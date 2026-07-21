@@ -13,12 +13,9 @@
   "bin": {
     "ccr": "./dist/cli/index.cjs"
   },
-  "files": [
-    "dist",
-    "prompts",
-    "action.yml"
-  ],
+  "files": ["dist", "prompts", "action.yml"],
   "scripts": {
+    "prepare": "husky",
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
@@ -42,10 +39,17 @@
     "picomatch": "^4.0.0",
     "zod": "^3.23.0"
   },
+  "lint-staged": {
+    "*.{ts,tsx}": ["biome check --write", "biome format --write"],
+    "*.{json,md,yml,yaml}": ["biome format --write"]
+  },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^21.2.1",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^2.0.0",
-    "@biomejs/biome": "^2.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.1.0",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.6.0",
