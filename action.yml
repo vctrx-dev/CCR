@@ -1,0 +1,88 @@
+name: critical-code-reviewer
+description: Review PR changes with configurable criteria and post inline review comments.
+author: CCR Contributors
+inputs:
+  api-key:
+    description: API key for the ASU AIML review provider.
+    required: true
+  base-url:
+    description: Base URL for the ASU AIML query endpoint.
+    required: false
+    default: https://api-main.aiml.asu.edu/queryV2
+  model-provider:
+    description: ASU model provider identifier to send with query requests.
+    required: false
+    default: openai
+  model:
+    description: ASU model name to use for the review.
+    required: true
+  github-token:
+    description: GitHub token for PR file discovery and inline comments.
+    required: false
+  post-inline-comments:
+    description: Whether to post structured inline comments on changed lines.
+    required: false
+    default: "true"
+  inline-comment-limit:
+    description: Maximum number of inline comments to post per run.
+    required: false
+    default: "10"
+  inline-comment-mode:
+    description: Inline comment strategy (findings or file-coverage).
+    required: false
+    default: findings
+  criteria:
+    description: Comma-separated criteria IDs to run (default all).
+    required: false
+    default: ""
+  prompt-root:
+    description: Directory containing criteria prompt files.
+    required: false
+    default: prompts
+  base-ref:
+    description: Base git ref or commit to diff against.
+    required: false
+  head-ref:
+    description: Head git ref or commit to review.
+    required: false
+  include-globs:
+    description: Comma-separated glob patterns to include.
+    required: false
+    default: "**/*"
+  exclude-globs:
+    description: Comma-separated glob patterns to exclude.
+    required: false
+    default: "node_modules/**,dist/**,coverage/**,.git/**"
+  max-files:
+    description: Maximum changed files to include in review payload.
+    required: false
+    default: "25"
+  max-context-chars:
+    description: Maximum characters across file context payloads.
+    required: false
+    default: "12000"
+  temperature:
+    description: Sampling temperature for the review model.
+    required: false
+    default: "0.2"
+  request-timeout-ms:
+    description: Timeout for model requests in milliseconds.
+    required: false
+    default: "120000"
+outputs:
+  summary:
+    description: Concise summary from the review output.
+  risk-level:
+    description: Overall risk level (low, medium, high).
+  finding-count:
+    description: Number of review findings.
+  criteria:
+    description: Criteria IDs that ran.
+  inline-comments-posted:
+    description: Number of inline comments posted.
+runs:
+  using: node24
+  main: dist/action/index.cjs
+branding:
+  icon: search
+  color: blue
