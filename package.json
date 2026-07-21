@@ -1,0 +1,54 @@
+{
+  "name": "@ccr/reviewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LLM-powered code review for educational AI fairness — GitHub Action, CLI, agent skill",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "ccr": "./dist/cli/index.cjs"
+  },
+  "files": [
+    "dist",
+    "prompts",
+    "action.yml"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/",
+    "format": "biome format --write src/",
+    "self-review:local": "npm run build && node dist/cli/index.cjs review --local --criteria explainability,ai-governance,privacy-consent",
+    "self-review:ci": "npm run build && node dist/cli/index.cjs review --fixture self-review-pr --criteria explainability,ai-governance,privacy-consent",
+    "fixture:record": "tsx scripts/record-pr.ts",
+    "fixture:replay": "tsx scripts/replay-review.ts",
+    "fixture:refresh-all": "tsx scripts/regenerate-fixtures.ts",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.0",
+    "@actions/github": "^6.0.0",
+    "commander": "^12.0.0",
+    "picomatch": "^4.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@biomejs/biome": "^2.5.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}
