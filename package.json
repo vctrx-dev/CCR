@@ -2,6 +2,7 @@
   "name": "@ccr/reviewer",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "LLM-powered code review for educational AI fairness — GitHub Action, CLI, agent skill",
   "type": "module",
   "exports": {
