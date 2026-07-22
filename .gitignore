@@ -3,6 +3,8 @@ node_modules/
 coverage/
 *.response.*
 .env
+.env.*
+pnpm-lock.yaml
 .DS_Store
 *.tsbuildinfo
 .superpowers/

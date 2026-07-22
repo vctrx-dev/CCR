@@ -77,6 +77,9 @@ Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage: stm
 ## Project Practices
 
 - Conventional commits: `feat:`, `fix:`, `chore:`, `test:`, `refactor:`, `docs:`, `perf:`
+  - ✅ `feat: add code quality audit rules and scripts`
+  - ❌ `Added Rules and scripts` (commitlint will reject this)
+  - If commitlint blocks you, run: `git commit -m "type: message"` where type is one of the list above.
 - Feature branches off `master`, squash-merge to `master`
 - Lint: Biome recommended. Format: 2-space, double quotes, semicolons, line width 100
 - Comments only for non-obvious WHY

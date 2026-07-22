@@ -80,6 +80,8 @@ outputs:
     description: Criteria IDs that ran.
   inline-comments-posted:
     description: Number of inline comments posted.
+  inline-comments-skipped:
+    description: Number of findings skipped while building inline comments.
 runs:
   using: node24
   main: dist/action/index.cjs

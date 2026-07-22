@@ -49,6 +49,9 @@
     "picomatch": "^4.0.0",
     "zod": "^3.23.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "husky"]
+  },
   "lint-staged": {
     "*.{ts,tsx}": ["biome check --write", "biome format --write"],
     "*.json": ["biome format --write"]
