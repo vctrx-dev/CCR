@@ -47,7 +47,7 @@ Every function needs JSDoc: what it does, why it exists, `@param`, `@returns`. N
 
 ## Testing & TDD
 
-TDD: write failing test first. Three levels enforced by the blast radius analyzer (`npm run test:changed`):
+TDD: write failing test first. Every exported function, public method, and non-trivial helper must have at least one test. Three levels enforced by the blast radius analyzer (`npm run test:changed`):
 
 | Level | Dir | Scope |
 |---|---|---|
@@ -55,7 +55,7 @@ TDD: write failing test first. Three levels enforced by the blast radius analyze
 | Medium (integration) | `tests/integration/` | Combined functions, cross-module |
 | Large (e2e) | `tests/e2e/` | Full workflows (CLI, GH Action) |
 
-Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage: stmts 80%, branches 70%, funcs 75%, lines 80%.
+Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thresholds guard against regression — set low enough to not block dev, high enough to catch completely untested modules.
 
 **Blast radius** — `scripts/audit.mjs --blast` maps changed files to affected tests: unit (1:1), integration (module-level), e2e (all).
 
@@ -80,7 +80,10 @@ Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage: stm
   - ✅ `feat: add code quality audit rules and scripts`
   - ❌ `Added Rules and scripts` (commitlint will reject this)
   - If commitlint blocks you, run: `git commit -m "type: message"` where type is one of the list above.
-- Feature branches off `master`, squash-merge to `master`
+- Feature branches off `dev`, squash-merge to `main`
+  - `dev` → feature work, PRs target `dev`
+  - `stage` → pre-production validation
+  - `main` → stable, protected by CI
 - Lint: Biome recommended. Format: 2-space, double quotes, semicolons, line width 100
 - Comments only for non-obvious WHY
 

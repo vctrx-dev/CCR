@@ -4,8 +4,8 @@ coverage/
 *.response.*
 .env
 .env.*
-pnpm-lock.yaml
 .DS_Store
 *.tsbuildinfo
 .superpowers/
 docs/superpowers/
+package-lock.json
