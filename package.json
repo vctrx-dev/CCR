@@ -37,7 +37,6 @@
     "lint:fix": "biome check --write src/",
     "format": "biome format --write src/",
     "self-review:local": "npm run build && node dist/cli/index.cjs review --local --criteria explainability,ai-governance,privacy-consent",
-    "self-review:ci": "npm run build && node dist/cli/index.cjs review --fixture self-review-pr --criteria explainability,ai-governance,privacy-consent",
     "fixture:record": "tsx scripts/record-pr.ts",
     "fixture:replay": "tsx scripts/replay-review.ts",
     "fixture:refresh-all": "tsx scripts/regenerate-fixtures.ts",
