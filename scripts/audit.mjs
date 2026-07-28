@@ -76,6 +76,24 @@ function isNonCode(line) {
   return t === "" || t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.startsWith('"use ') || t.startsWith("'use ");
 }
 
+/**
+ * Checks if a file exports logic (functions, classes, arrow functions) that
+ * requires testing. Type-only exports, constants, and re-exports are excluded.
+ *
+ * @param content - Full file content.
+ * @returns True if the file has function/class/arrow exports.
+ */
+function fileExportsLogic(content) {
+  for (const line of content.split("\n")) {
+    const t = line.trim();
+    if (isNonCode(t)) continue;
+    if (/^export\s+(default\s+)?(async\s+)?function\s*[*\s(]/.test(t)) return true;
+    if (/^export\s+(default\s+)?(abstract\s+)?class\s+/.test(t)) return true;
+    if (/^export\s+(const|let|var)\s+\w+(\s*:\s*[^=]+)?\s*=\s*(async\s+)?\s*[(<f]/.test(t)) return true;
+  }
+  return false;
+}
+
 function sourceToTestPaths(srcRel) {
   const base = srcRel.replace(/^src\//, "").replace(/\.tsx?$/, "");
   return ["unit", "integration", "e2e"].map((l) => `tests/${l}/${base}.test.ts`);
@@ -282,10 +300,10 @@ function checkTestFilesExist() {
     const candidates = sourceToTestPaths(rel);
     const found = candidates.some((c) => testFiles.has(c) || testFiles.has(c.replace(".test.ts", ".spec.ts")));
     if (!found) {
-      const content = readFileSync(filePath, "utf-8").trim();
-      if (content && content !== "export {};" && content !== "") {
-        warn("TDD-001", rel, 1,
-          `No test file found. Expected one of: ${candidates.join(", ")}`,
+      const content = readFileSync(filePath, "utf-8");
+      if (fileExportsLogic(content)) {
+        fail("TDD-001", rel, 1,
+          `No test file found for file exporting logic. Expected one of: ${candidates.join(", ")}`,
           `Create a test file at the first expected path above. Follow TDD: write a failing test first, then implement.\n` +
           `  Tests/$level/ directory mirrors src/ structure. Add describe("${rel.replace(/^src\//, "").replace(/\.ts$/, "")}") and it("should ...") blocks.`
         );
@@ -534,6 +552,7 @@ if (hasErrors) {
   console.error("    DEBUG-002  TODO/FIXME without issue ref — add #number");
   console.error("    DEBUG-003  debugger statement — remove it");
   console.error("    CODE-001   Too many function params — use options object");
+  console.error("    TDD-001    Missing test for file exporting logic");
   console.error("    TDD-003    describe() label too short — use descriptive name");
   console.error("");
   console.error("  ❌  Audit FAILED — fix errors above and re-stage.\n");
@@ -542,7 +561,6 @@ if (hasErrors) {
 
 if (hasWarnings) {
   console.warn("  [SUMMARY] Audit passed with warnings. Warning rule IDs:");
-  console.warn("    TDD-001    Missing test file for source file");
   console.warn("    TDD-002    Test level directory missing");
   console.warn("    TDD-004    it() description should start with \"should\"");
   console.warn("    TDD-005    Test level directory empty");
