@@ -87,6 +87,38 @@ Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thre
 - Lint: Biome recommended. Format: 2-space, double quotes, semicolons, line width 100
 - Comments only for non-obvious WHY
 
+## CCR Context Ownership
+
+- Commit shared repository context and human-approved decisions so local agents and CI use the
+  same project knowledge.
+- Keep per-developer continuity journals local. They describe work on one branch and must not
+  influence another developer's review.
+- An AI may propose a decision, but it becomes authoritative only after a developer reviews or
+  edits it.
+- Decisions must record their scope, rationale, affected stakeholders, and relevant paths or
+  symbols. Do not use a broad decision to suppress unrelated findings.
+- Shared context must not contain secrets, credentials, student records, personal data, or raw
+  private discussions.
+
+## Versioning and Releases
+
+CCR uses Semantic Versioning (`MAJOR.MINOR.PATCH`):
+
+- `PATCH` fixes defects without intentionally changing a public interface.
+- `MINOR` adds backward-compatible behavior or interfaces.
+- `MAJOR` makes an incompatible change. Before `1.0.0`, incompatible changes increment `MINOR`.
+- The version in `package.json` is the source of truth.
+- Release tags use the exact form `vMAJOR.MINOR.PATCH`, such as `v0.1.0` or `v1.0.0`.
+- Do not change a version for ordinary development commits. Change it only in a release-preparation
+  change.
+- Every release must update `CHANGELOG.md` and move relevant entries from `Unreleased` into a
+  heading for the released version and date.
+- Release notes describe user-visible behavior, migration steps, known limitations, and notable
+  fixes. Do not list internal refactors unless they affect users or contributors.
+- A release is complete only after validation passes, the release change reaches `main`, and the
+  matching immutable Git tag is created from that commit.
+- Never move or reuse a published release tag. Fix a release through a new version.
+
 ## Debug Artifacts
 
 No `console.log()` in source (use the `log` module). No `debugger`. No commented-out code. No `TODO`/`FIXME`/`HACK` without issue reference (`TODO(#123)`).

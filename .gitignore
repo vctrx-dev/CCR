@@ -10,3 +10,7 @@ coverage/
 .superpowers/
 docs/superpowers/
 package-lock.json
+
+# Per-developer CCR continuity; shared context and approved decisions remain tracked.
+.ccr/journal/
+.ccr/private/
