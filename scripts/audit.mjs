@@ -20,19 +20,22 @@
  * To find specific rule failures: grep "<rule-id>" <output>
  */
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join, relative, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = resolve(ROOT, "src");
 const TESTS = resolve(ROOT, "tests");
 
 const EXCLUDE_DIRS = new Set(["node_modules", ".git", "dist", "coverage", ".husky"]);
-const MAX_LOC_DEFAULT = 700;
-const MAX_LOC_TYPES = 1000;
-const MAX_LOC_TESTS = 500;
+const SOFT_LOC_DEFAULT = 300;
+const SOFT_LOC_TYPES = 500;
+const SOFT_LOC_TESTS = 300;
+const MAX_LOC_DEFAULT = 500;
+const MAX_LOC_TYPES = 700;
+const MAX_LOC_TESTS = 400;
 const MAX_FUNC_PARAMS = 4;
 
 let hasErrors = false;
@@ -63,7 +66,9 @@ function findFiles(dir, extRe = /\.(ts|tsx|mts)$/i) {
       if (entry.isDirectory()) files.push(...findFiles(full, extRe));
       else if (entry.isFile() && extRe.test(entry.name)) files.push(full);
     }
-  } catch { /* skip unreadable */ }
+  } catch {
+    /* skip unreadable */
+  }
   return files;
 }
 
@@ -73,7 +78,14 @@ function isKebabCase(name) {
 
 function isNonCode(line) {
   const t = line.trim();
-  return t === "" || t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.startsWith('"use ') || t.startsWith("'use ");
+  return (
+    t === "" ||
+    t.startsWith("//") ||
+    t.startsWith("*") ||
+    t.startsWith("/*") ||
+    t.startsWith('"use ') ||
+    t.startsWith("'use ")
+  );
 }
 
 /**
@@ -89,7 +101,8 @@ function fileExportsLogic(content) {
     if (isNonCode(t)) continue;
     if (/^export\s+(default\s+)?(async\s+)?function\s*[*\s(]/.test(t)) return true;
     if (/^export\s+(default\s+)?(abstract\s+)?class\s+/.test(t)) return true;
-    if (/^export\s+(const|let|var)\s+\w+(\s*:\s*[^=]+)?\s*=\s*(async\s+)?\s*[(<f]/.test(t)) return true;
+    if (/^export\s+(const|let|var)\s+\w+(\s*:\s*[^=]+)?\s*=\s*(async\s+)?\s*[(<f]/.test(t))
+      return true;
   }
   return false;
 }
@@ -102,7 +115,9 @@ function sourceToTestPaths(srcRel) {
 function run(cmd) {
   try {
     return execSync(cmd, { cwd: ROOT, encoding: "utf-8" }).trim();
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 // ─── Static Audit ──────────────────────────────────────────
@@ -111,11 +126,23 @@ function checkLoc(rel, lines) {
   const isTypes = rel.includes("/types") || rel.endsWith(".types.ts") || rel.endsWith(".types.tsx");
   const isTests = rel.startsWith("tests/");
   const limit = isTypes ? MAX_LOC_TYPES : isTests ? MAX_LOC_TESTS : MAX_LOC_DEFAULT;
+  const softLimit = isTypes ? SOFT_LOC_TYPES : isTests ? SOFT_LOC_TESTS : SOFT_LOC_DEFAULT;
   const nonBlank = lines.filter((l) => l.trim() !== "").length;
   if (nonBlank > limit) {
-    fail("LOC-001", rel, 1,
+    fail(
+      "LOC-001",
+      rel,
+      1,
       `File exceeds ${limit} non-blank lines (has ${nonBlank}). Split into smaller files.`,
-      `Extract functions/types into separate files under the same module. Each file = one concern. Move helpers to dedicated files. For types, split into shared/types/domain-specific files.`
+      "Extract functions/types into separate files under the same module. Each file = one concern. Move helpers to dedicated files. For types, split into shared/types/domain-specific files.",
+    );
+  } else if (nonBlank > softLimit) {
+    warn(
+      "LOC-002",
+      rel,
+      1,
+      `File exceeds the ${softLimit}-line soft limit (has ${nonBlank} non-blank lines).`,
+      "Review whether the file still represents one cohesive concern before adding more code.",
     );
   }
 }
@@ -123,29 +150,42 @@ function checkLoc(rel, lines) {
 function checkFunctionDocs(rel, lines) {
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    const funcMatch = trimmed.match(/^(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z_$]\w*)\s*\(/);
-    const arrowMatch = trimmed.match(/^(?:export\s+)?(?:const|let|var)\s+([a-zA-Z_$]\w*)\s*=\s*(?:async\s+)?(?:\(|function)/);
+    const funcMatch = trimmed.match(/^export\s+(?:async\s+)?function\s+([a-zA-Z_$]\w*)\s*\(/);
+    const arrowMatch = trimmed.match(
+      /^export\s+(?:const|let|var)\s+([a-zA-Z_$]\w*)\s*=\s*(?:async\s+)?(?:\(|function)/,
+    );
     const name = funcMatch?.[1] || arrowMatch?.[1];
-    if (!name || name === "constructor" || name === "render" || name.startsWith("it") || name.startsWith("test") || name.startsWith("describe")) continue;
+    if (
+      !name ||
+      name === "constructor" ||
+      name === "render" ||
+      name.startsWith("it") ||
+      name.startsWith("test") ||
+      name.startsWith("describe")
+    )
+      continue;
 
-    let j = i - 1, hasDoc = false;
+    let j = i - 1;
+    let hasDoc = false;
     while (j >= 0) {
       const prev = lines[j].trim();
-      if (prev === "" || prev.startsWith("//") || prev.startsWith("@")) { j--; continue; }
-      if (prev.endsWith("*/")) { hasDoc = true; break; }
+      if (prev === "" || prev.startsWith("//") || prev.startsWith("@")) {
+        j--;
+        continue;
+      }
+      if (prev.endsWith("*/")) {
+        hasDoc = true;
+        break;
+      }
       break;
     }
     if (!hasDoc && !trimmed.includes("// biome-ignore")) {
-      fail("DOCS-001", rel, i + 1,
-        `Function "${name}()" is missing JSDoc comment. Every function must document what it does and why.`,
-        `Add a JSDoc block before line ${i + 1} using this format:\n` +
-        `  /**\n` +
-        `   * One-line summary — what this function does.\n` +
-        `   * Why it exists and any non-obvious design decisions.\n` +
-        `   *\n` +
-        `   * @param paramName - Describe valid values, nullability, side effects.\n` +
-        `   * @returns Describe return value and when it could be null/undefined.\n` +
-        `   */`
+      fail(
+        "DOCS-001",
+        rel,
+        i + 1,
+        `Exported function "${name}()" is missing API documentation.`,
+        `Add a JSDoc block before line ${i + 1} using this format:\n  /** Describe the public behavior, constraints, and non-obvious effects. */`,
       );
     }
   }
@@ -156,9 +196,12 @@ function checkNoAny(rel, lines) {
     const trimmed = lines[i].trim();
     if (isNonCode(lines[i]) || trimmed.includes("// biome-ignore")) continue;
     if (/: any[\s,;\n)]/.test(trimmed) || trimmed.endsWith(": any")) {
-      fail("TS-001", rel, i + 1,
+      fail(
+        "TS-001",
+        rel,
+        i + 1,
         `Type "any" is banned. Use "unknown" with type guards instead.`,
-        `Replace \`: any\` with \`: unknown\` and narrow the type using type guards (typeof checks, instanceof, or custom type predicates). Read ${rel} around line ${i + 1}.`
+        `Replace \`: any\` with \`: unknown\` and narrow the type using type guards (typeof checks, instanceof, or custom type predicates). Read ${rel} around line ${i + 1}.`,
       );
     }
   }
@@ -166,10 +209,18 @@ function checkNoAny(rel, lines) {
 
 function checkNaming(rel, lines) {
   const base = rel.split("/").pop() || "";
-  if (!base.endsWith(".d.ts") && !base.endsWith(".test.ts") && !base.endsWith(".spec.ts") && !isKebabCase(base)) {
-    fail("NAMING-001", rel, 1,
+  if (
+    !base.endsWith(".d.ts") &&
+    !base.endsWith(".test.ts") &&
+    !base.endsWith(".spec.ts") &&
+    !isKebabCase(base)
+  ) {
+    fail(
+      "NAMING-001",
+      rel,
+      1,
       `File name "${base}" must be kebab-case (lowercase letters, hyphens).`,
-      `Rename "${base}" to kebab-case: e.g., "my-component.ts" instead of "${base}". Use only lowercase letters a-z, digits 0-9, and hyphens.`
+      `Rename "${base}" to kebab-case: e.g., "my-component.ts" instead of "${base}". Use only lowercase letters a-z, digits 0-9, and hyphens.`,
     );
   }
 
@@ -180,9 +231,12 @@ function checkNaming(rel, lines) {
     if (typeMatch) {
       const n = typeMatch[1];
       if (n !== "never" && !/^[A-Z]/.test(n)) {
-        fail("NAMING-002", rel, i + 1,
+        fail(
+          "NAMING-002",
+          rel,
+          i + 1,
           `Type/interface "${n}" must be PascalCase (starts with uppercase).`,
-          `Rename "${n}" to "${n.charAt(0).toUpperCase() + n.slice(1)}". Types and interfaces always start with a capital letter.`
+          `Rename "${n}" to "${n.charAt(0).toUpperCase() + n.slice(1)}". Types and interfaces always start with a capital letter.`,
         );
       }
     }
@@ -190,9 +244,12 @@ function checkNaming(rel, lines) {
     if (funcMatch) {
       const n = funcMatch[1];
       if (n !== n[0].toLowerCase() + n.slice(1) && !/^[A-Z][A-Z_0-9]+$/.test(n)) {
-        fail("NAMING-003", rel, i + 1,
+        fail(
+          "NAMING-003",
+          rel,
+          i + 1,
           `Exported function "${n}" must be camelCase (starts with lowercase).`,
-          `Rename "${n}" to "${n.charAt(0).toLowerCase() + n.slice(1)}". Functions start with a lowercase letter. Exception: UPPER_CASE for module-level constants.`
+          `Rename "${n}" to "${n.charAt(0).toLowerCase() + n.slice(1)}". Functions start with a lowercase letter. Exception: UPPER_CASE for module-level constants.`,
         );
       }
     }
@@ -207,9 +264,12 @@ function checkConsoleLog(rel, lines) {
     const m = trimmed.match(/console\.(log|warn|error|debug|info)\(/);
     if (!m) continue;
     if (isLogModule && m[1] !== "log") continue;
-    fail("DEBUG-001", rel, i + 1,
+    fail(
+      "DEBUG-001",
+      rel,
+      i + 1,
       `console.${m[1]}() found. Use the project's logging module instead.`,
-      `Replace console.${m[1]}() with the appropriate logger from src/log/. If adding new log output, add it to the log module rather than using console directly.`
+      `Replace console.${m[1]}() with the appropriate logger from src/log/. If adding new log output, add it to the log module rather than using console directly.`,
     );
   }
 }
@@ -221,9 +281,12 @@ function checkTodos(rel, lines) {
     if (!m) continue;
     if (/[#@]\d+/.test(trimmed) || /github\.com\/.*\/issues\/\d+/.test(trimmed)) continue;
     if (trimmed.includes("// biome-ignore")) continue;
-    fail("DEBUG-002", rel, i + 1,
+    fail(
+      "DEBUG-002",
+      rel,
+      i + 1,
       `${m[1]} without an issue reference. All TODOs must link to a GitHub issue.`,
-      `Add issue reference: change to "${m[1]}(#123): your message" where 123 is the GitHub issue number. Example: "TODO(#42): implement retry logic".`
+      `Add issue reference: change to "${m[1]}(#123): your message" where 123 is the GitHub issue number. Example: "TODO(#42): implement retry logic".`,
     );
   }
 }
@@ -232,16 +295,20 @@ function checkTypeAssertions(rel, lines) {
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
     if (isNonCode(lines[i]) || trimmed.includes("// biome-ignore")) continue;
-    if (/^(import|export)\s/.test(trimmed) || trimmed.includes("catch (") || /as\s+const\b/.test(trimmed)) continue;
+    if (
+      /^(import|export)\s/.test(trimmed) ||
+      trimmed.includes("catch (") ||
+      /as\s+const\b/.test(trimmed)
+    )
+      continue;
     const m = trimmed.match(/\bas\s+([A-Z][A-Za-z0-9_]+)\b/);
     if (m) {
-      fail("TS-002", rel, i + 1,
+      fail(
+        "TS-002",
+        rel,
+        i + 1,
         `Type assertion "as ${m[1]}" used. Use Zod parsing or type narrowing instead.`,
-        `Replace \`expr as ${m[1]}\` with proper type narrowing. Options:\n` +
-        `  1. Use Zod schema + .parse() for external data\n` +
-        `  2. Add runtime type guard (typeof/instanceof check)\n` +
-        `  3. Use discriminated union and switch narrowing\n` +
-        `  Exception: \`as const\` assertions are allowed.`
+        `Replace \`expr as ${m[1]}\` with proper type narrowing. Options:\n  1. Use Zod schema + .parse() for external data\n  2. Add runtime type guard (typeof/instanceof check)\n  3. Use discriminated union and switch narrowing\n  Exception: \`as const\` assertions are allowed.`,
       );
     }
   }
@@ -255,23 +322,36 @@ function checkMaxParams(rel, lines) {
     const isArrow = /^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?\(/.test(trimmed);
     if (!isFunc && !isArrow) continue;
 
-    const start = trimmed.indexOf("("); let depth = 0, end = start;
+    const start = trimmed.indexOf("(");
+    let depth = 0;
+    let end = start;
     for (; end < trimmed.length; end++) {
       if (trimmed[end] === "(") depth++;
-      else if (trimmed[end] === ")") { depth--; if (depth === 0) break; }
+      else if (trimmed[end] === ")") {
+        depth--;
+        if (depth === 0) break;
+      }
     }
     if (depth !== 0) continue;
     const params = trimmed.slice(start + 1, end).replace(/\([^)]*\)/g, "");
     if (params.trim() === "" || params.trim() === "_" || params.trim() === "void") continue;
-    depth = 0; let count = 1;
-    for (const ch of params) { if ("{[(".includes(ch)) depth++; else if ("}])".includes(ch)) depth--; else if (ch === "," && depth === 0) count++; }
+    depth = 0;
+    let count = 1;
+    for (const ch of params) {
+      if ("{[(".includes(ch)) depth++;
+      else if ("}])".includes(ch)) depth--;
+      else if (ch === "," && depth === 0) count++;
+    }
     if (count > MAX_FUNC_PARAMS) {
       const n = trimmed.match(/(?:function|const)\s+(\w+)/)?.[1] || "anonymous";
-      fail("CODE-001", rel, i + 1,
+      fail(
+        "CODE-001",
+        rel,
+        i + 1,
         `"${n}()" has ${count} parameters (limit ${MAX_FUNC_PARAMS}). Use an options object.`,
         `Refactor "${n}" to accept a single options object parameter instead of ${count} positional params.\n` +
-        `  Before: function ${n}(a: string, b: number, c: boolean, d: Date, e: string[])\n` +
-        `  After:  function ${n}(opts: { a: string; b: number; c: boolean; d: Date; e: string[] })`
+          `  Before: function ${n}(a: string, b: number, c: boolean, d: Date, e: string[])\n` +
+          `  After:  function ${n}(opts: { a: string; b: number; c: boolean; d: Date; e: string[] })`,
       );
     }
   }
@@ -282,9 +362,12 @@ function checkDebugger(rel, lines) {
     const trimmed = lines[i].trim();
     if (isNonCode(lines[i])) continue;
     if (/debugger/.test(trimmed)) {
-      fail("DEBUG-003", rel, i + 1,
-        `debugger statement found. Remove before committing.`,
-        `Delete the debugger statement on line ${i + 1} of ${rel}. Debugger statements block CI and should never be committed.`
+      fail(
+        "DEBUG-003",
+        rel,
+        i + 1,
+        "debugger statement found. Remove before committing.",
+        `Delete the debugger statement on line ${i + 1} of ${rel}. Debugger statements block CI and should never be committed.`,
       );
     }
   }
@@ -298,14 +381,18 @@ function checkTestFilesExist() {
     const rel = relative(ROOT, filePath).replace(/\\/g, "/");
     if (rel === "src/index.ts" || rel.endsWith("/index.ts")) continue;
     const candidates = sourceToTestPaths(rel);
-    const found = candidates.some((c) => testFiles.has(c) || testFiles.has(c.replace(".test.ts", ".spec.ts")));
+    const found = candidates.some(
+      (c) => testFiles.has(c) || testFiles.has(c.replace(".test.ts", ".spec.ts")),
+    );
     if (!found) {
       const content = readFileSync(filePath, "utf-8");
       if (fileExportsLogic(content)) {
-        fail("TDD-001", rel, 1,
-          `No test file found for file exporting logic. Expected one of: ${candidates.join(", ")}`,
-          `Create a test file at the first expected path above. Follow TDD: write a failing test first, then implement.\n` +
-          `  Tests/$level/ directory mirrors src/ structure. Add describe("${rel.replace(/^src\//, "").replace(/\.ts$/, "")}") and it("should ...") blocks.`
+        warn(
+          "TDD-001",
+          rel,
+          1,
+          `No discoverable test covers this file's exported behavior. Checked: ${candidates.join(", ")}`,
+          "Confirm that an existing behavioral test covers this boundary, or add the narrowest useful test. Do not test internal helpers only to satisfy this warning.",
         );
       }
     }
@@ -314,7 +401,13 @@ function checkTestFilesExist() {
   for (const level of ["unit", "integration", "e2e"]) {
     const levelDir = join(TESTS, level);
     if (!existsSync(levelDir)) {
-      warn("TDD-002", level, 0, `Test level directory "tests/${level}/" is missing.`, `Create tests/${level}/ directory. Add at least one .test.ts file to start testing at this level.`);
+      warn(
+        "TDD-002",
+        level,
+        0,
+        `Test level directory "tests/${level}/" is missing.`,
+        `Create tests/${level}/ directory. Add at least one .test.ts file to start testing at this level.`,
+      );
       continue;
     }
     for (const filePath of findFiles(levelDir)) {
@@ -324,39 +417,15 @@ function checkTestFilesExist() {
         const line = content.split("\n")[i].trim();
         const dm = line.match(/describe\(['"](.+?)['"]/);
         if (dm && dm[1].length < 2) {
-          fail("TDD-003", rel, i + 1,
+          fail(
+            "TDD-003",
+            rel,
+            i + 1,
             `describe() label "${dm[1]}" is too short. Use descriptive test group names.`,
-            `Change describe("${dm[1]}") to describe("ModuleOrFunctionName"). Use PascalCase for modules, camelCase for function names.`
-          );
-        }
-        const im = line.match(/\b(it|test)\(['"](.+?)['"]/);
-        if (im && im[2].length > 20 && !/^(should|does|handles|returns|throws|passes|fails|accepts|rejects|creates|builds|parses|validates|extracts|maps|filters|sorts|merges|splits|generates|converts|formats|logs|sends|receives|renders|updates|deletes|adds|removes|includes|excludes|resolves|emits|calls|wraps|unwraps|encodes|decodes)/i.test(im[2])) {
-          warn("TDD-004", rel, i + 1,
-            `it() description "${im[2]}" should start with "should".`,
-            `Rename it("${im[2]}") to it("should ${im[2].charAt(0).toLowerCase() + im[2].slice(1)}"). Test descriptions should read like "should return X when Y".`
+            `Change describe("${dm[1]}") to describe("ModuleOrFunctionName"). Use PascalCase for modules, camelCase for function names.`,
           );
         }
       }
-    }
-  }
-}
-
-function checkTestLevels() {
-  for (const level of ["unit", "integration", "e2e"]) {
-    const d = join(TESTS, level);
-    if (!existsSync(d)) {
-      warn("TDD-002", "project-root", 0, `tests/${level}/ directory does not exist.`, `Create tests/${level}/ to enable ${level}-level testing. Add a .gitkeep if not yet implemented.`);
-      continue;
-    }
-    const files = findFiles(d).filter((f) => !f.endsWith(".gitkeep"));
-    if (files.length === 0) {
-      warn("TDD-005", `tests/${level}/`, 0,
-        `${level} test directory exists but has no test files.`,
-        `Add at least one test file in tests/${level}/. Tests at this level cover:\n` +
-        `  unit → individual functions\n` +
-        `  integration → combined functions, cross-module\n` +
-        `  e2e → full workflows`
-      );
     }
   }
 }
@@ -385,8 +454,6 @@ function runAudit() {
     }
     checkTestFilesExist();
   }
-  checkTestLevels();
-
   const allTestFiles = findFiles(TESTS);
   for (const filePath of allTestFiles) {
     const rel = relative(ROOT, filePath).replace(/\\/g, "/");
@@ -411,7 +478,8 @@ function findTestDirs(level) {
       if (entry.name.startsWith(".")) continue;
       const full = join(d, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".spec.ts")) entries.push(relative(ROOT, full).replace(/\\/g, "/"));
+      else if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".spec.ts"))
+        entries.push(relative(ROOT, full).replace(/\\/g, "/"));
     }
   }
   walk(dir);
@@ -461,11 +529,15 @@ function getAllSourceFiles() {
 }
 
 function runBlastRadius(flagPrint, flagAll) {
-  const changedFiles = flagAll ? getAllSourceFiles() : [...new Set([
-    ...run("git diff --name-only --cached").split("\n").filter(Boolean),
-    ...run("git diff --name-only").split("\n").filter(Boolean),
-    ...run("git ls-files --others --exclude-standard").split("\n").filter(Boolean),
-  ])].filter((f) => f.startsWith("src/"));
+  const changedFiles = flagAll
+    ? getAllSourceFiles()
+    : [
+        ...new Set([
+          ...run("git diff --name-only --cached").split("\n").filter(Boolean),
+          ...run("git diff --name-only").split("\n").filter(Boolean),
+          ...run("git ls-files --others --exclude-standard").split("\n").filter(Boolean),
+        ]),
+      ].filter((f) => f.startsWith("src/"));
 
   console.log("\n  ── Blast Radius ────────────────────────\n");
 
@@ -482,8 +554,13 @@ function runBlastRadius(flagPrint, flagAll) {
   console.log("");
   for (const level of ["unit", "integration", "e2e"]) {
     const tests = level === "integration" ? plan.integration : plan[level];
-    if (!tests || tests.length === 0) { console.log(`  ${level}: — no tests affected`); continue; }
-    console.log(`  ${level}: ${tests.length > 10 ? `${tests.length} test(s)` : tests.length === 1 ? "1 test" : `${tests.length} tests`}`);
+    if (!tests || tests.length === 0) {
+      console.log(`  ${level}: — no tests affected`);
+      continue;
+    }
+    console.log(
+      `  ${level}: ${tests.length > 10 ? `${tests.length} test(s)` : tests.length === 1 ? "1 test" : `${tests.length} tests`}`,
+    );
     for (const t of tests.slice(0, 10)) console.log(`    → ${t}`);
     if (tests.length > 10) console.log(`    … and ${tests.length - 10} more`);
   }
@@ -497,17 +574,35 @@ function runBlastRadius(flagPrint, flagAll) {
 
   if (plan.unit.length > 0) {
     console.log(`  ▶  Running ${plan.unit.length} unit test(s)...`);
-    try { const out = run(`npx vitest run ${plan.unit.join(" ")} --reporter=verbose`); console.log(out); } catch (e) { console.error(e.stdout || e.message); exitCode = 1; }
+    try {
+      const out = run(`pnpm exec vitest run ${plan.unit.join(" ")} --reporter=verbose`);
+      console.log(out);
+    } catch (e) {
+      console.error(e.stdout || e.message);
+      exitCode = 1;
+    }
   }
 
   if (plan.integration.length > 0) {
     console.log(`  ▶  Running integration tests for ${plan.integration.length} module(s)...`);
-    try { const out = run(`npx vitest run tests/integration --reporter=verbose`); console.log(out); } catch (e) { console.error(e.stdout || e.message); exitCode = 1; }
+    try {
+      const out = run("pnpm exec vitest run tests/integration --reporter=verbose");
+      console.log(out);
+    } catch (e) {
+      console.error(e.stdout || e.message);
+      exitCode = 1;
+    }
   }
 
   if (plan.e2e.length > 0) {
     console.log(`  ▶  Running ${plan.e2e.length} e2e test(s)...`);
-    try { const out = run(`npx vitest run ${plan.e2e.join(" ")} --reporter=verbose`); console.log(out); } catch (e) { console.error(e.stdout || e.message); exitCode = 1; }
+    try {
+      const out = run(`pnpm exec vitest run ${plan.e2e.join(" ")} --reporter=verbose`);
+      console.log(out);
+    } catch (e) {
+      console.error(e.stdout || e.message);
+      exitCode = 1;
+    }
   }
 
   return exitCode;
@@ -542,9 +637,9 @@ if (hasErrors) {
   // Print aggregated counts by rule type
   console.error("  [SUMMARY] Quick reference — error rule IDs:");
   console.error("    LOC-001    File too large — split into smaller files");
-  console.error("    DOCS-001   Function missing JSDoc — add documentation block");
-  console.error("    TS-001     Type \"any\" used — replace with \"unknown\"");
-  console.error("    TS-002     Type assertion \"as X\" — use Zod/narrowing instead");
+  console.error("    DOCS-001   Exported function missing API documentation");
+  console.error('    TS-001     Type "any" used — replace with "unknown"');
+  console.error('    TS-002     Type assertion "as X" — use Zod/narrowing instead');
   console.error("    NAMING-001 File name not kebab-case — rename file");
   console.error("    NAMING-002 Type/interface not PascalCase — rename type");
   console.error("    NAMING-003 Exported function not camelCase — rename function");
@@ -552,7 +647,6 @@ if (hasErrors) {
   console.error("    DEBUG-002  TODO/FIXME without issue ref — add #number");
   console.error("    DEBUG-003  debugger statement — remove it");
   console.error("    CODE-001   Too many function params — use options object");
-  console.error("    TDD-001    Missing test for file exporting logic");
   console.error("    TDD-003    describe() label too short — use descriptive name");
   console.error("");
   console.error("  ❌  Audit FAILED — fix errors above and re-stage.\n");
@@ -561,9 +655,8 @@ if (hasErrors) {
 
 if (hasWarnings) {
   console.warn("  [SUMMARY] Audit passed with warnings. Warning rule IDs:");
-  console.warn("    TDD-002    Test level directory missing");
-  console.warn("    TDD-004    it() description should start with \"should\"");
-  console.warn("    TDD-005    Test level directory empty");
+  console.warn("    LOC-002    File crossed its soft limit — review cohesion");
+  console.warn("    TDD-001    No discoverable behavioral test for exported logic");
   console.warn("");
   console.warn("  ⚠️   Audit passed with warnings.\n");
   process.exit(0);

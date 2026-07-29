@@ -2,13 +2,16 @@
 
 Enforced by `scripts/audit.mjs` pre-commit. Do not modify that file without approval.
 
-## File LOC Limits
+## File Size
 
-| Type | Limit |
-|---|---|
-| Implementation | 700 |
-| Type definitions | 1000 |
-| Tests | 500 |
+One file should represent one concern. Size is a signal to reconsider boundaries, not a reason to
+split cohesive code mechanically.
+
+| Type | Soft limit | Hard limit |
+|---|---:|---:|
+| Implementation | 300 | 500 |
+| Type definitions | 500 | 700 |
+| Tests | 300 | 400 |
 
 ## Naming Conventions
 
@@ -33,7 +36,9 @@ No `I` prefix on interfaces. No `any`. Use `unknown` + narrow.
 
 ## Function Documentation
 
-Every function needs JSDoc: what it does, why it exists, `@param`, `@returns`. Not needed on getters, overrides, or test blocks.
+Document exported APIs and behavior that is surprising, safety-sensitive, or constrained by a
+non-obvious decision. Do not add JSDoc that merely restates a function name or TypeScript signature.
+Internal helpers need comments only when their reason or constraints are not clear from the code.
 
 ```typescript
 /**
@@ -47,7 +52,13 @@ Every function needs JSDoc: what it does, why it exists, `@param`, `@returns`. N
 
 ## Testing & TDD
 
-TDD: write failing test first. Every exported function, public method, and non-trivial helper must have at least one test. Three levels enforced by the blast radius analyzer (`npm run test:changed`):
+Use TDD for behavior changes and bug fixes: write or identify a failing behavioral test, implement
+the smallest change, then refactor. Documentation, formatting, generated files, and mechanical
+configuration changes do not require a contrived failing test.
+
+Test observable behavior through stable boundaries. Do not require a one-to-one test for every
+helper or mirror implementation details in assertions. Add the narrowest test level that proves the
+change:
 
 | Level | Dir | Scope |
 |---|---|---|
@@ -55,17 +66,11 @@ TDD: write failing test first. Every exported function, public method, and non-t
 | Medium (integration) | `tests/integration/` | Combined functions, cross-module |
 | Large (e2e) | `tests/e2e/` | Full workflows (CLI, GH Action) |
 
-Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thresholds guard against regression — set low enough to not block dev, high enough to catch completely untested modules.
+Unit test paths normally mirror source paths when that improves discovery. Test names describe
+behavior and conditions clearly; `it("should ...")` is preferred but not mandatory. Coverage
+protects against untested modules, not against every uncovered line.
 
 **Blast radius** — `scripts/audit.mjs --blast` maps changed files to affected tests: unit (1:1), integration (module-level), e2e (all).
-
-## UI Components (Future)
-
-- Own file per component, named export, `displayName` set
-- Props interface: `ComponentNameProps`, exported
-- Composition (compound components, children) over giant props
-- Controlled + uncontrolled via `value`/`onChange` + `defaultValue`
-- Headless pattern: separate hooks/behavior from rendering
 
 ## Backend Structure
 
@@ -80,12 +85,30 @@ Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thre
   - ✅ `feat: add code quality audit rules and scripts`
   - ❌ `Added Rules and scripts` (commitlint will reject this)
   - If commitlint blocks you, run: `git commit -m "type: message"` where type is one of the list above.
-- Feature branches off `dev`, squash-merge to `main`
+- Feature branches start from `dev` and merge back into `dev`
   - `dev` → feature work, PRs target `dev`
-  - `stage` → pre-production validation
-  - `main` → stable, protected by CI
+  - `stage` → pre-production validation promoted from `dev`
+  - `main` → stable releases promoted from `stage`
 - Lint: Biome recommended. Format: 2-space, double quotes, semicolons, line width 100
 - Comments only for non-obvious WHY
+
+## Repository Quality Gates
+
+Biome is the formatter and linter; do not add Prettier unless the formatter is deliberately
+replaced. Git hooks and CI use the same package scripts:
+
+- Pre-commit formats and safely fixes supported staged files first.
+- It then checks staged files for secrets, private key files, generated output, oversized files,
+  conflict markers, and remaining whitespace errors.
+- Finally, it runs the code audit, typecheck, and affected tests.
+- Pre-push runs the complete `pnpm verify` gate: tracked-file safety, audit, typecheck, lint,
+  coverage tests, and build.
+- CI runs `pnpm verify` with a frozen lockfile and is authoritative because local hooks can be
+  bypassed with `--no-verify`.
+- Never weaken or skip a failing gate merely to complete a commit. Fix the cause or obtain explicit
+  maintainer approval for a policy change.
+- Repository quality gates may stop commits or pushes. This is separate from CCR review findings
+  and future target-repository context hooks, which remain advisory.
 
 ## CCR Context Ownership
 
@@ -99,6 +122,14 @@ Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thre
   symbols. Do not use a broad decision to suppress unrelated findings.
 - Shared context must not contain secrets, credentials, student records, personal data, or raw
   private discussions.
+- Source, tests, schemas, interfaces, and approved human decisions outrank generated context.
+- Generated context is advisory and must link important claims to live paths, symbols, commands,
+  decisions, or Git history.
+- Never treat a developer's silence as confirmation of a finding or decision.
+- Review results are advisory by default. Distinguish confirmed issues, questions, and observations;
+  uncertainty must not be presented as a proven bug.
+- Default hooks may detect stale context and print a repair command. They must not invoke an LLM,
+  rewrite or stage files, retry Git operations, or block a commit or push.
 
 ## Versioning and Releases
 
@@ -127,19 +158,22 @@ No `console.log()` in source (use the `log` module). No `debugger`. No commented
 
 | Command | Purpose |
 |---|---|
-| `npm run build` | tsup — 3 targets |
-| `npm test` | Full vitest suite |
-| `npm run test:unit` / `test:integration` / `test:e2e` | Run specific level |
-| `npm run test:changed` | Blast radius: affected tests only |
-| `npm run test:coverage` | Coverage with thresholds |
-| `npm run typecheck` | tsc --noEmit |
-| `npm run lint` | biome check src/ |
-| `npm run audit` | Code quality audit |
+| `pnpm build` | tsup — 3 targets |
+| `pnpm test` | Full vitest suite |
+| `pnpm test:unit` / `test:integration` / `test:e2e` | Run specific level |
+| `pnpm test:changed` | Blast radius: affected tests only |
+| `pnpm test:coverage` | Coverage with thresholds |
+| `pnpm typecheck` | tsc --noEmit |
+| `pnpm lint` | biome check src/ |
+| `pnpm run audit` | Code quality audit |
+| `pnpm check:staged` | Check staged content for repository safety issues |
+| `pnpm check:tracked` | Check all tracked content for repository safety issues |
+| `pnpm verify` | Complete pre-push and CI verification |
 
 ## Self-Review Checklist
 
-1. `npm run audit && npm run typecheck && npm run lint && npm test && npm run build` — all pass
-2. `npm run test:changed:print` — confirm no unexpected test impacts
+1. `pnpm verify` — complete safety, quality, test coverage, and build gate passes
+2. `pnpm test:changed:print` — confirm no unexpected test impacts
 3. No debug artifacts, no TODOs, no commented code
 4. Edge cases tested (empty input, error paths, boundaries)
 

@@ -1,0 +1,7 @@
+* text=auto
+
+# Shell-based hooks and automation must remain portable across Windows and Unix.
+.husky/* text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

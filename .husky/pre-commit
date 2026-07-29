@@ -1,2 +1,7 @@
-node scripts/audit.mjs
-npx lint-staged
+set -e
+
+pnpm format:staged
+pnpm check:staged
+pnpm run audit
+pnpm typecheck
+pnpm test:changed

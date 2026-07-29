@@ -10,12 +10,19 @@ contain incompatible changes when they are clearly documented.
 ### Added
 
 - Initial repository structure for the Critical Code Reviewer.
+- Layered pre-commit, pre-push, and CI repository safety gates.
 
 ### Changed
 
+- Simplified repository rules, CI, and planning material for private development.
+
 ### Fixed
 
+- Aligned CI branch coverage with the documented `dev` → `stage` → `main` flow.
+
 ### Removed
+
+- Premature public publishing, installation, licensing, and community-facing material.
 
 ## 0.1.0 - Unreleased
 
