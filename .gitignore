@@ -60,9 +60,10 @@ service-account*.json
 .claude/settings.local.json
 .claude/worktrees/
 .superpowers/
-docs/superpowers/
+docs/
 
 # Per-developer CCR continuity. Shared context and approved decisions remain tracked.
+.ccr/config.local.json
 .ccr/journal/
 .ccr/private/
 .ccr/cache/

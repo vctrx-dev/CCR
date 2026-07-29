@@ -11,7 +11,7 @@ const GENERATED_PATH_PATTERN =
   /(^|\/)(?:\.cache|\.npm|\.nyc_output|\.pnpm-store|\.temp|\.tmp|blob-report|coverage|dist|logs|node_modules|playwright-report|temp|test-results|tmp)(\/|$)/;
 const PRIVATE_FILE_PATTERN = /\.(jks|key|keystore|p12|pfx|pem)$/i;
 const LOCAL_ONLY_PATH_PATTERN =
-  /(^|\/)(?:\.claude\/(?:settings\.local\.json|worktrees(?:\/.*)?)|\.ccr\/(?:cache|journal|private|tmp)(?:\/.*)?|(?:\.npmrc|\.pypirc|\.netrc)|(?:id_rsa|id_dsa|id_ecdsa|id_ed25519)|credentials\.json|service-account[^/]*\.json|[^/]+\.response\.[^/]+|[^/]+\.log)$/i;
+  /(^|\/)(?:\.claude\/(?:settings\.local\.json|worktrees(?:\/.*)?)|\.ccr\/(?:config\.local\.json|(?:cache|journal|private|tmp)(?:\/.*)?)|(?:\.npmrc|\.pypirc|\.netrc)|(?:id_rsa|id_dsa|id_ecdsa|id_ed25519)|credentials\.json|service-account[^/]*\.json|[^/]+\.response\.[^/]+|[^/]+\.log)$/i;
 const SECRET_PATTERNS = [
   { label: "private key", pattern: /-----BEGIN (?:EC |OPENSSH |RSA )?PRIVATE KEY-----/ },
   { label: "AWS access key", pattern: /\bAKIA[0-9A-Z]{16}\b/ },

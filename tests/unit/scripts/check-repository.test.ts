@@ -42,6 +42,9 @@ describe("findPathFailures", () => {
     expect(findPathFailures(".ccr/cache/index.json")).toContain(
       "credential or local-only configuration file is not allowed",
     );
+    expect(findPathFailures(".ccr/config.local.json")).toContain(
+      "credential or local-only configuration file is not allowed",
+    );
     expect(findPathFailures(".claude/worktrees/task/source.ts")).toContain(
       "credential or local-only configuration file is not allowed",
     );
