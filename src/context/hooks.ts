@@ -1,8 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { chmod, mkdir, readFile } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { writeTextAtomic } from "./files";
+import { readTextIfExists, writeTextAtomic } from "./files";
+
+/**
+ * Safe composition for CCR's advisory pre-commit integration. Future hook types should reuse its
+ * path validation and marked-block ownership rules, extending the definition rather than overwriting
+ * another tool's hook.
+ */
 
 export interface HookResult {
   path: string;
@@ -23,15 +29,6 @@ interface ManagedBlock {
 interface ResolvedHook {
   isHusky: boolean;
   path: string;
-}
-
-async function readOptional(filePath: string): Promise<string | undefined> {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error: unknown) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  }
 }
 
 function isWithin(root: string, target: string): boolean {
@@ -162,7 +159,7 @@ function removeManagedBlock(content: string, block: ManagedBlock): string {
 export async function installContextHook(root: string): Promise<HookResult> {
   const resolved = resolveHook(root);
   const hookPath = resolved.path;
-  const existing = await readOptional(hookPath);
+  const existing = await readTextIfExists(hookPath);
   if (existing !== undefined) {
     const managedBlock = findManagedBlock(existing);
     assertComposableHook(existing, resolved.isHusky, hookPath);
@@ -189,7 +186,7 @@ export async function installContextHook(root: string): Promise<HookResult> {
 /** Removes only CCR's marked block and preserves other hook commands. */
 export async function removeContextHook(root: string): Promise<HookResult> {
   const hookPath = resolveHook(root).path;
-  const existing = await readOptional(hookPath);
+  const existing = await readTextIfExists(hookPath);
   if (existing === undefined) return { path: hookPath, status: "not-installed" };
   const managedBlock = findManagedBlock(existing);
   if (!managedBlock) return { path: hookPath, status: "not-installed" };
@@ -201,7 +198,7 @@ export async function removeContextHook(root: string): Promise<HookResult> {
 /** Reports whether CCR's marked block is installed in the active pre-commit hook. */
 export async function readContextHookStatus(root: string): Promise<HookResult> {
   const hookPath = resolveHook(root).path;
-  const existing = await readOptional(hookPath);
+  const existing = await readTextIfExists(hookPath);
   return {
     path: hookPath,
     status:

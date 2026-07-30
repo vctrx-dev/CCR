@@ -50,6 +50,22 @@ Internal helpers need comments only when their reason or constraints are not cle
  */
 ```
 
+## Reusable Code and Extension Comments
+
+When adding a reusable boundary, document it where future developers and coding agents will first
+look: at the top of its file and on its exported API. State the intended reuse, the important
+constraint, and the preferred extension path—not a restatement of the implementation.
+
+- Check existing modules before creating a helper, registry, type, parser, filesystem operation,
+  Git operation, or managed-file workflow.
+- Reuse an existing boundary when it fits. If a new feature needs a compatible generalization,
+  evolve the shared code with regression coverage so current behavior stays intact; do not copy it
+  into a feature-specific implementation.
+- File-level reuse comments belong on shared registries, safety boundaries, and adapters. Exported
+  reusable APIs need JSDoc that names their safety or behavior constraint.
+- Do not comment obvious one-off helpers or repeat TypeScript types in prose. Comments must make the
+  next implementation safer or easier to extend.
+
 ## Testing & TDD
 
 Use TDD for behavior changes and bug fixes: write or identify a failing behavioral test, implement

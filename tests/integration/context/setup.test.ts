@@ -177,6 +177,18 @@ describe("CCR setup", () => {
     expect(manual).not.toContain("## Initialize");
   });
 
+  it("should preserve a skill with a foreign marker", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const root = await makeRepository();
+    const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+    const foreignContent = "<!-- managed by CCR skill; foreign tool -->\nCustom skill\n";
+    await mkdir(path.dirname(skillPath), { recursive: true });
+    await writeFile(skillPath, foreignContent, "utf8");
+
+    await expect(previewSetup(root)).rejects.toThrow("managed file conflict");
+    expect(await readFile(skillPath, "utf8")).toBe(foreignContent);
+  });
+
   it("should reject malformed managed markers instead of appending a second block", async () => {
     const { writeFile } = await import("node:fs/promises");
     const root = await makeRepository();

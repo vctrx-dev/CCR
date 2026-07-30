@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+/**
+ * Versioned configuration boundary for all CCR context features. Add a setting through its schema,
+ * defaults, migration, help text, and typed updater so shared and local policy cannot drift.
+ */
+
 const CONFIG_COMMENT =
   "Human-owned committed settings. CCR and Claude must not change this file unless a human explicitly requests or approves the exact change.";
 

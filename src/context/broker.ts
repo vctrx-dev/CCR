@@ -6,6 +6,11 @@ import {
   readSafeStagedPaths,
 } from "./privacy";
 
+/**
+ * Privacy-preserving evidence boundary for context features and future AI integrations. Reuse these
+ * operations for repository content: they read approved Git-index data, never newer worktree content.
+ */
+
 const MAX_PATH_LIST_CHARACTERS = 6000;
 const MAX_EVIDENCE_CHARACTERS = 10_000;
 
@@ -27,7 +32,9 @@ function truncate(content: string, limit: number): string {
 
 async function safeRegularPaths(root: string): Promise<{
   config: Awaited<ReturnType<typeof readResolvedContextConfig>>;
+  entriesByPath: Map<string, ReturnType<typeof readIndexEntries>[number]>;
   paths: string[];
+  pathSet: Set<string>;
   excludedCount: number;
 }> {
   const config = await readResolvedContextConfig(root);
@@ -36,9 +43,16 @@ async function safeRegularPaths(root: string): Promise<{
     .filter((entry) => entry.mode.startsWith("100"))
     .map((entry) => entry.path);
   const filtered = filterExcludedPaths(regularPaths, config.privacy.excludedPaths);
+  const paths = filtered.included.sort((left, right) => left.localeCompare(right));
+  const entriesByPath = new Map<string, ReturnType<typeof readIndexEntries>[number]>();
+  for (const entry of entries) {
+    if (!entriesByPath.has(entry.path)) entriesByPath.set(entry.path, entry);
+  }
   return {
     config,
-    paths: filtered.included.sort((left, right) => left.localeCompare(right)),
+    entriesByPath,
+    paths,
+    pathSet: new Set(paths),
     excludedCount: filtered.excluded.length + entries.length - regularPaths.length,
   };
 }
@@ -79,7 +93,7 @@ export async function listSafeRecentPaths(root: string): Promise<SafeRecentPaths
   const recent = readRecentChangedPaths(root);
   const filtered = filterExcludedPaths(recent, safe.config.privacy.excludedPaths);
   const paths = filtered.included
-    .filter((candidate) => safe.paths.includes(candidate))
+    .filter((candidate) => safe.pathSet.has(candidate))
     .sort((left, right) => left.localeCompare(right));
   return {
     paths,
@@ -94,7 +108,7 @@ export async function readSafeRepositoryFile(root: string, candidate: string): P
   if (!safe.paths.includes(normalized)) {
     throw new Error("Path is not an approved regular repository file.");
   }
-  const entry = readIndexEntries(root).find((item) => item.path === normalized);
+  const entry = safe.entriesByPath.get(normalized);
   if (!entry) throw new Error("Approved index entry disappeared.");
   return truncate(readGitBlob(root, entry.oid), MAX_EVIDENCE_CHARACTERS);
 }

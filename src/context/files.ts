@@ -1,6 +1,26 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, rename, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+/**
+ * Shared repository filesystem boundary. New managed-file features must use these helpers so path
+ * containment, symlink checks, and atomic writes stay consistent; generalize this code, do not bypass it.
+ */
+
+/** Returns whether a filesystem error represents an absent path. */
+export function isFileNotFound(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+/** Reads optional UTF-8 text without hiding errors other than a missing file. */
+export async function readTextIfExists(filePath: string): Promise<string | undefined> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error: unknown) {
+    if (isFileNotFound(error)) return undefined;
+    throw error;
+  }
+}
 
 /** Rejects absolute, escaping, or symlinked managed paths before repository writes/deletes. */
 export async function assertSafeManagedPath(root: string, relativePath: string): Promise<string> {
@@ -47,4 +67,12 @@ export async function writeManagedText(
   await mkdir(path.dirname(target), { recursive: true });
   await assertSafeManagedPath(root, relativePath);
   await writeTextAtomic(target, content);
+}
+
+/** Safely reads an optional managed text file after containment and symlink checks. */
+export async function readManagedTextIfExists(
+  root: string,
+  relativePath: string,
+): Promise<string | undefined> {
+  return readTextIfExists(await assertSafeManagedPath(root, relativePath));
 }

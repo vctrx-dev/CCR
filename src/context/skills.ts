@@ -1,10 +1,22 @@
-const managedMarker = "<!-- managed by CCR skill; package updates may replace this file -->";
+export const MANAGED_SKILL_MARKER =
+  "<!-- managed by CCR skill; package updates may replace this file -->";
+
+/**
+ * Package-managed Claude skill definitions. Add future skills to `CCR_SKILLS`; the artifact registry
+ * automatically includes them in setup, upgrade, preview, and uninstall flows.
+ */
+
+export interface SkillDefinition {
+  id: string;
+  path: string;
+  content: string;
+}
 
 export const CCR_MANUAL_SKILL = `---
 description: Explain CCR, its installed components, commands, safety boundaries, and roadmap.
 ---
 
-${managedMarker}
+${MANAGED_SKILL_MARKER}
 # CCR manual
 
 CCR is one opt-in package for ethical review of educational software:
@@ -24,7 +36,7 @@ export const CCR_CONTEXT_SKILL = `---
 description: Initialize, update, verify, add to, or compact CCR repository context.
 ---
 
-${managedMarker}
+${MANAGED_SKILL_MARKER}
 # CCR context
 
 Interpret \`$ARGUMENTS\` as \`initialize\`, \`update\`, \`verify\`, \`addition\`, or \`compact\`.
@@ -121,3 +133,9 @@ verification commands, evidence links, and open uncertainty. Remove repetition a
 report before/after character counts, run the independent verification pass, show the diff, validate,
 and create one local journal entry.
 `;
+
+/** Every package-managed skill. Adding a skill here automatically participates in setup and uninstall. */
+export const CCR_SKILLS: readonly SkillDefinition[] = [
+  { id: "ccr", path: ".claude/skills/ccr/SKILL.md", content: CCR_MANUAL_SKILL },
+  { id: "ccr-context", path: ".claude/skills/ccr-context/SKILL.md", content: CCR_CONTEXT_SKILL },
+];

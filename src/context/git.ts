@@ -1,5 +1,10 @@
 import { execFileSync } from "node:child_process";
 
+/**
+ * Shared read-only Git boundary for context features. Add metadata or index operations here so
+ * parsing stays consistent; callers exposing content must use the broker, not working-tree reads.
+ */
+
 export interface IndexEntry {
   mode: string;
   oid: string;
@@ -14,6 +19,36 @@ export interface StagedContextState {
 }
 
 const LOCAL_CONTEXT_PREFIXES = [".ccr/journal/", ".ccr/private/", ".ccr/cache/", ".ccr/tmp/"];
+const DEFAULT_GIT_BUFFER_BYTES = 16 * 1024 * 1024;
+
+function runGit(root: string, args: string[], maxBuffer = DEFAULT_GIT_BUFFER_BYTES): string {
+  return execFileSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer,
+    windowsHide: true,
+  });
+}
+
+/** Reads one trimmed Git metadata value without exposing process execution to feature modules. */
+export function readGitValue(root: string, args: string[]): string {
+  return runGit(root, args).trim();
+}
+
+function parseGitEntries(output: string, oidIndex: number): IndexEntry[] {
+  return output
+    .split("\0")
+    .filter(Boolean)
+    .map((record) => {
+      const tabIndex = record.indexOf("\t");
+      const fields = record.slice(0, tabIndex).split(" ");
+      return {
+        mode: fields[0] ?? "",
+        oid: fields[oidIndex] ?? "",
+        path: record.slice(tabIndex + 1),
+      };
+    });
+}
 
 function isSharedContext(relativePath: string): boolean {
   return (
@@ -25,11 +60,7 @@ function isSharedContext(relativePath: string): boolean {
 
 /** Reads only staged path names to implement CCR's advisory pre-commit signal. */
 export function readStagedContextState(root: string): StagedContextState {
-  const output = execFileSync("git", ["diff", "--cached", "--name-only", "-z"], {
-    cwd: root,
-    encoding: "utf8",
-    windowsHide: true,
-  });
+  const output = runGit(root, ["diff", "--cached", "--name-only", "-z"]);
   const stagedPaths = output.split("\0").filter(Boolean);
   const hasContextChanges = stagedPaths.some(isSharedContext);
   const hasRepositoryChanges = stagedPaths.some(
@@ -45,20 +76,7 @@ export function readStagedContextState(root: string): StagedContextState {
 
 /** Reads regular-file and symlink metadata from Git's index without opening worktree files. */
 export function readIndexEntries(root: string): IndexEntry[] {
-  const output = execFileSync("git", ["ls-files", "--stage", "-z"], {
-    cwd: root,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    windowsHide: true,
-  });
-  return output
-    .split("\0")
-    .filter(Boolean)
-    .map((record) => {
-      const tabIndex = record.indexOf("\t");
-      const [mode = "", oid = ""] = record.slice(0, tabIndex).split(" ");
-      return { mode, oid, path: record.slice(tabIndex + 1) };
-    });
+  return parseGitEntries(runGit(root, ["ls-files", "--stage", "-z"]), 1);
 }
 
 /** Reads HEAD tree metadata, returning empty for a repository without a first commit. */
@@ -67,18 +85,11 @@ export function readHeadEntries(root: string): IndexEntry[] {
     const output = execFileSync("git", ["ls-tree", "-r", "-z", "HEAD"], {
       cwd: root,
       encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: DEFAULT_GIT_BUFFER_BYTES,
       stdio: ["ignore", "pipe", "ignore"],
       windowsHide: true,
     });
-    return output
-      .split("\0")
-      .filter(Boolean)
-      .map((record) => {
-        const tabIndex = record.indexOf("\t");
-        const [mode = "", , oid = ""] = record.slice(0, tabIndex).split(" ");
-        return { mode, oid, path: record.slice(tabIndex + 1) };
-      });
+    return parseGitEntries(output, 2);
   } catch {
     return [];
   }
@@ -87,26 +98,12 @@ export function readHeadEntries(root: string): IndexEntry[] {
 /** Reads one immutable blob selected by its index object ID. */
 export function readGitBlob(root: string, oid: string): string {
   if (!/^[0-9a-f]{40,64}$/u.test(oid)) throw new Error("Invalid Git object ID.");
-  return execFileSync("git", ["cat-file", "blob", oid], {
-    cwd: root,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    windowsHide: true,
-  });
+  return runGit(root, ["cat-file", "blob", oid]);
 }
 
 /** Reads the staged diff for one exact path without invoking external diff drivers. */
 export function readStagedDiff(root: string, relativePath: string): string {
-  return execFileSync(
-    "git",
-    ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--", relativePath],
-    {
-      cwd: root,
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-      windowsHide: true,
-    },
-  );
+  return runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--", relativePath]);
 }
 
 /** Lists path names touched by the latest five local commits without reading their content. */
@@ -131,11 +128,7 @@ export function readRecentChangedPaths(root: string): string[] {
 
 /** Resolves the Git worktree root without modifying repository configuration. */
 export function findRepositoryRoot(cwd: string): string {
-  return execFileSync("git", ["rev-parse", "--show-toplevel"], {
-    cwd,
-    encoding: "utf8",
-    windowsHide: true,
-  }).trim();
+  return readGitValue(cwd, ["rev-parse", "--show-toplevel"]);
 }
 
 /** Checks whether Git would ignore a generated path, including paths not created yet. */

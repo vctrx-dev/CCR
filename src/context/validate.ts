@@ -1,8 +1,13 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseContextConfig } from "./config";
-import { assertSafeManagedPath } from "./files";
+import { assertSafeManagedPath, readTextIfExists } from "./files";
 import { CONTEXT_FILES } from "./templates";
+
+/**
+ * Reusable validation boundary for shared context. Add compatible document checks here so setup,
+ * CLI, and future skills receive the same safety result rather than implementing local validation.
+ */
 
 export interface ValidationResult {
   isValid: boolean;
@@ -24,15 +29,6 @@ const REQUIRED_HEADINGS: Readonly<Record<string, string>> = {
 
 const MAX_INDEX_CHARACTERS = 6000;
 const MAX_CONTEXT_FILE_CHARACTERS = 10_000;
-
-async function readOptional(filePath: string): Promise<string | undefined> {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error: unknown) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  }
-}
 
 function referencedPaths(content: string): string[] {
   const references = new Set<string>();
@@ -78,7 +74,7 @@ function absoluteClaim(content: string): string | undefined {
 export async function validateContext(root: string): Promise<ValidationResult> {
   const issues: string[] = [];
   const configPath = await assertSafeManagedPath(root, ".ccr/config.json");
-  const configText = await readOptional(configPath);
+  const configText = await readTextIfExists(configPath);
   if (configText === undefined) {
     issues.push(".ccr/config.json is missing.");
   } else {
@@ -91,7 +87,7 @@ export async function validateContext(root: string): Promise<ValidationResult> {
   }
 
   for (const relativePath of Object.keys(CONTEXT_FILES).filter((file) => file.endsWith(".md"))) {
-    const content = await readOptional(await assertSafeManagedPath(root, relativePath));
+    const content = await readTextIfExists(await assertSafeManagedPath(root, relativePath));
     if (content === undefined) {
       issues.push(`${relativePath} is missing.`);
       continue;

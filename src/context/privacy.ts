@@ -2,8 +2,13 @@ import { readFile } from "node:fs/promises";
 import picomatch from "picomatch";
 import { parseContextConfig, parseLocalContextConfig, resolveContextConfig } from "./config";
 import type { ContextConfig } from "./config";
-import { assertSafeManagedPath } from "./files";
+import { assertSafeManagedPath, readTextIfExists } from "./files";
 import { readHeadEntries, readIndexEntries, readStagedContextState } from "./git";
+
+/**
+ * Shared privacy policy boundary. Features that list or expose repository paths must filter here
+ * before reading content; extend this policy rather than creating a filter that can drift from it.
+ */
 
 const MANDATORY_EXCLUDED_PATHS = [
   ".ccr/config.local.json",
@@ -35,15 +40,6 @@ export function hasControlCharacters(value: string): boolean {
   });
 }
 
-async function readOptional(filePath: string): Promise<string | undefined> {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error: unknown) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-
 /** Splits paths using configured globs before any excluded content is read or sent to Claude. */
 export function filterExcludedPaths(paths: string[], patterns: string[]): FilteredPaths {
   const isExcluded = picomatch([...MANDATORY_EXCLUDED_PATHS, ...patterns], {
@@ -65,7 +61,7 @@ export async function readResolvedContextConfig(root: string): Promise<ContextCo
   const sharedPath = await assertSafeManagedPath(root, ".ccr/config.json");
   const localPath = await assertSafeManagedPath(root, ".ccr/config.local.json");
   const shared = parseContextConfig(await readFile(sharedPath, "utf8"));
-  const localText = await readOptional(localPath);
+  const localText = await readTextIfExists(localPath);
   const local = localText ? parseLocalContextConfig(localText) : {};
   return resolveContextConfig(shared, local);
 }

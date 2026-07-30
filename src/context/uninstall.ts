@@ -1,7 +1,18 @@
 import { access, readFile, unlink } from "node:fs/promises";
-import { assertSafeManagedPath, writeManagedText } from "./files";
-import { CCR_CONTEXT_SKILL, CCR_MANUAL_SKILL } from "./skills";
-import { CONTEXT_FILES } from "./templates";
+import {
+  assertSafeManagedPath,
+  isFileNotFound,
+  readManagedTextIfExists,
+  writeManagedText,
+} from "./files";
+import { MANAGED_ARTIFACTS, isPackageManagedSkill } from "./managed-artifacts";
+import { removeManagedBlock } from "./managed-block";
+import { CLAUDE_BLOCK, IGNORE_BLOCK } from "./templates";
+
+/**
+ * Bounded removal workflow for managed artifacts. Extend registry lifecycle policies instead of
+ * adding path-specific deletion rules, and preserve user-owned content by default.
+ */
 
 const LOCAL_STATE_PATHS = [
   ".ccr/config.local.json",
@@ -11,40 +22,17 @@ const LOCAL_STATE_PATHS = [
   ".ccr/tmp",
 ] as const;
 
-const MANAGED_SKILLS: Readonly<Record<string, string>> = {
-  ".claude/skills/ccr/SKILL.md": CCR_MANUAL_SKILL,
-  ".claude/skills/ccr-context/SKILL.md": CCR_CONTEXT_SKILL,
-};
-const MANAGED_SKILL_MARKER = "<!-- managed by CCR skill; package updates may replace this file -->";
-
 export interface UninstallPreview {
   removePaths: string[];
   modifyPaths: string[];
 }
 
-async function readOptional(filePath: string): Promise<string | undefined> {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error: unknown) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-
-async function readManagedOptional(
-  root: string,
-  relativePath: string,
-): Promise<string | undefined> {
-  return readOptional(await assertSafeManagedPath(root, relativePath));
-}
-
-function stripBlock(content: string, start: string, end: string): string {
-  const startIndex = content.indexOf(start);
-  const endIndex = content.indexOf(end, startIndex);
-  if (startIndex < 0 || endIndex < 0) return content;
-  const before = content.slice(0, startIndex).trimEnd();
-  const after = content.slice(endIndex + end.length).trimStart();
-  return `${before}${before && after ? "\n\n" : ""}${after}${before || after ? "\n" : ""}`;
+function managedBlock(content: string) {
+  return {
+    content,
+    end: content.slice(content.lastIndexOf("\n") + 1),
+    start: content.slice(0, content.indexOf("\n")),
+  };
 }
 
 async function hasLocalState(root: string): Promise<boolean> {
@@ -54,7 +42,7 @@ async function hasLocalState(root: string): Promise<boolean> {
       await access(target);
       return true;
     } catch (error: unknown) {
-      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+      if (!isFileNotFound(error)) throw error;
     }
   }
   return false;
@@ -66,25 +54,32 @@ export async function previewUninstall(
   shouldRemoveContext: boolean,
 ): Promise<UninstallPreview> {
   const removePaths: string[] = [];
-  for (const [skillPath, content] of Object.entries(MANAGED_SKILLS)) {
-    const existing = await readManagedOptional(root, skillPath);
-    if (existing === content || existing?.split(MANAGED_SKILL_MARKER).length === 2) {
-      removePaths.push(skillPath);
+  for (const artifact of MANAGED_ARTIFACTS) {
+    const existing = await readManagedTextIfExists(root, artifact.path);
+    if (
+      artifact.uninstallPolicy === "remove-if-marked" &&
+      existing &&
+      (existing === artifact.content || isPackageManagedSkill(existing))
+    ) {
+      removePaths.push(artifact.path);
     }
   }
   if (shouldRemoveContext) {
-    for (const relativePath of Object.keys(CONTEXT_FILES)) {
-      if ((await readManagedOptional(root, relativePath)) !== undefined) {
-        removePaths.push(relativePath);
+    for (const artifact of MANAGED_ARTIFACTS) {
+      if (
+        artifact.uninstallPolicy === "remove-with-context" &&
+        (await readManagedTextIfExists(root, artifact.path)) !== undefined
+      ) {
+        removePaths.push(artifact.path);
       }
     }
   }
   const modifyPaths: string[] = [];
   for (const instructionPath of ["CLAUDE.md", "AGENTS.md"]) {
-    const content = await readManagedOptional(root, instructionPath);
+    const content = await readManagedTextIfExists(root, instructionPath);
     if (content?.includes("<!-- ccr:start -->")) modifyPaths.push(instructionPath);
   }
-  const ignore = await readManagedOptional(root, ".gitignore");
+  const ignore = await readManagedTextIfExists(root, ".gitignore");
   if (ignore?.includes("# ccr:start - local context continuity") && !(await hasLocalState(root))) {
     modifyPaths.push(".gitignore");
   }
@@ -105,8 +100,8 @@ export async function applyUninstall(
     const content = await readFile(target, "utf8");
     const updated =
       relativePath === "CLAUDE.md" || relativePath === "AGENTS.md"
-        ? stripBlock(content, "<!-- ccr:start -->", "<!-- ccr:end -->")
-        : stripBlock(content, "# ccr:start - local context continuity", "# ccr:end");
+        ? removeManagedBlock(content, managedBlock(CLAUDE_BLOCK))
+        : removeManagedBlock(content, managedBlock(IGNORE_BLOCK));
     await writeManagedText(root, relativePath, updated);
   }
   return preview;

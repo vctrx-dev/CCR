@@ -1,5 +1,10 @@
 import { DEFAULT_CONTEXT_CONFIG } from "./config";
 
+/**
+ * Source templates for context files and optional instruction blocks. Add shared generated content
+ * here, then register its lifecycle in `managed-artifacts.ts` instead of embedding it in workflows.
+ */
+
 const managedHeader = "<!-- managed by CCR; edit facts, keep headings -->";
 
 export const CONTEXT_FILES: Readonly<Record<string, string>> = {
