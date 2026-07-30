@@ -1,6 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
-import { DEFAULT_CONTEXT_CONFIG, parseContextConfig } from "./config";
+import { parseContextConfig } from "./config";
 import { assertSafeManagedPath } from "./files";
 import { CONTEXT_FILES } from "./templates";
 
@@ -20,9 +20,10 @@ const REQUIRED_HEADINGS: Readonly<Record<string, string>> = {
   ".ccr/index.md": "# CCR Context",
   ".ccr/project.md": "# Project",
   ".ccr/stakeholders.md": "# Stakeholders",
-  ".ccr/architecture.md": "# Architecture",
-  ".ccr/decisions.md": "# Human-approved Decisions",
 };
+
+const MAX_INDEX_CHARACTERS = 6000;
+const MAX_CONTEXT_FILE_CHARACTERS = 10_000;
 
 async function readOptional(filePath: string): Promise<string | undefined> {
   try {
@@ -78,13 +79,11 @@ export async function validateContext(root: string): Promise<ValidationResult> {
   const issues: string[] = [];
   const configPath = await assertSafeManagedPath(root, ".ccr/config.json");
   const configText = await readOptional(configPath);
-  let config = DEFAULT_CONTEXT_CONFIG;
-
   if (configText === undefined) {
     issues.push(".ccr/config.json is missing.");
   } else {
     try {
-      config = parseContextConfig(configText);
+      parseContextConfig(configText);
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : "unknown validation error";
       issues.push(`.ccr/config.json is invalid: ${detail}`);
@@ -98,17 +97,13 @@ export async function validateContext(root: string): Promise<ValidationResult> {
       continue;
     }
     const limit =
-      relativePath === ".ccr/index.md"
-        ? config.context.maxIndexCharacters
-        : config.context.maxFileCharacters;
+      relativePath === ".ccr/index.md" ? MAX_INDEX_CHARACTERS : MAX_CONTEXT_FILE_CHARACTERS;
     if (content.length > limit)
       issues.push(`${relativePath} exceeds its ${limit}-character limit.`);
     if (SECRET_PATTERNS.some((pattern) => pattern.test(content))) {
       issues.push(`${relativePath} contains secret-like content.`);
     }
-    if (
-      [".ccr/project.md", ".ccr/stakeholders.md", ".ccr/architecture.md"].includes(relativePath)
-    ) {
+    if ([".ccr/project.md", ".ccr/stakeholders.md"].includes(relativePath)) {
       const absolute = absoluteClaim(content);
       if (absolute) {
         issues.push(

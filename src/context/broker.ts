@@ -1,4 +1,4 @@
-import { readGitBlob, readIndexEntries, readStagedDiff } from "./git";
+import { readGitBlob, readIndexEntries, readRecentChangedPaths, readStagedDiff } from "./git";
 import {
   filterExcludedPaths,
   hasControlCharacters,
@@ -6,10 +6,18 @@ import {
   readSafeStagedPaths,
 } from "./privacy";
 
+const MAX_PATH_LIST_CHARACTERS = 6000;
+const MAX_EVIDENCE_CHARACTERS = 10_000;
+
 export interface SafePathList {
   paths: string[];
   excludedCount: number;
   omittedCount: number;
+}
+
+export interface SafeRecentPaths {
+  paths: string[];
+  excludedCount: number;
 }
 
 function truncate(content: string, limit: number): string {
@@ -54,7 +62,7 @@ export async function listSafeRepositoryPaths(
   const paths: string[] = [];
   let usedCharacters = 0;
   for (const candidate of candidates) {
-    if (usedCharacters + candidate.length + 3 > safe.config.context.maxIndexCharacters) break;
+    if (usedCharacters + candidate.length + 3 > MAX_PATH_LIST_CHARACTERS) break;
     paths.push(candidate);
     usedCharacters += candidate.length + 3;
   }
@@ -62,6 +70,20 @@ export async function listSafeRepositoryPaths(
     paths,
     excludedCount: safe.excludedCount,
     omittedCount: candidates.length - paths.length,
+  };
+}
+
+/** Lists readable current files touched by the latest five commits after privacy filtering. */
+export async function listSafeRecentPaths(root: string): Promise<SafeRecentPaths> {
+  const safe = await safeRegularPaths(root);
+  const recent = readRecentChangedPaths(root);
+  const filtered = filterExcludedPaths(recent, safe.config.privacy.excludedPaths);
+  const paths = filtered.included
+    .filter((candidate) => safe.paths.includes(candidate))
+    .sort((left, right) => left.localeCompare(right));
+  return {
+    paths,
+    excludedCount: filtered.excluded.length,
   };
 }
 
@@ -74,16 +96,15 @@ export async function readSafeRepositoryFile(root: string, candidate: string): P
   }
   const entry = readIndexEntries(root).find((item) => item.path === normalized);
   if (!entry) throw new Error("Approved index entry disappeared.");
-  return truncate(readGitBlob(root, entry.oid), safe.config.context.maxFileCharacters);
+  return truncate(readGitBlob(root, entry.oid), MAX_EVIDENCE_CHARACTERS);
 }
 
 /** Reads the staged diff for one approved path without opening its worktree file. */
 export async function readSafeRepositoryDiff(root: string, candidate: string): Promise<string> {
-  const config = await readResolvedContextConfig(root);
   const normalized = candidate.replaceAll("\\", "/");
   const safePaths = await readSafeStagedPaths(root);
   if (!safePaths.included.includes(normalized)) {
     throw new Error("Path is not an approved staged file.");
   }
-  return truncate(readStagedDiff(root, normalized), config.context.maxFileCharacters);
+  return truncate(readStagedDiff(root, normalized), MAX_EVIDENCE_CHARACTERS);
 }

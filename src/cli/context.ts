@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
 import {
+  listSafeRecentPaths,
   listSafeRepositoryPaths,
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
@@ -50,7 +51,7 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
             writesFiles: false,
             sendsData: false,
             skillVisibility: isSkillLocal ? "local" : "shareable",
-            limits: preview.config.context,
+            contextSettings: preview.config.context,
             changes: preview.changes.map(({ action, path: relativePath }) => ({
               action,
               path: relativePath,
@@ -72,7 +73,7 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
       ...(hookPreview ? [`  hook       ${hookPreview.path}`] : []),
       "Local-only ignore rules: config.local.json, journal/, private/, cache/, and tmp/.",
       "Data boundary: setup sends nothing; later repository reads use the filtered Git-index broker.",
-      `Context limits: index ${preview.config.context.maxIndexCharacters}, file ${preview.config.context.maxFileCharacters}, recent journals ${preview.config.context.recentJournalEntries}.`,
+      `Context settings: recent journals ${preview.config.context.recentJournalEntries}, compaction cap ${preview.config.context.maxCompactionPercent}%.`,
       `Hook behavior: ${options.hooks ? "marked advisory warning requested" : "not requested"}.`,
       "Conflicts: none. Malformed managed blocks or symlinked managed paths stop setup.",
       "Rollback: `ccr uninstall --apply` (add `--remove-context` to remove shared context).",
@@ -88,7 +89,7 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
     result.changedPaths.length
       ? `CCR setup wrote ${result.changedPaths.length} file(s).`
       : "CCR setup is already current.",
-    "Next: open Claude Code and run `/ccr initialize`.",
+    "Next: open Claude Code and run `/ccr-context initialize`.",
   ]);
 }
 
@@ -177,6 +178,9 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .action(async (file: string) => {
       io.write(await readSafeRepositoryDiff(rootFor(io), file));
     });
+  context.command("recent").action(async () => {
+    io.write(`${JSON.stringify(await listSafeRecentPaths(rootFor(io)))}\n`);
+  });
   context.command("journal").action(async () => {
     const result = await createJournalEntry(rootFor(io));
     writeLines(io, [`Created ${result.path}`]);
@@ -189,8 +193,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
   config.action(async () => {
     const configPath = await assertSafeManagedPath(rootFor(io), ".ccr/config.json");
     const content = await readFile(configPath, "utf8");
-    parseContextConfig(content);
-    io.write(content);
+    io.write(`${JSON.stringify(parseContextConfig(content), null, 2)}\n`);
   });
   config.command("validate").action(async () => {
     const configPath = await assertSafeManagedPath(rootFor(io), ".ccr/config.json");
@@ -208,15 +211,15 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .action(async (options: { apply?: boolean }) => {
       if (!options.apply) {
         writeLines(io, [
-          "Would create .ccr/config.json only.",
-          "Run `ccr config init --apply`, edit it, then run `ccr setup --apply`.",
+          "Would create or upgrade .ccr/config.json only.",
+          "Run `ccr config init --apply`, review it, then run `ccr setup --apply`.",
         ]);
         return;
       }
       const change = await applyConfigSetup(rootFor(io));
       writeLines(io, [
         `CCR configuration: ${change.action}.`,
-        "Edit .ccr/config.json, run `ccr config validate`, then `ccr setup --apply`.",
+        "Review .ccr/config.json, run `ccr config validate`, then `ccr setup --apply`.",
       ]);
     });
   config
@@ -289,7 +292,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     if (state.shouldWarn) {
       writeLines(io, [
         "CCR warning: context might need updating.",
-        "Run `/ccr update` in Claude Code, or continue if context is unaffected.",
+        "Run `/ccr-context update` in Claude Code, or continue if context is unaffected.",
       ]);
     }
   });

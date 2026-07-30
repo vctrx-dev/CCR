@@ -5,37 +5,51 @@ Notable user-visible changes to CCR are recorded here.
 This project follows [Semantic Versioning](https://semver.org/). Until `1.0.0`, a minor release may
 contain incompatible changes when they are clearly documented.
 
-## Unreleased
+## 0.3.0 - Unreleased
 
 ### Added
 
-- Initial repository structure for the Critical Code Reviewer.
-- Layered pre-commit, pre-push, and CI repository safety gates.
-- Preview-first context setup, Claude Code skill installation, validation, status, and uninstall.
-- Filtered Git-index repository reads and staged diffs that do not expose newer unstaged content.
-- Deterministic, collision-resistant branch-local continuity journals with Git-derived metadata.
-- Optional advisory pre-commit context warning with Husky-aware installation.
-- Machine-readable setup preview and packed-artifact smoke verification.
-- Parallel, focused Claude context discovery followed by an independent bounded verification pass.
-- Self-explaining valid JSON settings through `_comment` fields and configurable discovery workers.
+- `/ccr-context` with five operations: initialize, update, verify, addition, and compact.
+- A separate `/ccr` manual and privacy-filtered recent-commit verification paths.
+- Human-readable config help for every setting and a bounded compaction percentage.
 
 ### Changed
 
-- Simplified repository rules, CI, and planning material for private development.
-- Prepared the public `@vctrx/ccr` CLI package with Node.js 22+ support.
-- Made development-hook installation explicit so packaging never rewrites consumer Git settings.
-- Refused symlink escapes, external hook paths, malformed managed blocks, and non-shell hook
-  composition.
-
-### Fixed
-
-- Aligned CI branch coverage with the documented `dev` → `stage` → `main` flow.
+- Configuration schema v2 makes settings human-owned and reads supported v1 values without
+  rewriting their file.
+- Context discovery can incorporate explicitly supplied plans or specifications as future intent.
 
 ### Removed
 
-- Premature public publishing, installation, licensing, and community-facing material.
-- The generated `risks.md` context page.
+- Provider policy and configurable character-limit settings.
 
-## 0.1.0 - Unreleased
+## 0.2.0 - 2026-07-29
 
-Initial development release. Release notes will be completed when this version is ready to tag.
+### Added
+
+- One-package, opt-in component guidance.
+
+### Changed
+
+- Consolidated technical structure, data, integrations, and verification into `project.md`.
+
+### Removed
+
+- Separate architecture, decisions, and risks context pages. Technical details now live in the
+  concise project context.
+
+## 0.1.1 - 2026-07-29
+
+- Used a unique local package version to avoid package-manager reuse of the first test artifact.
+- Stopped context initialization on CLI/config schema mismatch instead of editing configuration.
+
+## 0.1.0 - 2026-07-29
+
+- Initial repository context CLI and Claude Code skill.
+- Preview-first setup, validation, status, configuration, and safe uninstall.
+- Filtered Git-index evidence broker and privacy exclusions.
+- Branch-local journals and optional advisory pre-commit warning.
+- Parallel discovery with an independent bounded verification pass.
+- Packed-artifact installation smoke test and repository quality gates.
+
+This local development package was not published to npm.

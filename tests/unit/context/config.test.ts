@@ -16,8 +16,23 @@ describe("parseContextConfig", () => {
       updateAgentsMd: false,
     });
     expect(DEFAULT_CONTEXT_CONFIG.domain).toBe("unspecified");
-    expect(DEFAULT_CONTEXT_CONFIG._comment).toMatch(/committed/i);
+    expect(DEFAULT_CONTEXT_CONFIG._comment).toMatch(/human-owned/i);
+    expect(DEFAULT_CONTEXT_CONFIG._help["context.maxCompactionPercent"]).toMatch(/integer.*20-30/i);
     expect(DEFAULT_CONTEXT_CONFIG.discovery.subagentCount).toBe(3);
+    expect(DEFAULT_CONTEXT_CONFIG.context.maxCompactionPercent).toBe(25);
+    expect(DEFAULT_CONTEXT_CONFIG.privacy).not.toHaveProperty("providerPolicy");
+    expect(DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths).toEqual(
+      expect.arrayContaining([
+        ".env*",
+        "**/.env*",
+        "**/secrets/**",
+        "**/credentials/**",
+        "**/*.pem",
+        "**/*.key",
+      ]),
+    );
+    expect(DEFAULT_CONTEXT_CONFIG.context).not.toHaveProperty("maxIndexCharacters");
+    expect(DEFAULT_CONTEXT_CONFIG.context).not.toHaveProperty("maxFileCharacters");
   });
 
   it("should accept a repository-specific domain", () => {
@@ -28,7 +43,7 @@ describe("parseContextConfig", () => {
     ).toBe("civic-tech/elections");
   });
 
-  it("should add help and discovery defaults when reading an older config", () => {
+  it("should migrate supported settings from the previous schema", () => {
     const parsed = parseContextConfig(
       JSON.stringify({
         schemaVersion: 1,
@@ -47,9 +62,14 @@ describe("parseContextConfig", () => {
       }),
     );
 
-    expect(parsed._comment).toMatch(/committed/i);
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed._comment).toMatch(/human-owned/i);
     expect(parsed.discovery.subagentCount).toBe(3);
     expect(parsed.domain).toBe("education");
+    expect(parsed.context.recentJournalEntries).toBe(3);
+    expect(parsed.context.maxCompactionPercent).toBe(25);
+    expect(parsed.privacy.excludedPaths).toEqual(DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths);
+    expect(parsed.privacy).not.toHaveProperty("providerPolicy");
   });
 
   it("should reject unknown settings", () => {
@@ -83,6 +103,10 @@ describe("updateContextConfig", () => {
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.recentJournalEntries", "2").context
         .recentJournalEntries,
     ).toBe(2);
+    expect(
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.maxCompactionPercent", "30").context
+        .maxCompactionPercent,
+    ).toBe(30);
     expect(updateContextConfig(DEFAULT_CONTEXT_CONFIG, "domain", "civic-tech").domain).toBe(
       "civic-tech",
     );
@@ -99,5 +123,8 @@ describe("updateContextConfig", () => {
     expect(() =>
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "automation.checkBeforeCommit", "maybe"),
     ).toThrow(/true or false/);
+    expect(() =>
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.maxCompactionPercent", "31"),
+    ).toThrow();
   });
 });

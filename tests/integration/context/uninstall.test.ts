@@ -32,7 +32,10 @@ it("should preview safely and preserve context unless removal is explicit", asyn
   await applySetup(root);
 
   const preview = await previewUninstall(root, false);
-  expect(preview.removePaths).toEqual([".claude/skills/ccr/SKILL.md"]);
+  expect(preview.removePaths).toEqual([
+    ".claude/skills/ccr/SKILL.md",
+    ".claude/skills/ccr-context/SKILL.md",
+  ]);
   expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain("<!-- ccr:start -->");
 
   await applyUninstall(root, false);
@@ -61,4 +64,21 @@ it("should preserve local ignore rules while a private journal remains", async (
   expect(await readFile(path.join(root, ".ccr/journal/feature/entry.md"), "utf8")).toContain(
     "private continuity",
   );
+});
+
+it("should remove a legacy package-managed skill", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-legacy-"));
+  roots.push(root);
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+  await mkdir(path.dirname(skillPath), { recursive: true });
+  await writeFile(
+    skillPath,
+    "<!-- managed by CCR skill; package updates may replace this file -->\n# Old CCR skill\n",
+    "utf8",
+  );
+
+  expect((await previewUninstall(root, false)).removePaths).toEqual([
+    ".claude/skills/ccr/SKILL.md",
+  ]);
 });

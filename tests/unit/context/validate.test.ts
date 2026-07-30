@@ -44,22 +44,22 @@ describe("validateContext", () => {
   it("should reject a context path that does not exist", async () => {
     const root = await makeSetup();
     await writeFile(
-      path.join(root, ".ccr/architecture.md"),
-      "# Architecture\n\nEntry point: `missing/app/`.\n",
+      path.join(root, ".ccr/project.md"),
+      "# Project\n\nEntry point: `missing/app/`.\n",
       "utf8",
     );
 
     const result = await validateContext(root);
 
-    expect(result.issues).toContain(".ccr/architecture.md references a missing path: missing/app/");
+    expect(result.issues).toContain(".ccr/project.md references a missing path: missing/app/");
   });
 
   it("should reject broken context routes and host-independent unsafe paths", async () => {
     const root = await makeSetup();
     await rm(path.join(root, ".ccr/project.md"));
     await writeFile(
-      path.join(root, ".ccr/architecture.md"),
-      "# Architecture\n\nUnsafe: `C:\\private\\records.txt`.\n",
+      path.join(root, ".ccr/stakeholders.md"),
+      "# Stakeholders\n\nUnsafe: `C:\\private\\records.txt`.\n",
       "utf8",
     );
 
@@ -67,7 +67,7 @@ describe("validateContext", () => {
 
     expect(result.issues).toContain(".ccr/index.md references a missing route: project.md");
     expect(result.issues).toContain(
-      ".ccr/architecture.md contains an unsafe path reference: C:\\private\\records.txt",
+      ".ccr/stakeholders.md contains an unsafe path reference: C:\\private\\records.txt",
     );
   });
 

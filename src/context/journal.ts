@@ -42,7 +42,7 @@ export async function createJournalEntry(
   await writeManagedText(
     root,
     relativePath,
-    `# CCR Continuity\n\n- **Timestamp**: ${isoTimestamp}\n- **Branch**: \`${branch}\`\n- **Commit**: \`${commit}\`\n\n## Changed paths\n\n- None recorded.\n\n## Summary\n\nNeeds concise completion.\n\n## Findings and decisions\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n- Approved decisions: none.\n`,
+    `# CCR Continuity\n\n- **Timestamp**: ${isoTimestamp}\n- **Branch**: \`${branch}\`\n- **Commit**: \`${commit}\`\n\n## Changed paths\n\n- None recorded.\n\n## Summary\n\nNeeds concise completion.\n\n## Findings and outcomes\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n`,
   );
   return { path: relativePath };
 }

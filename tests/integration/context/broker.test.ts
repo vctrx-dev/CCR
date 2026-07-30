@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it } from "vitest";
 import {
+  listSafeRecentPaths,
   listSafeRepositoryPaths,
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
@@ -16,6 +17,30 @@ const roots: string[] = [];
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+it("should list privacy-filtered paths from recent commits", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-recent-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet"], { cwd: root });
+  await run("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await mkdir(path.join(root, "src"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    `${JSON.stringify(DEFAULT_CONTEXT_CONFIG)}\n`,
+    "utf8",
+  );
+  await writeFile(path.join(root, "src/main.ts"), "export {};\n", "utf8");
+  await writeFile(path.join(root, ".env.production"), "SECRET=x\n", "utf8");
+  await run("git", ["add", "--force", "--", "."], { cwd: root });
+  await run("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
+
+  expect(await listSafeRecentPaths(root)).toEqual({
+    paths: [".ccr/config.json", "src/main.ts"],
+    excludedCount: 1,
+  });
 });
 
 it("should expose only approved index content and never unstaged or symlink content", async () => {

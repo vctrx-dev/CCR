@@ -112,20 +112,15 @@ replaced. Git hooks and CI use the same package scripts:
 
 ## CCR Context Ownership
 
-- Commit shared repository context and human-approved decisions so local agents and CI use the
-  same project knowledge.
+- Commit shared repository context so local agents and CI use the same project knowledge.
 - Keep per-developer continuity journals local. They describe work on one branch and must not
   influence another developer's review.
-- An AI may propose a decision, but it becomes authoritative only after a developer reviews or
-  edits it.
-- Decisions must record their scope, rationale, affected stakeholders, and relevant paths or
-  symbols. Do not use a broad decision to suppress unrelated findings.
 - Shared context must not contain secrets, credentials, student records, personal data, or raw
   private discussions.
-- Source, tests, schemas, interfaces, and approved human decisions outrank generated context.
+- Source, tests, schemas, and interfaces outrank generated context.
 - Generated context is advisory and must link important claims to live paths, symbols, commands,
   decisions, or Git history.
-- Never treat a developer's silence as confirmation of a finding or decision.
+- Never treat a developer's silence as confirmation of a finding.
 - Review results are advisory by default. Distinguish confirmed issues, questions, and observations;
   uncertainty must not be presented as a proven bug.
 - Default hooks may detect stale context and print a repair command. They must not invoke an LLM,
@@ -149,6 +144,12 @@ CCR uses Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - A release is complete only after validation passes, the release change reaches `main`, and the
   matching immutable Git tag is created from that commit.
 - Never move or reuse a published release tag. Fix a release through a new version.
+
+## User Documentation
+
+- Update `USER_MANUAL.md` in the same change as any user-facing skill, slash operation, CLI command,
+  configuration setting, setup flow, privacy boundary, or uninstall behavior.
+- Keep examples aligned with the current package version and clearly label future capabilities.
 
 ## Debug Artifacts
 

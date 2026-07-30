@@ -109,6 +109,26 @@ export function readStagedDiff(root: string, relativePath: string): string {
   );
 }
 
+/** Lists path names touched by the latest five local commits without reading their content. */
+export function readRecentChangedPaths(root: string): string[] {
+  try {
+    const output = execFileSync(
+      "git",
+      ["log", "-5", "--name-only", "--pretty=format:", "--no-renames"],
+      {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 1024 * 1024,
+        stdio: ["ignore", "pipe", "ignore"],
+        windowsHide: true,
+      },
+    );
+    return [...new Set(output.split(/\r?\n/u).filter(Boolean))];
+  } catch {
+    return [];
+  }
+}
+
 /** Resolves the Git worktree root without modifying repository configuration. */
 export function findRepositoryRoot(cwd: string): string {
   return execFileSync("git", ["rev-parse", "--show-toplevel"], {

@@ -62,7 +62,7 @@ service-account*.json
 .superpowers/
 docs/
 
-# Per-developer CCR continuity. Shared context and approved decisions remain tracked.
+# Per-developer CCR continuity. Shared context remains tracked.
 .ccr/config.local.json
 .ccr/journal/
 .ccr/private/

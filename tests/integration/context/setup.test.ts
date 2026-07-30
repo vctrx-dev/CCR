@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG } from "../../../src/context/config";
-import { applySetup, previewSetup } from "../../../src/context/setup";
+import { applyConfigSetup, applySetup, previewSetup } from "../../../src/context/setup";
 
 const roots: string[] = [];
 
@@ -25,7 +25,12 @@ describe("CCR setup", () => {
 
     expect(preview.changes.map((change) => change.path)).toContain(".ccr/config.json");
     expect(preview.changes.map((change) => change.path)).toContain(".claude/skills/ccr/SKILL.md");
+    expect(preview.changes.map((change) => change.path)).toContain(
+      ".claude/skills/ccr-context/SKILL.md",
+    );
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/risks.md");
+    expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/architecture.md");
+    expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/decisions.md");
     expect(preview.changes.map((change) => change.path)).not.toContain("CLAUDE.md");
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
   });
@@ -93,7 +98,7 @@ describe("CCR setup", () => {
     expect(paths).toContain("AGENTS.md");
   });
 
-  it("should upgrade an older config without changing its settings", async () => {
+  it("should read an older config without rewriting the human-owned file", async () => {
     const { mkdir, writeFile } = await import("node:fs/promises");
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"));
@@ -118,22 +123,30 @@ describe("CCR setup", () => {
     );
 
     const preview = await previewSetup(root);
+    expect(preview.config.schemaVersion).toBe(2);
+    expect(preview.config.automation.checkBeforeCommit).toBe(false);
     expect(preview.changes.find((change) => change.path === ".ccr/config.json")?.action).toBe(
-      "modify",
+      "preserve",
     );
     await applySetup(root);
     const config = JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"));
     expect(config.domain).toBe("education");
     expect(config.automation.checkBeforeCommit).toBe(false);
     expect(config.context.recentJournalEntries).toBe(2);
-    expect(config.discovery.subagentCount).toBe(3);
-    expect(config._comment).toBeTruthy();
+    expect(config.schemaVersion).toBe(1);
+    expect(config.discovery).toBeUndefined();
+
+    const explicitUpgrade = await applyConfigSetup(root);
+    const upgraded = JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"));
+    expect(explicitUpgrade.action).toBe("modify");
+    expect(upgraded.schemaVersion).toBe(2);
+    expect(upgraded._help).toBeTruthy();
   });
 
   it("should update only a package-managed Claude skill", async () => {
     const { mkdir, writeFile } = await import("node:fs/promises");
     const root = await makeRepository();
-    const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+    const skillPath = path.join(root, ".claude/skills/ccr-context/SKILL.md");
     await mkdir(path.dirname(skillPath), { recursive: true });
     await writeFile(
       skillPath,
@@ -143,11 +156,25 @@ describe("CCR setup", () => {
 
     const result = await applySetup(root);
 
-    expect(result.changedPaths).toContain(".claude/skills/ccr/SKILL.md");
+    expect(result.changedPaths).toContain(".claude/skills/ccr-context/SKILL.md");
     const skill = await readFile(skillPath, "utf8");
-    expect(skill).toContain("never present them as terminal subcommands");
+    expect(skill).toContain("`initialize`, `update`, `verify`, `addition`, or `compact`");
+    expect(skill).toContain("optional context that is not in this repository");
     expect(skill).toContain("parallel discovery subagents");
     expect(skill).toContain("verification subagent");
+    expect(skill).toMatch(/stop\s+immediately/);
+    expect(skill).toContain("Normalize `initialise`");
+    expect(skill).toContain("Never edit `.ccr/config.json`");
+    expect(skill).toContain("20% and 30%");
+    expect(skill).toMatch(/Please review the resulting `\.ccr`\s+context changes/);
+    expect(skill).not.toContain(".ccr/architecture.md");
+    expect(skill).not.toContain(".ccr/decisions.md");
+
+    const manual = await readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8");
+    expect(manual).toContain("CCR manual");
+    expect(manual).toContain("/ccr-context");
+    expect(manual).toContain("/ccr-review");
+    expect(manual).not.toContain("## Initialize");
   });
 
   it("should reject malformed managed markers instead of appending a second block", async () => {

@@ -30,6 +30,10 @@ describe("context CLI", () => {
     expect(output).toContain('"checkBeforeCommit": true');
     expect(output).toContain('"subagentCount": 3');
     expect(output).toContain('"_comment"');
+    expect(output).toContain('"_help"');
+    expect(output).not.toContain("providerPolicy");
+    expect(output).not.toContain("maxIndexCharacters");
+    expect(output).not.toContain("maxFileCharacters");
 
     await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).toBeTruthy();
@@ -54,14 +58,14 @@ describe("context CLI", () => {
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
     expect(output).toContain("preview");
     expect(output).toContain("setup sends nothing");
-    expect(output).toContain("Context limits:");
+    expect(output).toContain("Context settings:");
     expect(output).toContain("Rollback:");
     expect(output).toContain("executes no Claude command");
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).toContain(
-      '"schemaVersion": 1',
+      '"schemaVersion": 2',
     );
 
     output = "";

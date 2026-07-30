@@ -22,7 +22,7 @@ export function createCli(io: CliIo = defaultIo()): Command {
   const program = new Command()
     .name("ccr")
     .description("Context management for ethical review of educational software")
-    .version("0.1.0");
+    .version("0.3.0");
   registerContextCommands(program, io);
   return program;
 }

@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import { DEFAULT_CONTEXT_CONFIG, parseContextConfig } from "./config";
 import type { ContextConfig } from "./config";
 import { assertSafeManagedPath, writeManagedText } from "./files";
-import { CLAUDE_BLOCK, CLAUDE_SKILL, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
+import { CCR_CONTEXT_SKILL, CCR_MANUAL_SKILL } from "./skills";
+import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
 
 export type SetupAction = "create" | "modify" | "preserve" | "unchanged";
 
@@ -20,8 +21,14 @@ export interface SetupPreview {
 
 const MANAGED_FILES: Readonly<Record<string, string>> = {
   ...CONTEXT_FILES,
-  ".claude/skills/ccr/SKILL.md": CLAUDE_SKILL,
+  ".claude/skills/ccr/SKILL.md": CCR_MANUAL_SKILL,
+  ".claude/skills/ccr-context/SKILL.md": CCR_CONTEXT_SKILL,
 };
+
+const MANAGED_SKILL_PATHS = new Set([
+  ".claude/skills/ccr/SKILL.md",
+  ".claude/skills/ccr-context/SKILL.md",
+]);
 
 async function readOptional(filePath: string): Promise<string | undefined> {
   try {
@@ -96,12 +103,9 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
   const managedEntries = await Promise.all(
     Object.entries(MANAGED_FILES).map(async ([relativePath, content]): Promise<SetupChange> => {
       const existing = await readManagedOptional(root, relativePath);
-      const canonicalConfig =
-        relativePath === ".ccr/config.json" && existing
-          ? `${JSON.stringify(parseContextConfig(existing), null, 2)}\n`
-          : undefined;
+      const isExistingConfig = relativePath === ".ccr/config.json" && existing !== undefined;
       const isManagedSkill =
-        relativePath === ".claude/skills/ccr/SKILL.md" &&
+        MANAGED_SKILL_PATHS.has(relativePath) &&
         existing?.includes("<!-- managed by CCR skill;") === true;
       if (isManagedSkill && existing && markerCount(existing, "<!-- managed by CCR skill;") !== 1) {
         throw new Error(`CCR managed file conflict in ${relativePath}.`);
@@ -111,16 +115,14 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
         action:
           existing === undefined
             ? "create"
-            : canonicalConfig !== undefined
-              ? existing === canonicalConfig
-                ? "unchanged"
-                : "modify"
+            : isExistingConfig
+              ? "preserve"
               : existing === content
                 ? "unchanged"
                 : isManagedSkill
                   ? "modify"
                   : "preserve",
-        content: canonicalConfig ?? content,
+        content: isExistingConfig ? existing : content,
       };
     }),
   );
@@ -149,13 +151,14 @@ export async function applySetup(root: string): Promise<{ changedPaths: string[]
   return { changedPaths };
 }
 
-/** Creates only the editable team configuration, leaving skills and instructions untouched. */
+/** Explicitly creates or upgrades only the human-owned team configuration. */
 export async function applyConfigSetup(root: string): Promise<SetupChange> {
   const preview = await previewSetup(root);
-  const change = preview.changes.find((item) => item.path === ".ccr/config.json");
-  if (!change) throw new Error("CCR configuration template is unavailable.");
-  if (change.action === "create") {
-    await writeManagedText(root, change.path, change.content);
-  }
-  return change;
+  const path = ".ccr/config.json";
+  const existing = await readManagedOptional(root, path);
+  const content = `${JSON.stringify(preview.config, null, 2)}\n`;
+  const action: SetupAction =
+    existing === undefined ? "create" : existing === content ? "unchanged" : "modify";
+  if (action !== "unchanged") await writeManagedText(root, path, content);
+  return { path, action, content };
 }

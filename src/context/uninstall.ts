@@ -1,6 +1,7 @@
 import { access, readFile, unlink } from "node:fs/promises";
 import { assertSafeManagedPath, writeManagedText } from "./files";
-import { CLAUDE_SKILL, CONTEXT_FILES } from "./templates";
+import { CCR_CONTEXT_SKILL, CCR_MANUAL_SKILL } from "./skills";
+import { CONTEXT_FILES } from "./templates";
 
 const LOCAL_STATE_PATHS = [
   ".ccr/config.local.json",
@@ -9,6 +10,12 @@ const LOCAL_STATE_PATHS = [
   ".ccr/cache",
   ".ccr/tmp",
 ] as const;
+
+const MANAGED_SKILLS: Readonly<Record<string, string>> = {
+  ".claude/skills/ccr/SKILL.md": CCR_MANUAL_SKILL,
+  ".claude/skills/ccr-context/SKILL.md": CCR_CONTEXT_SKILL,
+};
+const MANAGED_SKILL_MARKER = "<!-- managed by CCR skill; package updates may replace this file -->";
 
 export interface UninstallPreview {
   removePaths: string[];
@@ -59,8 +66,12 @@ export async function previewUninstall(
   shouldRemoveContext: boolean,
 ): Promise<UninstallPreview> {
   const removePaths: string[] = [];
-  const skillPath = ".claude/skills/ccr/SKILL.md";
-  if ((await readManagedOptional(root, skillPath)) === CLAUDE_SKILL) removePaths.push(skillPath);
+  for (const [skillPath, content] of Object.entries(MANAGED_SKILLS)) {
+    const existing = await readManagedOptional(root, skillPath);
+    if (existing === content || existing?.split(MANAGED_SKILL_MARKER).length === 2) {
+      removePaths.push(skillPath);
+    }
+  }
   if (shouldRemoveContext) {
     for (const relativePath of Object.keys(CONTEXT_FILES)) {
       if ((await readManagedOptional(root, relativePath)) !== undefined) {
