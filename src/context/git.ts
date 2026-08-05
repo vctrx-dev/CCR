@@ -50,7 +50,8 @@ function parseGitEntries(output: string, oidIndex: number): IndexEntry[] {
     });
 }
 
-function isSharedContext(relativePath: string): boolean {
+/** Classifies a repo path as shared context when it lives under `.ccr/` and is not local-only state. */
+export function isSharedContext(relativePath: string): boolean {
   return (
     relativePath.startsWith(".ccr/") &&
     relativePath !== ".ccr/config.local.json" &&
@@ -112,6 +113,26 @@ export function readRecentChangedPaths(root: string): string[] {
     const output = execFileSync(
       "git",
       ["log", "-5", "--name-only", "--pretty=format:", "--no-renames"],
+      {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 1024 * 1024,
+        stdio: ["ignore", "pipe", "ignore"],
+        windowsHide: true,
+      },
+    );
+    return [...new Set(output.split(/\r?\n/u).filter(Boolean))];
+  } catch {
+    return [];
+  }
+}
+
+/** Lists path names touched by the latest local commit without reading their content. */
+export function readLastCommitPaths(root: string): string[] {
+  try {
+    const output = execFileSync(
+      "git",
+      ["log", "-1", "--name-only", "--pretty=format:", "--no-renames"],
       {
         cwd: root,
         encoding: "utf8",

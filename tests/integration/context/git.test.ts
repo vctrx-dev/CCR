@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { isGitIgnored, readStagedContextState } from "../../../src/context/git";
+import {
+  isGitIgnored,
+  isSharedContext,
+  readLastCommitPaths,
+  readStagedContextState,
+} from "../../../src/context/git";
 
 const run = promisify(execFile);
 const roots: string[] = [];
@@ -49,5 +54,34 @@ describe("readStagedContextState", () => {
     const root = await makeRepository();
     await writeFile(path.join(root, ".gitignore"), ".claude/\n", "utf8");
     expect(isGitIgnored(root, ".claude/skills/ccr/SKILL.md")).toBe(true);
+  });
+});
+
+describe("readLastCommitPaths", () => {
+  it("should list the latest commit's changed paths", async () => {
+    const root = await makeRepository();
+    await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    await writeFile(path.join(root, "a.txt"), "a\n", "utf8");
+    await writeFile(path.join(root, "b.txt"), "b\n", "utf8");
+    await run("git", ["add", "."], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+    expect(readLastCommitPaths(root)).toEqual(["a.txt", "b.txt"]);
+  });
+
+  it("should return an empty array for a repository without commits", async () => {
+    const root = await makeRepository();
+    expect(readLastCommitPaths(root)).toEqual([]);
+  });
+});
+
+describe("isSharedContext", () => {
+  it("should classify shared .ccr files and exclude local state", () => {
+    expect(isSharedContext(".ccr/project.md")).toBe(true);
+    expect(isSharedContext(".ccr/index.md")).toBe(true);
+    expect(isSharedContext(".ccr/stakeholders.md")).toBe(true);
+    expect(isSharedContext(".ccr/journal/feature_x/2026-01-01T00-00-00Z.md")).toBe(false);
+    expect(isSharedContext(".ccr/config.local.json")).toBe(false);
+    expect(isSharedContext("src/main.ts")).toBe(false);
   });
 });
