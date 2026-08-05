@@ -23,7 +23,7 @@ the developer chooses which components to enable:
 |---|---|---|
 | Editable settings only | `ccr config init --apply` | Yes |
 | Claude manual, context skill, and shared context | `ccr setup --apply` | Yes |
-| Advisory pre-commit warning | `ccr hooks install --apply` | Yes |
+| Advisory context hooks (pre-commit + post-commit) | `ccr hooks install --apply` | Yes |
 | `CLAUDE.md` or `AGENTS.md` pointer | Enable its config setting before setup | Yes |
 | Local continuity journal | Created by `/ccr-context` operations when needed | Yes |
 
@@ -88,10 +88,13 @@ npx --no-install ccr hooks status
 npx --no-install ccr uninstall
 ```
 
-The Git hook is optional and advisory. It only warns when repository files are staged without a
-staged shared `.ccr/` file. Claude receives repository evidence through a Git-index broker with
-mandatory credential/local-path exclusions, so staged review never reads a newer unstaged file.
-Branch-local journals remain ignored and are preserved safely during uninstall.
+The Git hooks are optional and advisory and install automatically when the package is installed
+(npm/yarn; with pnpm, approve `@vctrx/ccr` in `pnpm.onlyBuiltDependencies`). The pre-commit hook
+warns when repository files are staged without a staged shared `.ccr/` file. The post-commit hook
+starts a local journal entry for each commit and prints a copy-paste prompt that updates the shared
+context and completes the journal in Claude Code. Claude receives repository evidence through a
+Git-index broker with mandatory credential/local-path exclusions, so staged review never reads a
+newer unstaged file. Branch-local journals remain ignored and are preserved safely during uninstall.
 
 `.ccr/config.json` is human-owned. Its top `_help` map documents every setting, datatype, allowed
 range, and effect. CCR and Claude do not change it unless the developer explicitly requests or

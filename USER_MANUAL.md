@@ -5,7 +5,7 @@ Update this file whenever a user-facing skill, command, setting, or setup flow c
 ## Quick flow
 
 ```text
-Install → Configure → Setup → Initialize → Review context → Update when needed
+Install → Initialize → Review context → Claude updates context and journal after each commit
 ```
 
 ## 1. Install
@@ -21,6 +21,24 @@ npm install --save-dev /path/to/vctrx-ccr-VERSION.tgz
 ```
 
 Requires Node.js 22.12+ and Claude Code 2.1.0+.
+
+## Automatic hooks
+
+Installing the package runs `ccr hooks install --apply` automatically (npm/yarn; for pnpm, approve
+`@vctrx/ccr` in `pnpm.onlyBuiltDependencies`). It installs two advisory Git hooks and keeps local
+context directories ignored:
+
+- `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file.
+- `post-commit` — after every commit, starts a branch-local journal entry when none exists, warns
+  (without blocking) when the last commit changed repository files without updating shared context,
+  and prints a copy-paste instruction for Claude Code.
+
+After a commit, paste the printed instruction into Claude Code. Claude reviews the last commit,
+completes the journal entry in `.ccr/journal/`, and changes `.ccr/project.md` only when the commit
+affects the repository's high-level context. Most commits do not change `.ccr/project.md`.
+
+Both hooks are advisory: they never block a commit, edit files by themselves, or fail the commit.
+Remove them with `npx --no-install ccr hooks uninstall --apply`.
 
 ## 2. Configure
 
@@ -84,13 +102,12 @@ Review `.ccr` changes after every operation.
 
 ## Optional commit warning
 
-```bash
-npx --no-install ccr hooks install
-npx --no-install ccr hooks install --apply
-```
-
-The hook only warns when staged code has no staged context. It never changes files or blocks a
-commit.
+Both Git hooks are advisory. The pre-commit hook warns when repository files are staged without a
+staged shared `.ccr/` file. After each commit, the post-commit hook starts a local journal entry and
+prints a copy-paste prompt; pasting it into Claude Code updates the shared context and completes the
+journal, changing `.ccr/project.md` only when the commit affects the repository's high-level context.
+Neither hook blocks a commit. Check or remove them with `npx --no-install ccr hooks status` and
+`npx --no-install ccr hooks uninstall --apply`.
 
 ## Privacy
 

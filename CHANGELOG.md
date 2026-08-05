@@ -12,6 +12,9 @@ contain incompatible changes when they are clearly documented.
 - `/ccr-context` with five operations: initialize, update, verify, addition, and compact.
 - A separate `/ccr` manual and privacy-filtered recent-commit verification paths.
 - Human-readable config help for every setting and a bounded compaction percentage.
+- Package `postinstall` installs advisory Git hooks automatically in a target repository.
+- A post-commit hook starts a branch-local journal entry, warns when a commit changed code without
+  updating shared context, and prints a copy-paste prompt that drives `/ccr-context`.
 
 ### Changed
 
