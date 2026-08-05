@@ -5,7 +5,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG } from "../../../src/context/config";
-import { createJournalEntry, readRecentJournalEntries } from "../../../src/context/journal";
+import {
+  createJournalEntry,
+  journalEntryExistsForCommit,
+  readRecentJournalEntries,
+} from "../../../src/context/journal";
 
 const run = promisify(execFile);
 const roots: string[] = [];
@@ -43,4 +47,30 @@ it("should derive journal path and metadata from Git and UTC time", async () => 
   const newer = await createJournalEntry(root, new Date("2026-07-29T07:45:12Z"));
   const recent = await readRecentJournalEntries(root);
   expect(recent.map((entry) => entry.path)).toEqual([newer.path, result.path]);
+});
+
+it("should report journal existence per commit and record changed paths", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-exists-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(path.join(root, "main.py"), "print(1)\n", "utf8");
+  await run("git", ["add", "main.py"], { cwd: root });
+  await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+  const commit = (await run("git", ["rev-parse", "HEAD"], { cwd: root })).stdout.trim();
+  const otherCommit = "0".repeat(40);
+
+  expect(await journalEntryExistsForCommit(root, commit)).toBe(false);
+  expect(await journalEntryExistsForCommit(root, otherCommit)).toBe(false);
+
+  const result = await createJournalEntry(root, new Date("2026-07-29T09:00:00Z"), ["main.py"]);
+  const content = await readFile(path.join(root, result.path), "utf8");
+  expect(content).toContain(`**Commit**: \`${commit}\``);
+  expect(content).toContain("- main.py");
+  expect(content).not.toContain("None recorded.");
+
+  expect(await journalEntryExistsForCommit(root, commit)).toBe(true);
+  expect(await journalEntryExistsForCommit(root, otherCommit)).toBe(false);
 });
