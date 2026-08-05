@@ -18,6 +18,7 @@
   },
   "scripts": {
     "hooks:dev": "husky",
+    "postinstall": "node dist/cli/index.cjs hooks install --apply || exit 0",
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",

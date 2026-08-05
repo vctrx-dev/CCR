@@ -36,15 +36,11 @@ function runInstalled(bin, arguments_, cwd) {
     return execFileSync(bin, arguments_, { cwd, encoding: "utf8", windowsHide: true });
   }
 
-  return execFileSync(
-    process.env.ComSpec ?? "cmd.exe",
-    ["/d", "/c", path.basename(bin), ...arguments_],
-    {
-      cwd: path.dirname(bin),
-      encoding: "utf8",
-      windowsHide: true,
-    },
-  );
+  return execFileSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/c", bin, ...arguments_], {
+    cwd: path.dirname(bin),
+    encoding: "utf8",
+    windowsHide: true,
+  });
 }
 
 try {
@@ -98,6 +94,47 @@ try {
   const preview = runInstalled(installedBin, ["setup"], consumer);
   if (!preview.includes("CCR setup preview") || existsSync(path.join(consumer, ".ccr"))) {
     throw new Error("Installed CLI setup preview changed the clean consumer repository.");
+  }
+
+  // Verify postinstall installs both advisory hooks and local ignore rules in a consumer repo.
+  const scripted = path.join(temporaryRoot, "consumer-scripted");
+  mkdirSync(scripted);
+  writeFileSync(
+    path.join(scripted, "package.json"),
+    `${JSON.stringify({ name: "ccr-smoke-scripted", private: true }, null, 2)}\n`,
+  );
+  execFileSync("git", ["init", "--quiet"], { cwd: scripted, windowsHide: true });
+  runNpm(
+    [
+      "install",
+      "--no-audit",
+      "--no-fund",
+      "--package-lock=false",
+      "--offline",
+      "--cache",
+      cache,
+      tarball,
+    ],
+    scripted,
+  );
+
+  const preCommitPath = path.join(scripted, ".git", "hooks", "pre-commit");
+  const postCommitPath = path.join(scripted, ".git", "hooks", "post-commit");
+  const ignorePath = path.join(scripted, ".gitignore");
+  if (!existsSync(preCommitPath) || !readFileSync(preCommitPath, "utf8").includes("# ccr:start")) {
+    throw new Error("postinstall did not install the pre-commit hook.");
+  }
+  if (
+    !existsSync(postCommitPath) ||
+    !readFileSync(postCommitPath, "utf8").includes("# ccr:start - post-commit context check")
+  ) {
+    throw new Error("postinstall did not install the post-commit hook.");
+  }
+  if (
+    !existsSync(ignorePath) ||
+    !readFileSync(ignorePath, "utf8").includes("# ccr:start - local context continuity")
+  ) {
+    throw new Error("postinstall did not add local-continuity ignore rules.");
   }
 
   process.stdout.write(
