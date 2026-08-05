@@ -108,6 +108,21 @@ protects against untested modules, not against every uncovered line.
 - Lint: Biome recommended. Format: 2-space, double quotes, semicolons, line width 100
 - Comments only for non-obvious WHY
 
+## Prompt Writing
+
+Before authoring or editing any prompt shipped in this package — Claude Code skills
+(`src/context/skills.ts`), the post-commit copy-paste instruction
+(`src/context/after-commit.ts`), the `CLAUDE.md`/`AGENTS.md` pointer block
+(`src/context/templates.ts`), or future review prompts — read and follow the official Claude
+prompting best practices:
+
+<https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>
+
+Key practices to apply: be clear and direct with specific output constraints; give Claude a role;
+provide context and motivation for instructions; use 3-5 relevant, structured few-shot examples;
+structure complex prompts with XML tags; direct tool use explicitly; and define success criteria
+and when to stop. Prefer telling Claude what to do over what not to do.
+
 ## Repository Quality Gates
 
 Biome is the formatter and linter; do not add Prettier unless the formatter is deliberately
