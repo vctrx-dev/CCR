@@ -77,9 +77,11 @@ or approves that exact change.
 - End every operation with: "Please review the resulting \`.ccr\` context changes once before relying
   on them."
 
-When an operation calls for a journal, run \`context journal\` exactly once and edit only the
-returned local file's summary sections. Preserve its generated timestamp, branch, commit, and path.
-Keep it under 1,200 characters; never stage it. Read continuity only through \`context journals\`.
+When an operation calls for a journal and the commit hook has not already started one for the
+current commit, run \`context journal\` exactly once and edit only the returned local file's summary
+sections; otherwise complete the existing entry found through \`context journals\`. Preserve its
+generated timestamp, branch, commit, and path. Keep it under 1,200 characters; never stage it. Read
+continuity only through \`context journals\`.
 
 ## Initialize
 
@@ -106,11 +108,14 @@ change config without explicit approval. Validate, then create one local journal
 ## Update
 
 Read bounded continuity through \`context journals\`, then use \`context changes\` and
-\`context diff <file>\` for each relevant staged file. Update only the affected claims, preserving
-the project narrative's natural flow. Add a small detail when it changes how a human or future
+\`context diff <file>\` for each relevant staged file. If no files are staged (for example right after
+a commit), base the update on \`context recent\` and read the changed files with
+\`context read <file>\`. Update only the affected claims, preserving the project narrative's natural
+flow. Add a small detail when it changes how a human or future
 implementation should reason about the system; do not append isolated technical categories. Use
-parallel discovery subagents only when the diff spans independent evidence traces. Run the
-independent verification pass, show the diff, validate, and create one local journal entry.
+parallel discovery subagents only when the diff spans independent evidence traces. Run the independent verification pass, show the diff, validate, and complete or create one local
+journal entry. When updating \`.ccr/project.md\`, change it only if the commit affects the
+repository's high-level context; most commits do not.
 
 ## Verify
 
