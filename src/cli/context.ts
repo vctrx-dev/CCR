@@ -9,9 +9,13 @@ import {
 import { DEFAULT_CONTEXT_CONFIG, parseContextConfig, updateContextConfig } from "../context/config";
 import { assertSafeManagedPath, writeManagedText } from "../context/files";
 import { findRepositoryRoot, isGitIgnored, readStagedContextState } from "../context/git";
-import { installContextHook, readContextHookStatus, removeContextHook } from "../context/hooks";
+import {
+  installAllContextHooks,
+  readContextHookStatus,
+  removeAllContextHooks,
+} from "../context/hooks";
 import { createJournalEntry, readRecentJournalEntries } from "../context/journal";
-import { readResolvedContextConfig, readSafeStagedPaths } from "../context/privacy";
+import { readSafeStagedPaths } from "../context/privacy";
 import { applyConfigSetup, applySetup, previewSetup } from "../context/setup";
 import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { validateContext } from "../context/validate";
@@ -82,7 +86,7 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
     return;
   }
   const result = await applySetup(root);
-  if (options.hooks) await installContextHook(root);
+  if (options.hooks) await installAllContextHooks(root);
   writeLines(io, [
     compatibility,
     `Claude skill: ${isSkillLocal ? "local (ignored by Git)" : "shareable"}`,
@@ -124,7 +128,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       }
       const shouldRemoveContext = options.removeContext ?? false;
       await applyUninstall(root, shouldRemoveContext);
-      await removeContextHook(root);
+      await removeAllContextHooks(root);
       writeLines(io, [
         `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
         "Local context was preserved and remains ignored.",
@@ -242,58 +246,4 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       await writeManagedText(root, ".ccr/config.json", `${JSON.stringify(updated, null, 2)}\n`);
       writeLines(io, [`Updated ${key}.`]);
     });
-
-  const hooks = program.command("hooks").description("Manage the advisory pre-commit check");
-  hooks
-    .command("install")
-    .option("--apply", "write the previewed hook block")
-    .action(async (options: ApplyOptions) => {
-      const root = rootFor(io);
-      if (!options.apply) {
-        const preview = await readContextHookStatus(root);
-        writeLines(io, [
-          `CCR hook preview: ${preview.status} (${preview.path})`,
-          "Run `ccr hooks install --apply` to install.",
-        ]);
-        return;
-      }
-      const result = await installContextHook(root);
-      writeLines(io, [`CCR hook: ${result.status} (${result.path})`]);
-    });
-  hooks.command("status").action(async () => {
-    const result = await readContextHookStatus(rootFor(io));
-    writeLines(io, [`CCR hook: ${result.status} (${result.path})`]);
-  });
-  hooks
-    .command("uninstall")
-    .option("--apply", "remove CCR's marked hook block")
-    .action(async (options: ApplyOptions) => {
-      const root = rootFor(io);
-      if (!options.apply) {
-        const preview = await readContextHookStatus(root);
-        writeLines(io, [
-          `CCR hook uninstall preview: ${preview.status} (${preview.path})`,
-          "Run `ccr hooks uninstall --apply` to remove.",
-        ]);
-        return;
-      }
-      const result = await removeContextHook(root);
-      writeLines(io, [`CCR hook: ${result.status} (${result.path})`]);
-    });
-  hooks.command("check").action(async () => {
-    let shouldCheck = false;
-    try {
-      shouldCheck = (await readResolvedContextConfig(rootFor(io))).automation.checkBeforeCommit;
-    } catch {
-      return;
-    }
-    if (!shouldCheck) return;
-    const state = readStagedContextState(rootFor(io));
-    if (state.shouldWarn) {
-      writeLines(io, [
-        "CCR warning: context might need updating.",
-        "Run `/ccr-context update` in Claude Code, or continue if context is unaffected.",
-      ]);
-    }
-  });
 }

@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { registerContextCommands } from "./context";
+import { registerHooksCommands } from "./hooks";
 
 export interface CliIo {
   cwd: string;
@@ -24,6 +25,7 @@ export function createCli(io: CliIo = defaultIo()): Command {
     .description("Context management for ethical review of educational software")
     .version("0.3.0");
   registerContextCommands(program, io);
+  registerHooksCommands(program, io);
   return program;
 }
 
