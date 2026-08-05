@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
-import { assertSafeManagedPath, isFileNotFound, writeManagedText } from "./files";
+import {
+  assertSafeManagedPath,
+  isFileNotFound,
+  readManagedTextIfExists,
+  writeManagedText,
+} from "./files";
 import { readGitValue } from "./git";
 import { readResolvedContextConfig } from "./privacy";
 
@@ -22,6 +27,25 @@ export function branchDetails(root: string): { branch: string; directory: string
   };
 }
 
+/**
+ * Returns the first free journal path for a second-resolution timestamp. Appends a numeric
+ * suffix (`.1.md`, `.2.md`, ...) when the base path already exists so same-second entries do
+ * not overwrite one another; the base path is returned unchanged when it is free.
+ */
+async function freeJournalPath(
+  root: string,
+  relativeDirectory: string,
+  timestamp: string,
+): Promise<string> {
+  const base = `${relativeDirectory}/${timestamp}`;
+  const relativePath = `${base}.md`;
+  if ((await readManagedTextIfExists(root, relativePath)) === undefined) return relativePath;
+  for (let index = 1; ; index += 1) {
+    const candidate = `${base}.${index}.md`;
+    if ((await readManagedTextIfExists(root, candidate)) === undefined) return candidate;
+  }
+}
+
 /** Creates a journal skeleton whose timestamp, branch, commit, and path come from deterministic inputs. */
 export async function createJournalEntry(
   root: string,
@@ -32,7 +56,7 @@ export async function createJournalEntry(
   const timestamp = isoTimestamp.replaceAll(":", "-");
   const { branch, directory } = branchDetails(root);
   const commit = readGitValue(root, ["rev-parse", "HEAD"]);
-  const relativePath = `.ccr/journal/${directory}/${timestamp}.md`;
+  const relativePath = await freeJournalPath(root, `.ccr/journal/${directory}`, timestamp);
   const paths = changedPaths.length
     ? changedPaths.map((relativePath) => `- ${relativePath}`).join("\n")
     : "- None recorded.";
@@ -54,7 +78,9 @@ export async function journalEntryExistsForCommit(root: string, commit: string):
       await readdir(await assertSafeManagedPath(root, relativeDirectory), { withFileTypes: true })
     )
       .filter(
-        (entry) => entry.isFile() && /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/u.test(entry.name),
+        (entry) =>
+          entry.isFile() &&
+          /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u.test(entry.name),
       )
       .map((entry) => entry.name);
   } catch (error: unknown) {
@@ -81,7 +107,9 @@ export async function readRecentJournalEntries(root: string): Promise<JournalEnt
   try {
     names = (await readdir(directoryPath, { withFileTypes: true }))
       .filter(
-        (entry) => entry.isFile() && /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.md$/u.test(entry.name),
+        (entry) =>
+          entry.isFile() &&
+          /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u.test(entry.name),
       )
       .map((entry) => entry.name)
       .sort()

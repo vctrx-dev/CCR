@@ -74,3 +74,33 @@ it("should report journal existence per commit and record changed paths", async 
   expect(await journalEntryExistsForCommit(root, commit)).toBe(true);
   expect(await journalEntryExistsForCommit(root, otherCommit)).toBe(false);
 });
+
+it("should not overwrite a journal entry created in the same second", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-collision-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    `${JSON.stringify(DEFAULT_CONTEXT_CONFIG)}\n`,
+    "utf8",
+  );
+  await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
+  await run("git", ["add", "file.txt"], { cwd: root });
+  await run("git", ["commit", "--quiet", "-m", "test"], { cwd: root });
+
+  const sameSecond = new Date("2026-07-29T10:00:00Z");
+  const first = await createJournalEntry(root, sameSecond);
+  const second = await createJournalEntry(root, sameSecond);
+
+  expect(second.path).not.toBe(first.path);
+  for (const entry of [first, second]) {
+    const content = await readFile(path.join(root, entry.path), "utf8");
+    expect(content).toMatch(/\*\*Commit\*\*: `[0-9a-f]{40}`/);
+  }
+
+  const recent = await readRecentJournalEntries(root);
+  expect(new Set(recent.map((entry) => entry.path))).toEqual(new Set([first.path, second.path]));
+});
