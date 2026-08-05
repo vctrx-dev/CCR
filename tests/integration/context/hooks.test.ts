@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it } from "vitest";
-import { installContextHook, removeContextHook } from "../../../src/context/hooks";
+import {
+  installAllContextHooks,
+  installContextHook,
+  readContextHookStatus,
+  removeAllContextHooks,
+  removeContextHook,
+} from "../../../src/context/hooks";
 
 const run = promisify(execFile);
 const roots: string[] = [];
@@ -100,4 +106,40 @@ it.each([
   await expect(installContextHook(root)).rejects.toThrow(/managed markers/i);
   await expect(removeContextHook(root)).rejects.toThrow(/managed markers/i);
   expect(await readFile(hookPath, "utf8")).toBe(existing);
+});
+
+it("should install and remove a post-commit hook independently of pre-commit", async () => {
+  const root = await createRepository();
+  const hookPath = path.join(root, ".git/hooks/post-commit");
+
+  expect((await installContextHook(root, "post-commit")).status).toBe("installed");
+  expect(await readFile(hookPath, "utf8")).toContain("ccr hooks after-commit");
+  expect((await installContextHook(root, "post-commit")).status).toBe("already-installed");
+  expect((await readContextHookStatus(root, "post-commit")).status).toBe("already-installed");
+
+  expect((await removeContextHook(root, "post-commit")).status).toBe("removed");
+  expect(await readFile(hookPath, "utf8")).not.toContain("ccr");
+});
+
+it("should install both advisory hooks and local ignore rules together", async () => {
+  const root = await createRepository();
+  const result = await installAllContextHooks(root);
+  expect(result.preCommit.status).toBe("installed");
+  expect(result.postCommit.status).toBe("installed");
+  expect(result.ignore).toBe("created");
+  expect(await readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).toContain(
+    "# ccr:start - post-commit context check",
+  );
+  expect(await readFile(path.join(root, ".gitignore"), "utf8")).toContain(
+    "# ccr:start - local context continuity",
+  );
+
+  const again = await installAllContextHooks(root);
+  expect(again.preCommit.status).toBe("already-installed");
+  expect(again.postCommit.status).toBe("already-installed");
+  expect(again.ignore).toBe("unchanged");
+
+  const removed = await removeAllContextHooks(root);
+  expect(removed.preCommit.status).toBe("removed");
+  expect(removed.postCommit.status).toBe("removed");
 });

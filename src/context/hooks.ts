@@ -3,23 +3,44 @@ import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { readTextIfExists, writeTextAtomic } from "./files";
+import { ensureLocalIgnoreRules } from "./ignore";
+import type { IgnoreOutcome } from "./ignore";
 
 /**
- * Safe composition for CCR's advisory pre-commit integration. Future hook types should reuse its
+ * Safe composition for CCR's advisory Git hook integration. Future hook types should reuse its
  * path validation and marked-block ownership rules, extending the definition rather than overwriting
  * another tool's hook.
  */
+
+export type CcrHookName = "pre-commit" | "post-commit";
 
 export interface HookResult {
   path: string;
   status: "installed" | "already-installed" | "removed" | "not-installed";
 }
 
-const START_MARKER = "# ccr:start - advisory context check";
-const END_MARKER = "# ccr:end";
-const HOOK_BLOCK = `${START_MARKER}
+interface HookDefinition {
+  block: string;
+  end: string;
+  start: string;
+}
+
+const HOOK_DEFINITIONS: Record<CcrHookName, HookDefinition> = {
+  "pre-commit": {
+    start: "# ccr:start - advisory context check",
+    end: "# ccr:end",
+    block: `# ccr:start - advisory context check
 npx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2
-${END_MARKER}`;
+# ccr:end`,
+  },
+  "post-commit": {
+    start: "# ccr:start - post-commit context check",
+    end: "# ccr:end",
+    block: `# ccr:start - post-commit context check
+npx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2
+# ccr:end`,
+  },
+};
 
 interface ManagedBlock {
   start: number;
@@ -65,7 +86,7 @@ function assertHookIsInRepository(root: string, hookPath: string): void {
   }
 }
 
-function resolveHook(root: string): ResolvedHook {
+function resolveHook(root: string, hookName: CcrHookName): ResolvedHook {
   let configured = "";
   try {
     configured = execFileSync("git", ["config", "--path", "--get", "core.hooksPath"], {
@@ -81,7 +102,7 @@ function resolveHook(root: string): ResolvedHook {
     const normalized = configured.replaceAll("\\", "/").replace(/\/+$/, "");
     const isHusky = normalized.endsWith("/_");
     const hooksRoot = isHusky ? normalized.slice(0, -2) : normalized;
-    const hookPath = path.resolve(root, hooksRoot, "pre-commit");
+    const hookPath = path.resolve(root, hooksRoot, hookName);
     assertHookIsInRepository(root, hookPath);
     return { isHusky, path: hookPath };
   }
@@ -91,7 +112,7 @@ function resolveHook(root: string): ResolvedHook {
     encoding: "utf8",
     windowsHide: true,
   }).trim();
-  const hookPath = path.resolve(root, hooksDirectory, "pre-commit");
+  const hookPath = path.resolve(root, hooksDirectory, hookName);
   assertHookIsInRepository(root, hookPath);
   return { isHusky: false, path: hookPath };
 }
@@ -101,9 +122,9 @@ function markerMatches(content: string, marker: string): RegExpMatchArray[] {
   return Array.from(content.matchAll(new RegExp(`^${escaped}\\r?$`, "gm")));
 }
 
-function findManagedBlock(content: string): ManagedBlock | undefined {
-  const starts = markerMatches(content, START_MARKER);
-  const ends = markerMatches(content, END_MARKER);
+function findManagedBlock(content: string, definition: HookDefinition): ManagedBlock | undefined {
+  const starts = markerMatches(content, definition.start);
+  const ends = markerMatches(content, definition.end);
   if (starts.length === 0 && ends.length === 0) return undefined;
   if (starts.length !== 1 || ends.length !== 1) {
     throw new Error("Existing hook has malformed or duplicate CCR managed markers.");
@@ -155,20 +176,23 @@ function removeManagedBlock(content: string, block: ManagedBlock): string {
   return `${before}${separator}${after}`;
 }
 
-/** Installs a marked advisory block while preserving an existing pre-commit hook. */
-export async function installContextHook(root: string): Promise<HookResult> {
-  const resolved = resolveHook(root);
-  const hookPath = resolved.path;
+/** Installs a marked advisory block while preserving an existing hook of the same name. */
+export async function installContextHook(
+  root: string,
+  hookName: CcrHookName = "pre-commit",
+): Promise<HookResult> {
+  const definition = HOOK_DEFINITIONS[hookName];
+  const hookPath = resolveHook(root, hookName).path;
   const existing = await readTextIfExists(hookPath);
   if (existing !== undefined) {
-    const managedBlock = findManagedBlock(existing);
-    assertComposableHook(existing, resolved.isHusky, hookPath);
+    const managedBlock = findManagedBlock(existing, definition);
+    assertComposableHook(existing, resolveHook(root, hookName).isHusky, hookPath);
     if (managedBlock) {
       const managed = existing.slice(managedBlock.start, managedBlock.end);
-      if (managed === HOOK_BLOCK) return { path: hookPath, status: "already-installed" };
+      if (managed === definition.block) return { path: hookPath, status: "already-installed" };
       await writeTextAtomic(
         hookPath,
-        `${existing.slice(0, managedBlock.start)}${HOOK_BLOCK}${existing.slice(managedBlock.end)}`,
+        `${existing.slice(0, managedBlock.start)}${definition.block}${existing.slice(managedBlock.end)}`,
       );
       await chmod(hookPath, 0o755);
       return { path: hookPath, status: "installed" };
@@ -178,30 +202,62 @@ export async function installContextHook(root: string): Promise<HookResult> {
   const base = existing?.trim() ? existing : "#!/bin/sh";
   const separator = base.endsWith("\n") ? "\n" : "\n\n";
   await mkdir(path.dirname(hookPath), { recursive: true });
-  await writeTextAtomic(hookPath, `${base}${separator}${HOOK_BLOCK}\n`);
+  await writeTextAtomic(hookPath, `${base}${separator}${definition.block}\n`);
   await chmod(hookPath, 0o755);
   return { path: hookPath, status: "installed" };
 }
 
 /** Removes only CCR's marked block and preserves other hook commands. */
-export async function removeContextHook(root: string): Promise<HookResult> {
-  const hookPath = resolveHook(root).path;
+export async function removeContextHook(
+  root: string,
+  hookName: CcrHookName = "pre-commit",
+): Promise<HookResult> {
+  const definition = HOOK_DEFINITIONS[hookName];
+  const hookPath = resolveHook(root, hookName).path;
   const existing = await readTextIfExists(hookPath);
   if (existing === undefined) return { path: hookPath, status: "not-installed" };
-  const managedBlock = findManagedBlock(existing);
+  const managedBlock = findManagedBlock(existing, definition);
   if (!managedBlock) return { path: hookPath, status: "not-installed" };
   await writeTextAtomic(hookPath, removeManagedBlock(existing, managedBlock));
   await chmod(hookPath, 0o755);
   return { path: hookPath, status: "removed" };
 }
 
-/** Reports whether CCR's marked block is installed in the active pre-commit hook. */
-export async function readContextHookStatus(root: string): Promise<HookResult> {
-  const hookPath = resolveHook(root).path;
+/** Reports whether CCR's marked block is installed in the named hook. */
+export async function readContextHookStatus(
+  root: string,
+  hookName: CcrHookName = "pre-commit",
+): Promise<HookResult> {
+  const definition = HOOK_DEFINITIONS[hookName];
+  const hookPath = resolveHook(root, hookName).path;
   const existing = await readTextIfExists(hookPath);
   return {
     path: hookPath,
     status:
-      existing !== undefined && findManagedBlock(existing) ? "already-installed" : "not-installed",
+      existing !== undefined && findManagedBlock(existing, definition)
+        ? "already-installed"
+        : "not-installed",
   };
+}
+
+/** Installs both advisory hooks and the local-continuity ignore rules in one idempotent step. */
+export async function installAllContextHooks(root: string): Promise<{
+  preCommit: HookResult;
+  postCommit: HookResult;
+  ignore: IgnoreOutcome;
+}> {
+  const preCommit = await installContextHook(root, "pre-commit");
+  const postCommit = await installContextHook(root, "post-commit");
+  const ignore = await ensureLocalIgnoreRules(root);
+  return { preCommit, postCommit, ignore };
+}
+
+/** Removes CCR's marked blocks from both advisory hooks. */
+export async function removeAllContextHooks(root: string): Promise<{
+  preCommit: HookResult;
+  postCommit: HookResult;
+}> {
+  const preCommit = await removeContextHook(root, "pre-commit");
+  const postCommit = await removeContextHook(root, "post-commit");
+  return { preCommit, postCommit };
 }
