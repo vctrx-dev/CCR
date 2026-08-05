@@ -65,9 +65,11 @@ Then open Claude Code:
 | `/ccr-context addition` | Add human-provided plans, specifications, or other context |
 | `/ccr-context compact` | Remove at most the configured 20–30% while preserving key knowledge |
 
-Initialization uses focused discovery subagents for product, stakeholder, technical, data,
-integration, contract, and verification evidence. A separate subagent verifies the synthesis before
-one bounded correction pass. Every operation asks the developer to review proposed context changes.
+Initialization uses focused discovery subagents that follow end-to-end evidence traces through real
+workflows and constraints. A separate subagent verifies the synthesis before one bounded correction
+pass. `project.md` is written as one connected, evidence-backed narrative, including small details
+that can affect safe future changes rather than fixed technical categories. Every operation asks the
+developer to review proposed context changes.
 
 Setup creates only `index.md`, `project.md`, and `stakeholders.md` as shared context. It preserves
 existing context and instructions, executes no repository-resolved Claude command, and never commits

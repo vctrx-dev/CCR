@@ -162,6 +162,9 @@ describe("CCR setup", () => {
     expect(skill).toContain("optional context that is not in this repository");
     expect(skill).toContain("parallel discovery subagents");
     expect(skill).toContain("verification subagent");
+    expect(skill).toContain("single, connected project narrative");
+    expect(skill).toContain("small but consequential");
+    expect(skill).toContain("fixed category sections");
     expect(skill).toMatch(/stop\s+immediately/);
     expect(skill).toContain("Normalize `initialise`");
     expect(skill).toContain("Never edit `.ccr/config.json`");
@@ -169,6 +172,10 @@ describe("CCR setup", () => {
     expect(skill).toMatch(/Please review the resulting `\.ccr`\s+context changes/);
     expect(skill).not.toContain(".ccr/architecture.md");
     expect(skill).not.toContain(".ccr/decisions.md");
+
+    const project = await readFile(path.join(root, ".ccr/project.md"), "utf8");
+    expect(project).toContain("living, evidence-backed narrative");
+    expect(project).toMatch(/Do not divide the account\s+into fixed categories/);
 
     const manual = await readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8");
     expect(manual).toContain("CCR manual");

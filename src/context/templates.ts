@@ -22,49 +22,21 @@ Source, tests, and schemas outrank generated context.
   ".ccr/project.md": `${managedHeader}
 # Project
 
-## Purpose
+This is a living, evidence-backed narrative of how this repository matters and works. Begin with the
+project's purpose and real-world use, then continue in the natural order needed to explain what
+happens, why the design exists, and what a future change must respect. Do not divide the account
+into fixed categories; connect relevant product, human, logical, technical, operational, and future
+details where they explain one another.
 
-Needs repository-backed confirmation.
-
-## Product capabilities
-
-- Needs repository-backed confirmation.
-
-## Primary workflows
-
-- Needs repository-backed confirmation.
-
-## Operating domain
-
-Needs developer confirmation.
-
-## Direct users
-
-Needs developer confirmation.
-
-## Important domain terms
-
-- Needs repository-backed confirmation.
-
-## Scope boundaries
-
-- Needs repository-backed confirmation.
-
-## Technical structure
-
-- Summarize entry points, runtime modules, boundaries, and contracts.
-
-## Data, identity, and integrations
-
-- Summarize important state, permissions, and external systems.
-
-## Verification
-
-- Cite executable commands and the tests or checks they run.
+Capture small but consequential facts when evidence shows their impact: defaults, opt-ins,
+conventions, ownership, edge cases, failure behavior, safety boundaries, compatibility promises,
+and constraints that a future implementation could accidentally break. Keep uncertainty explicit and
+avoid a file-by-file inventory.
 
 ## Evidence
 
-- Cite live paths plus symbols, commands, schemas, or precise contracts.
+Cite each material claim close to the relevant sentence with a live path and symbol, schema,
+command, test, or precise contract. Mark future plans as intent, not implemented behavior.
 `,
   ".ccr/stakeholders.md": `${managedHeader}
 # Stakeholders

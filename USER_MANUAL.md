@@ -63,7 +63,9 @@ Open Claude Code:
 ```
 
 You may provide plans, specifications, or other information not stored in the repository. Claude
-then uses discovery subagents and a separate verification pass.
+then uses evidence traces and a separate verification pass. The resulting `project.md` is one
+connected narrative that weaves real-world purpose, logic, technical constraints, and small but
+consequential details together instead of splitting them into fixed categories.
 
 Review the resulting `.ccr` changes.
 

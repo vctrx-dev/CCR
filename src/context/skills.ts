@@ -63,6 +63,14 @@ or approves that exact change.
 - Cite a live path and symbol, schema, command, or precise contract for material implementation
   claims. Prefer source plus a test/schema for high-impact claims. Preserve uncertainty as a
   question; subagent agreement alone is not evidence.
+- Write \`.ccr/project.md\` as a single, connected project narrative in the order a thoughtful human
+  would need to understand the repository. Do not divide the account into fixed category sections.
+  Weave purpose, real-world use, behavior, decisions, constraints, code patterns, verification, and
+  future intent together when their relationship matters.
+- Look deliberately for small but consequential details: defaults, opt-ins, naming and ownership
+  conventions, data boundaries, empty or error behavior, precedence rules, compatibility promises,
+  safety checks, implicit assumptions, and edge cases. Include each only when evidence shows why it
+  matters now or could constrain a future change; do not turn the narrative into a directory listing.
 - Show the exact shared-context diff, apply it once, then ask for review. Never commit, push, stage
   journals, or retry in a loop. Use one independent verification pass and one correction pass at
   most.
@@ -82,16 +90,13 @@ evidence and connect intended future behavior to the current system without clai
 
 Run \`context files\`, discover repository instructions, manifests, source roots, entry points,
 schemas, tests, and documentation, then fan out the configured number of parallel discovery
-subagents (1-4; default 3):
-
-1. purpose, capabilities, workflows, domain language, users, and stakeholders;
-2. runtime boundaries, data/state, identity, permissions, and integrations;
-3. executable contracts, schemas, tests, quality gates, and verification commands.
-
-Split data/integrations when using four; merge adjacent areas below three. Every subagent is
-read-only, repeats the shared rules, uses only broker commands, and returns claims with exact
-evidence and open questions—not a directory summary. Reconcile reports into detailed
-\`.ccr/project.md\` and \`.ccr/stakeholders.md\`; keep \`.ccr/index.md\` a short router.
+subagents (1-4; default 3). Give each an end-to-end evidence trace rather than a category: follow a
+real workflow or constraint across user need, configuration, runtime behavior, code, failures, and
+verification. Let traces overlap when that helps find missing details. Every subagent is read-only,
+repeats the shared rules, uses only broker commands, and returns evidence-backed claims, subtle
+constraints, relationships, and open questions—not a directory summary. Reconcile them into one
+single, connected project narrative in \`.ccr/project.md\` and a focused people-impact account in
+\`.ccr/stakeholders.md\`; keep \`.ccr/index.md\` a short router.
 
 Ask one verification subagent to independently re-query important evidence, reject unsupported
 claims, find contradictions and missing context, and perform the single correction pass. If visible
@@ -101,9 +106,10 @@ change config without explicit approval. Validate, then create one local journal
 ## Update
 
 Read bounded continuity through \`context journals\`, then use \`context changes\` and
-\`context diff <file>\` for each relevant staged file. Update only context affected by the diff,
-including durable behavior, stakeholders, data handling, interfaces, technical structure, or
-verification. Use parallel discovery subagents only when the diff spans independent areas. Run the
+\`context diff <file>\` for each relevant staged file. Update only the affected claims, preserving
+the project narrative's natural flow. Add a small detail when it changes how a human or future
+implementation should reason about the system; do not append isolated technical categories. Use
+parallel discovery subagents only when the diff spans independent evidence traces. Run the
 independent verification pass, show the diff, validate, and create one local journal entry.
 
 ## Verify
@@ -111,11 +117,10 @@ independent verification pass, show the diff, validate, and create one local jou
 Validate every shared \`.ccr\` file, run \`context recent\`, then run \`context changes\` and inspect
 each relevant staged path through \`context diff <file>\`. Compare those paths and claims with the
 current Git index and recent local journal entries so the latest five local commits plus staged work
-are not missed. Fan out independent subagents across product/stakeholders, technical/data, and
-contracts/tests; they report stale, contradicted, unsupported, or missing claims with evidence.
-Use one verification subagent to reconcile the reports. If changes are needed, show and apply one
-correction pass, validate, and create one local journal entry; otherwise report that no changes were
-needed.
+are not missed. Fan out independent evidence traces to find stale, contradicted, unsupported, or
+missing claims, especially small constraints that affect correct or safe future work. Use one
+verification subagent to reconcile the reports. If changes are needed, show and apply one correction
+pass, validate, and create one local journal entry; otherwise report that no changes were needed.
 
 ## Addition
 
@@ -127,9 +132,9 @@ verification pass, show the diff, validate, and create one local journal entry.
 ## Compact
 
 Read \`context.maxCompactionPercent\` from config. It must stay between 20% and 30%; never remove
-more than that percentage of the combined shared Markdown characters in one run. Preserve purpose,
-workflows, stakeholders, domain language and repository taste, technical/data/integration facts,
-verification commands, evidence links, and open uncertainty. Remove repetition and obsolete prose,
+more than that percentage of the combined shared Markdown characters in one run. Preserve the
+narrative's causal links and small consequential constraints alongside purpose, workflows, people,
+evidence, verification, future intent, and open uncertainty. Remove repetition and obsolete prose,
 report before/after character counts, run the independent verification pass, show the diff, validate,
 and create one local journal entry.
 `;
