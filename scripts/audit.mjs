@@ -20,10 +20,10 @@
  * To find specific rule failures: grep "<rule-id>" <output>
  */
 
-import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runCommand } from "./run-command.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = resolve(ROOT, "src");
@@ -113,11 +113,7 @@ function sourceToTestPaths(srcRel) {
 }
 
 function run(cmd) {
-  try {
-    return execSync(cmd, { cwd: ROOT, encoding: "utf-8" }).trim();
-  } catch {
-    return "";
-  }
+  return runCommand(cmd, ROOT);
 }
 
 // ─── Static Audit ──────────────────────────────────────────

@@ -67,7 +67,8 @@ function isUnsafeReference(reference: string): boolean {
 }
 
 function absoluteClaim(content: string): string | undefined {
-  return content.match(/\b(?:all|never|guaranteed)\b/iu)?.[0];
+  const proseOnly = content.replace(/```[\s\S]*?```/gu, "").replace(/`[^`\r\n]*`/gu, "");
+  return proseOnly.match(/\b(?:all|never|guaranteed)\b/iu)?.[0];
 }
 
 /** Validates committed CCR context without invoking an LLM or reading repository source. */

@@ -35,8 +35,8 @@ ccr setup --apply
 
 The global install only installs the CLI; run commands from each target repository. Neither install
 creates the shared `.ccr` files or Git hooks by itself. `ccr config init --apply` creates the
-human-readable `.ccr/config-manual.md` next to `.ccr/config.json`; `ccr setup --apply` applies the
-hook policy from `.ccr/config.json`.
+human-readable `.ccr/config-manual.md` next to `.ccr/config.json`; `ccr setup --apply` installs the
+CCR skills and context skeleton.
 
 For a packed build from this repository:
 
@@ -49,11 +49,13 @@ Requires Node.js 22.12+ and Claude Code 2.1.0+.
 
 ## Config-managed hooks
 
-Hooks are not installed during package installation. Setup reads the human-owned
-`.ccr/config.json`: `hooks.enabled` defaults to `true`, so `ccr setup --apply` installs or maintains
-two advisory Git hooks. Set `hooks.enabled` to `false` before setup when the repository should not
-have CCR hook blocks; applying setup then removes only CCR-managed blocks. Setup also keeps local context
-directories ignored.
+Hooks are not installed during package installation or directly by setup. Setup installs the
+repository-aware `/ccr-hooks` skill. `hooks.enabled` defaults to `true`, so
+`/ccr-context initialize` invokes `/ccr-hooks sync`; the skill inspects the repository before it
+chooses an existing hook framework, configured `core.hooksPath`, current hook interpreter, or a
+minimal direct Git hook. Set `hooks.enabled` to `false` before initialization when the repository
+should not have CCR hook integration. Setup also keeps local context directories ignored and removes
+legacy CCR-managed hook blocks when hooks are disabled.
 
 - `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file.
 - `post-commit` — after every commit, starts a branch-local journal entry when none exists, warns
@@ -68,8 +70,13 @@ affects the repository's high-level context. Most commits do not change `.ccr/pr
 Both hooks are advisory: they never invoke Claude automatically, block a commit, edit shared context
 by themselves, or fail the commit. The post-commit hook prints a copy-paste prompt when context or a
 journal needs attention. You can inspect them with `npx --no-install ccr hooks status`; the normal
-configuration path for removing them is `npx --no-install ccr config set hooks.enabled false --apply` followed
-by `npx --no-install ccr setup --apply`.
+configuration path for removing them is `/ccr-hooks remove`, followed by
+`npx --no-install ccr config set hooks.enabled false --apply` so future initialization leaves them
+disabled. Native-hook provenance includes the original byte length/hash and managed separator byte
+count, allowing removal to verify exact restoration without storing hook contents.
+While `.ccr/private/hooks-state.json` exists, use `/ccr-hooks status` or `/ccr-hooks remove`.
+The CLI cannot safely interpret every repository-native framework or language hook, so its uninstall
+commands stop without changing files until the skill has removed and verified that managed state.
 
 ## 2. Configure
 
@@ -137,8 +144,7 @@ npx --no-install ccr setup --apply
 - `.ccr/stakeholders.md`
 
 Existing context, `CLAUDE.md`, and `AGENTS.md` are preserved by default.
-Setup also reconciles the advisory Git hooks according to `config.hooks.enabled` and reports what it
-changed.
+Setup installs `/ccr-hooks`; it does not guess a hook strategy without repository analysis.
 
 ## 4. Initialize
 
@@ -149,12 +155,25 @@ Open Claude Code:
 ```
 
 Run this after `ccr setup --apply`. The prompt populates the existing context skeleton; it does not
-replace the setup command that creates the `.ccr` folder and files.
+replace the setup command that creates the `.ccr` folder and files. When hooks are enabled, it also
+invokes `/ccr-hooks sync` once.
 
 You may provide plans, specifications, or other information not stored in the repository. Claude
-then uses evidence traces and a separate verification pass. The resulting `project.md` is one
-connected narrative that weaves real-world purpose, logic, technical constraints, and small but
-consequential details together instead of splitting them into fixed categories.
+maps independent evidence traces and runs them in an adaptive parallel agent wave, using more agents
+for multi-language or very large repositories, then performs a separate verification pass. The
+resulting `project.md` is one connected narrative that weaves real-world purpose, logic, technical
+constraints, and small but consequential details together instead of fixed categories. Focused
+later operations use no discovery subagent for one trace; update, verify, and addition target five
+minutes, while semantic compact targets eight. Broader repairs use one bounded parallel wave before
+verification. A focused verifier reviews the supplied draft and evidence packet without launching
+another repository search. Drafts stay in memory; CCR operations do not leave scratch files in the
+repository root. Any harness-required temporary file is confined to ignored `.ccr/tmp/` and removed
+before completion.
+
+Material claims use full repository-relative files and concrete symbols, tests, commands, or prose
+contracts. Workflow/config summaries enumerate the collection and preserve trigger or role
+exceptions instead of treating every member as uniform. Human-supplied additions remain intent;
+omitting an implementation claim is not treated as proof that no implementation evidence exists.
 
 Review the resulting `.ccr` changes.
 
@@ -163,6 +182,9 @@ Review the resulting `.ccr` changes.
 | Command | Purpose |
 |---|---|
 | `/ccr` | Show the CCR manual |
+| `/ccr-hooks sync` | Detect and apply repository-native hook integration |
+| `/ccr-hooks status` | Explain the current hook strategy |
+| `/ccr-hooks remove` | Remove only CCR-managed hook integration |
 | `/ccr-context initialize` | Create repository context |
 | `/ccr-context update` | Update context from staged changes |
 | `/ccr-context verify` | Check whether context is accurate and current |
@@ -178,9 +200,9 @@ staged shared `.ccr/` file. After each commit, the post-commit hook starts a loc
 when context is stale or a journal entry needs completing, prints a copy-paste prompt; pasting it
 into Claude Code updates the shared context and completes the journal, changing `.ccr/project.md`
 only when the commit affects the repository's high-level context. Neither hook blocks a commit.
-Check them with `npx --no-install ccr hooks status`. Disable them through the config and setup flow:
-`npx --no-install ccr config set hooks.enabled false --apply`, then
-`npx --no-install ccr setup --apply`.
+Check the managed blocks with `npx --no-install ccr hooks status`, or ask `/ccr-hooks status` for the
+repository-aware explanation. Remove them with `/ccr-hooks remove`, then disable future sync with
+`npx --no-install ccr config set hooks.enabled false --apply`.
 
 ## Privacy
 
@@ -199,7 +221,7 @@ Local and ignored:
 - `.ccr/cache/`
 - `.ccr/tmp/`
 
-Never store secrets, credentials, student records, or personal data in shared context.
+Never store secrets, credentials, private records, or personal data in shared context.
 
 ## Check status
 
@@ -211,6 +233,9 @@ npx --no-install ccr hooks status
 ```
 
 ## Uninstall
+
+If `/ccr-hooks sync` created provenance-managed integration, run `/ccr-hooks remove` first. CCR
+will stop the CLI uninstall rather than claim that an unknown framework entry was removed.
 
 Preview:
 

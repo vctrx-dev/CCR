@@ -1,14 +1,18 @@
-import { access, readFile, unlink } from "node:fs/promises";
+import { access, unlink } from "node:fs/promises";
+import path from "node:path";
 import {
   assertSafeManagedPath,
   isFileNotFound,
   readManagedTextIfExists,
   writeManagedText,
 } from "./files";
-import { MANAGED_ARTIFACTS, isPackageManagedSkill } from "./managed-artifacts";
+import {
+  MANAGED_ARTIFACTS,
+  MANAGED_BLOCK_ARTIFACTS,
+  isPackageManagedSkill,
+} from "./managed-artifacts";
 import type { ManagedArtifact } from "./managed-artifacts";
 import { managedBlock, removeManagedBlock } from "./managed-block";
-import { CLAUDE_BLOCK, IGNORE_BLOCK } from "./templates";
 
 /**
  * Bounded removal workflow for managed artifacts. Extend registry lifecycle policies instead of
@@ -26,6 +30,19 @@ const LOCAL_STATE_PATHS = [
 export interface UninstallPreview {
   removePaths: string[];
   modifyPaths: string[];
+  removals: UninstallRemoval[];
+  modifications: UninstallModification[];
+  removeContext: boolean;
+  root: string;
+}
+
+export interface UninstallRemoval {
+  expectedContent: string;
+  path: string;
+}
+
+export interface UninstallModification extends UninstallRemoval {
+  updatedContent: string;
 }
 
 function shouldRemoveArtifact(
@@ -63,41 +80,68 @@ export async function previewUninstall(
   shouldRemoveContext: boolean,
 ): Promise<UninstallPreview> {
   const removePaths: string[] = [];
+  const removals: UninstallRemoval[] = [];
   for (const artifact of MANAGED_ARTIFACTS) {
     const existing = await readManagedTextIfExists(root, artifact.path);
     if (shouldRemoveArtifact(artifact, existing, shouldRemoveContext)) {
       removePaths.push(artifact.path);
+      if (existing !== undefined) removals.push({ path: artifact.path, expectedContent: existing });
     }
   }
   const modifyPaths: string[] = [];
-  for (const instructionPath of ["CLAUDE.md", "AGENTS.md"]) {
-    const content = await readManagedTextIfExists(root, instructionPath);
-    if (content?.includes("<!-- ccr:start -->")) modifyPaths.push(instructionPath);
+  const modifications: UninstallModification[] = [];
+  const isLocalStatePresent = await hasLocalState(root);
+  for (const blockArtifact of MANAGED_BLOCK_ARTIFACTS) {
+    if (blockArtifact.uninstallCondition === "without-local-state" && isLocalStatePresent) continue;
+    const content = await readManagedTextIfExists(root, blockArtifact.path);
+    if (content === undefined) continue;
+    const updatedContent = removeManagedBlock(
+      content,
+      managedBlock(blockArtifact.content),
+      blockArtifact.path,
+    );
+    if (updatedContent !== content) {
+      modifyPaths.push(blockArtifact.path);
+      modifications.push({
+        path: blockArtifact.path,
+        expectedContent: content,
+        updatedContent,
+      });
+    }
   }
-  const ignore = await readManagedTextIfExists(root, ".gitignore");
-  if (ignore?.includes("# ccr:start - local context continuity") && !(await hasLocalState(root))) {
-    modifyPaths.push(".gitignore");
-  }
-  return { removePaths, modifyPaths };
+  return {
+    root,
+    removeContext: shouldRemoveContext,
+    removePaths,
+    modifyPaths,
+    removals,
+    modifications,
+  };
 }
 
 /** Applies a bounded uninstall and removes only known files and marked instruction blocks. */
 export async function applyUninstall(
   root: string,
   shouldRemoveContext: boolean,
+  suppliedPreview?: UninstallPreview,
 ): Promise<UninstallPreview> {
-  const preview = await previewUninstall(root, shouldRemoveContext);
-  for (const relativePath of preview.removePaths) {
-    await unlink(await assertSafeManagedPath(root, relativePath));
+  const preview = suppliedPreview ?? (await previewUninstall(root, shouldRemoveContext));
+  if (
+    path.resolve(preview.root) !== path.resolve(root) ||
+    preview.removeContext !== shouldRemoveContext
+  ) {
+    throw new Error("CCR uninstall preview does not match this operation.");
   }
-  for (const relativePath of preview.modifyPaths) {
-    const target = await assertSafeManagedPath(root, relativePath);
-    const content = await readFile(target, "utf8");
-    const updated =
-      relativePath === "CLAUDE.md" || relativePath === "AGENTS.md"
-        ? removeManagedBlock(content, managedBlock(CLAUDE_BLOCK))
-        : removeManagedBlock(content, managedBlock(IGNORE_BLOCK));
-    await writeManagedText(root, relativePath, updated);
+  for (const planned of [...preview.removals, ...preview.modifications]) {
+    if ((await readManagedTextIfExists(root, planned.path)) !== planned.expectedContent) {
+      throw new Error(`CCR managed file changed after preview: ${planned.path}.`);
+    }
+  }
+  for (const removal of preview.removals) {
+    await unlink(await assertSafeManagedPath(root, removal.path));
+  }
+  for (const modification of preview.modifications) {
+    await writeManagedText(root, modification.path, modification.updatedContent);
   }
   return preview;
 }

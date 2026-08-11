@@ -1,6 +1,6 @@
 /**
- * Reusable marked-text operations for non-executable integration files such as instruction files
- * and `.gitignore`. Use this instead of copying marker parsing; hooks retain stricter validation.
+ * Exact-line marked-text operations for non-executable integration files. Marker recognition and
+ * mutations are byte-bounded: content outside the owned marker lines is never normalized.
  */
 export interface ManagedBlock {
   content: string;
@@ -8,48 +8,103 @@ export interface ManagedBlock {
   start: string;
 }
 
+interface TextLine {
+  end: number;
+  endWithNewline: number;
+  start: number;
+  text: string;
+}
+
+export type ManagedBlockInspection =
+  | { status: "absent" }
+  | { status: "conflict" }
+  | { end: number; endWithNewline: number; start: number; status: "valid" };
+
 /** Builds a block whose start and end markers are the first and last lines of the content. */
 export function managedBlock(content: string): ManagedBlock {
+  const lines = content.split("\n");
   return {
     content,
-    end: content.slice(content.lastIndexOf("\n") + 1),
-    start: content.slice(0, content.indexOf("\n")),
+    end: lines.at(-1) ?? "",
+    start: lines[0],
   };
 }
 
-function markerCount(content: string, marker: string): number {
-  return content.split(marker).length - 1;
+function textLines(content: string): TextLine[] {
+  const lines: TextLine[] = [];
+  let start = 0;
+  while (start < content.length) {
+    const lf = content.indexOf("\n", start);
+    const endWithNewline = lf < 0 ? content.length : lf + 1;
+    const rawEnd = lf < 0 ? content.length : lf;
+    const end = rawEnd > start && content[rawEnd - 1] === "\r" ? rawEnd - 1 : rawEnd;
+    lines.push({ start, end, endWithNewline, text: content.slice(start, end) });
+    start = endWithNewline;
+  }
+  return lines;
 }
 
-/** Upserts one marked text block while rejecting malformed or duplicate markers. */
+/** Classifies exact standalone marker lines without treating inline examples as ownership. */
+export function inspectManagedBlock(content: string, block: ManagedBlock): ManagedBlockInspection {
+  const lines = textLines(content);
+  const starts = lines.filter((line) => line.text === block.start);
+  const ends = lines.filter((line) => line.text === block.end);
+  if (starts.length === 0 && ends.length === 0) return { status: "absent" };
+  if (starts.length !== 1 || ends.length !== 1 || starts[0].start >= ends[0].start) {
+    return { status: "conflict" };
+  }
+  return {
+    status: "valid",
+    start: starts[0].start,
+    end: ends[0].end,
+    endWithNewline: ends[0].endWithNewline,
+  };
+}
+
+function lineEnding(content: string): "\r\n" | "\n" {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+
+function normalizeBlock(content: string, newline: "\r\n" | "\n"): string {
+  return content.replace(/\r?\n/g, newline);
+}
+
+function appendSeparator(content: string, newline: "\r\n" | "\n"): string {
+  if (!content) return "";
+  if (content.endsWith(`${newline}${newline}`)) return "";
+  if (content.endsWith(newline)) return newline;
+  return `${newline}${newline}`;
+}
+
+function conflict(relativePath: string): Error {
+  return new Error(`CCR managed block conflict in ${relativePath}.`);
+}
+
+/** Upserts one exact-line marked block while preserving every byte outside the owned span. */
 export function upsertManagedBlock(
   existing: string | undefined,
   block: ManagedBlock,
   relativePath: string,
 ): string {
-  const startCount = existing ? markerCount(existing, block.start) : 0;
-  const endCount = existing ? markerCount(existing, block.end) : 0;
-  if (startCount !== endCount || startCount > 1) {
-    throw new Error(`CCR managed block conflict in ${relativePath}.`);
+  const current = existing ?? "";
+  const inspection = inspectManagedBlock(current, block);
+  if (inspection.status === "conflict") throw conflict(relativePath);
+  const newline = lineEnding(current);
+  const managedContent = normalizeBlock(block.content, newline);
+  if (inspection.status === "valid") {
+    return `${current.slice(0, inspection.start)}${managedContent}${current.slice(inspection.end)}`;
   }
-  if (startCount === 1 && existing) {
-    if (existing.indexOf(block.start) > existing.indexOf(block.end)) {
-      throw new Error(`CCR managed block conflict in ${relativePath}.`);
-    }
-    const escapedStart = block.start.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const escapedEnd = block.end.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return existing.replace(new RegExp(`${escapedStart}[\\s\\S]*?${escapedEnd}`), block.content);
-  }
-  const base = existing?.trimEnd();
-  return `${base ? `${base}\n\n` : ""}${block.content}\n`;
+  return `${current}${appendSeparator(current, newline)}${managedContent}${newline}`;
 }
 
-/** Removes the first complete marked text block and normalizes the surrounding whitespace. */
-export function removeManagedBlock(content: string, block: ManagedBlock): string {
-  const startIndex = content.indexOf(block.start);
-  const endIndex = content.indexOf(block.end, startIndex);
-  if (startIndex < 0 || endIndex < 0) return content;
-  const before = content.slice(0, startIndex).trimEnd();
-  const after = content.slice(endIndex + block.end.length).trimStart();
-  return `${before}${before && after ? "\n\n" : ""}${after}${before || after ? "\n" : ""}`;
+/** Removes one validated marked span while preserving every byte outside its marker lines. */
+export function removeManagedBlock(
+  content: string,
+  block: ManagedBlock,
+  relativePath = "managed file",
+): string {
+  const inspection = inspectManagedBlock(content, block);
+  if (inspection.status === "conflict") throw conflict(relativePath);
+  if (inspection.status === "absent") return content;
+  return `${content.slice(0, inspection.start)}${content.slice(inspection.endWithNewline)}`;
 }

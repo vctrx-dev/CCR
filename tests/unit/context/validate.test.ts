@@ -83,4 +83,26 @@ describe("validateContext", () => {
 
     expect(result.issues.join("\n")).toContain("contains an absolute claim");
   });
+
+  it("should allow absolute words inside commands and code examples", async () => {
+    const root = await makeSetup();
+    await writeFile(
+      path.join(root, ".ccr/project.md"),
+      [
+        "# Project",
+        "",
+        "Run `npm run test:all` for the repository suite.",
+        "",
+        "```sh",
+        "npm run test:all",
+        "```",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await validateContext(root);
+
+    expect(result.issues.join("\n")).not.toContain("contains an absolute claim");
+  });
 });

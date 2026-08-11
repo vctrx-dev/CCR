@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -34,7 +34,66 @@ function captureIo(root: string): {
 }
 
 describe("hooks CLI", () => {
-  it("should apply the configured hook policy during setup", async () => {
+  it("should not block disabled setup on an external hook path", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "ccr-hooks-external-setup-"));
+    roots.push(parent);
+    const root = path.join(parent, "repository");
+    await mkdir(root);
+    await run("git", ["init", "--quiet"], { cwd: root });
+    await run("git", ["config", "core.hooksPath", "../external-hooks"], { cwd: root });
+    const { io, output, clear } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.enabled",
+      "false",
+      "--apply",
+    ]);
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+
+    expect(output()).toContain("external hook path is unsupported");
+    await expect(
+      readFile(path.join(parent, "external-hooks/pre-commit"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("should defer status and removal when skill provenance exists", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-provenance-"));
+    roots.push(root);
+    await run("git", ["init", "--quiet"], { cwd: root });
+    const { io, output, clear } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+    await mkdir(path.join(root, ".ccr/private"), { recursive: true });
+    await writeFile(path.join(root, ".ccr/private/hooks-state.json"), "{}\n", "utf8");
+    const hookPath = path.join(root, ".git/hooks/pre-commit");
+    const existing = "#!/bin/sh\n# ccr:start - advisory context check\ncustom\n# ccr:end\n";
+    await writeFile(hookPath, existing, "utf8");
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "status"]);
+    expect(output()).toContain("provenance-managed by `/ccr-hooks`");
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--apply"]);
+    expect(output()).toContain("Run `/ccr-hooks remove`");
+    expect(output()).not.toContain("hooks removed");
+    expect(await readFile(hookPath, "utf8")).toBe(existing);
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "uninstall", "--apply"]);
+    expect(output()).toContain("Run `/ccr-hooks remove`");
+    expect(output()).not.toContain("CCR integration removed");
+    expect(await readFile(hookPath, "utf8")).toBe(existing);
+    expect(await readFile(path.join(root, ".claude/skills/ccr-hooks/SKILL.md"), "utf8")).toContain(
+      "name: ccr-hooks",
+    );
+  });
+
+  it("should defer enabled hook installation to the repository-aware skill", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-cli-"));
     roots.push(root);
     await run("git", ["init", "--quiet"], { cwd: root });
@@ -45,17 +104,14 @@ describe("hooks CLI", () => {
     await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
 
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
-    expect(output()).toContain("CCR hooks enabled: pre-commit installed");
-    expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toContain(
-      "ccr hooks check",
-    );
-    expect(await readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).toContain(
-      "ccr hooks after-commit",
-    );
+    expect(output()).toContain("/ccr-hooks sync");
+    await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
+    await expect(readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).rejects.toThrow();
     expect(await readFile(path.join(root, ".gitignore"), "utf8")).toContain(
       "# ccr:start - local context continuity",
     );
 
+    clear();
     await createCli(io).parseAsync([
       "node",
       "ccr",
@@ -65,14 +121,11 @@ describe("hooks CLI", () => {
       "false",
       "--apply",
     ]);
+    expect(output()).toContain("/ccr-hooks remove");
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     expect(output()).toContain("CCR hooks disabled by .ccr/config.json");
-    expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).not.toContain(
-      "ccr:start",
-    );
-    expect(await readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).not.toContain(
-      "ccr:start",
-    );
+    await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
+    await expect(readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).rejects.toThrow();
 
     await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
     await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
@@ -88,9 +141,7 @@ describe("hooks CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--apply"]);
     expect(output()).toContain("pre-commit not-installed");
     expect(output()).toContain("post-commit not-installed");
-    expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).not.toContain(
-      "ccr:start",
-    );
+    await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
   }, 15_000);
 
   it("should run the post-commit check and print a copy-paste prompt", async () => {

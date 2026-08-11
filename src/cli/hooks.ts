@@ -1,7 +1,11 @@
 import type { Command } from "commander";
 import { runAfterCommitCheck } from "../context/after-commit";
 import { findRepositoryRoot, readStagedContextState } from "../context/git";
-import { readContextHookStatus, removeAllContextHooks } from "../context/hooks";
+import {
+  hasSkillManagedHookState,
+  readContextHookStatus,
+  removeAllContextHooks,
+} from "../context/hooks";
 import { readResolvedContextConfig } from "../context/privacy";
 import type { CliIo } from "./index";
 
@@ -22,6 +26,12 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
   const hooks = program.command("hooks").description("Manage the advisory context Git hooks");
   hooks.command("status").action(async () => {
     const root = rootFor(io);
+    if (hasSkillManagedHookState(root)) {
+      io.write(
+        "CCR hooks are provenance-managed by `/ccr-hooks`; run `/ccr-hooks status` for strategy and drift.\n",
+      );
+      return;
+    }
     const preCommit = await readContextHookStatus(root, "pre-commit");
     const postCommit = await readContextHookStatus(root, "post-commit");
     io.write(
@@ -33,6 +43,12 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     .option("--apply", "remove CCR's marked hook blocks")
     .action(async (options: { apply?: boolean }) => {
       const root = rootFor(io);
+      if (hasSkillManagedHookState(root)) {
+        io.write(
+          "CCR hooks are provenance-managed. Run `/ccr-hooks remove` before using CLI legacy cleanup.\n",
+        );
+        return;
+      }
       if (!options.apply) {
         const preCommit = await readContextHookStatus(root, "pre-commit");
         const postCommit = await readContextHookStatus(root, "post-commit");

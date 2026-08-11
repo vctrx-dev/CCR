@@ -31,6 +31,7 @@ it("should preview safely and preserve context unless removal is explicit", asyn
   expect(preview.removePaths).toEqual([
     ".claude/skills/ccr/SKILL.md",
     ".claude/skills/ccr-context/SKILL.md",
+    ".claude/skills/ccr-hooks/SKILL.md",
   ]);
   expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain("<!-- ccr:start -->");
 
@@ -70,11 +71,59 @@ it("should remove a legacy package-managed skill", async () => {
   await mkdir(path.dirname(skillPath), { recursive: true });
   await writeFile(
     skillPath,
-    "<!-- managed by CCR skill; package updates may replace this file -->\n# Old CCR skill\n",
+    "---\nname: ccr\ndescription: Old CCR skill\n---\n\n<!-- managed by CCR skill; package updates may replace this file -->\n# Old CCR skill\n",
     "utf8",
   );
 
   expect((await previewUninstall(root, false)).removePaths).toEqual([
     ".claude/skills/ccr/SKILL.md",
   ]);
+});
+
+it("should reject malformed instruction markers without modifying the file", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-conflict-"));
+  roots.push(root);
+  const { writeFile } = await import("node:fs/promises");
+  const content = "<!-- ccr:start -->\nuser content\n";
+  await writeFile(path.join(root, "CLAUDE.md"), content, "utf8");
+
+  await expect(previewUninstall(root, false)).rejects.toThrow(
+    "managed block conflict in CLAUDE.md",
+  );
+  expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(content);
+});
+
+it("should ignore inline marker prose during uninstall", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-inline-"));
+  roots.push(root);
+  const { writeFile } = await import("node:fs/promises");
+  const content = "Example: <!-- ccr:start --> and <!-- ccr:end --> are reserved.\n";
+  await writeFile(path.join(root, "CLAUDE.md"), content, "utf8");
+
+  const preview = await previewUninstall(root, false);
+
+  expect(preview.modifyPaths).not.toContain("CLAUDE.md");
+  await applyUninstall(root, false, preview);
+  expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(content);
+});
+
+it("should consume a validated uninstall plan and reject later user edits", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-plan-"));
+  roots.push(root);
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      instructions: { updateClaudeMd: true, updateAgentsMd: false },
+    }),
+    "utf8",
+  );
+  await applySetup(root);
+  const preview = await previewUninstall(root, false);
+  await writeFile(path.join(root, "CLAUDE.md"), "user replaced this file\n", "utf8");
+
+  await expect(applyUninstall(root, false, preview)).rejects.toThrow("changed after preview");
+  expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe("user replaced this file\n");
 });

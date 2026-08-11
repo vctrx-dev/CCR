@@ -29,6 +29,9 @@ describe("CCR setup", () => {
     expect(preview.changes.map((change) => change.path)).toContain(
       ".claude/skills/ccr-context/SKILL.md",
     );
+    expect(preview.changes.map((change) => change.path)).toContain(
+      ".claude/skills/ccr-hooks/SKILL.md",
+    );
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/risks.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/architecture.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/decisions.md");
@@ -180,7 +183,7 @@ describe("CCR setup", () => {
     await mkdir(path.dirname(skillPath), { recursive: true });
     await writeFile(
       skillPath,
-      "<!-- managed by CCR skill; package updates may replace this file -->\nold\n",
+      "---\nname: ccr-context\ndescription: Old context skill\n---\n\n<!-- managed by CCR skill; package updates may replace this file -->\nold\n",
       "utf8",
     );
 
@@ -188,16 +191,16 @@ describe("CCR setup", () => {
 
     expect(result.changedPaths).toContain(".claude/skills/ccr-context/SKILL.md");
     const skill = await readFile(skillPath, "utf8");
-    expect(skill).toContain("`initialize`, `update`, `verify`, `addition`, or `compact`");
+    expect(skill).toMatch(/`initialize`, `update`, `verify`,\s*`addition`, or `compact`/);
     expect(skill).toContain("optional context that is not in this repository");
-    expect(skill).toContain("parallel discovery subagents");
+    expect(skill).toContain("Use adaptive subagents");
     expect(skill).toContain("verification subagent");
     expect(skill).toContain("single, connected project narrative");
     expect(skill).toContain("small but consequential");
-    expect(skill).toContain("fixed category sections");
+    expect(skill).toMatch(/fixed\s+category sections/);
     expect(skill).toMatch(/stop\s+immediately/);
     expect(skill).toContain("Normalize `initialise`");
-    expect(skill).toContain("Never edit `.ccr/config.json`");
+    expect(skill).toMatch(/Never edit\s+`\.ccr\/config\.json`/);
     expect(skill).toContain("20% and 30%");
     expect(skill).toMatch(/Please review the resulting `\.ccr`\s+context changes/);
     expect(skill).not.toContain(".ccr/architecture.md");
@@ -211,6 +214,7 @@ describe("CCR setup", () => {
     expect(manual).toContain("CCR manual");
     expect(manual).toContain("/ccr-context");
     expect(manual).toContain("/ccr-review");
+    expect(manual).toContain("/ccr-hooks");
     expect(manual).not.toContain("## Initialize");
   });
 
@@ -218,12 +222,41 @@ describe("CCR setup", () => {
     const { mkdir, writeFile } = await import("node:fs/promises");
     const root = await makeRepository();
     const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
-    const foreignContent = "<!-- managed by CCR skill; foreign tool -->\nCustom skill\n";
+    const foreignContent =
+      "---\nname: ccr\ndescription: Foreign managed skill\n---\n\n<!-- managed by CCR skill; foreign tool -->\nCustom skill\n";
     await mkdir(path.dirname(skillPath), { recursive: true });
     await writeFile(skillPath, foreignContent, "utf8");
 
     await expect(previewSetup(root)).rejects.toThrow("managed file conflict");
     expect(await readFile(skillPath, "utf8")).toBe(foreignContent);
+  });
+
+  it("should preserve a user skill that only quotes the package marker", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const root = await makeRepository();
+    const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+    const userSkill = `---\nname: custom\ndescription: User skill\n---\n\n# Notes\n\`${"<!-- managed by CCR skill; package updates may replace this file -->"}\`\n`;
+    await mkdir(path.dirname(skillPath), { recursive: true });
+    await writeFile(skillPath, userSkill, "utf8");
+
+    const preview = await previewSetup(root);
+
+    expect(
+      preview.changes.find((change) => change.path === ".claude/skills/ccr/SKILL.md")?.action,
+    ).toBe("preserve");
+    expect((await applySetup(root)).changedPaths).not.toContain(".claude/skills/ccr/SKILL.md");
+    expect(await readFile(skillPath, "utf8")).toBe(userSkill);
+  });
+
+  it("should reject applying a preview after a user changes a planned file", async () => {
+    const { writeFile } = await import("node:fs/promises");
+    const root = await makeRepository();
+    await writeFile(path.join(root, "CLAUDE.md"), "user before\n", "utf8");
+    const preview = await previewSetup(root);
+    await writeFile(path.join(root, ".gitignore"), "user changed\n", "utf8");
+
+    await expect(applySetup(root, preview)).rejects.toThrow("changed after preview");
+    expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe("user changed\n");
   });
 
   it("should reject malformed managed markers instead of appending a second block", async () => {

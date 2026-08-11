@@ -60,12 +60,27 @@ describe("parseContextConfig", () => {
     );
 
     expect(parsed.hooks).toEqual({ enabled: true, checkBeforeCommit: true });
-    expect(parsed.discovery.subagentCount).toBe(3);
+    expect(parsed).not.toHaveProperty("discovery");
     expect(parsed.domain).toBe("education");
     expect(parsed.context.recentJournalEntries).toBe(3);
     expect(parsed.context.maxCompactionPercent).toBe(25);
     expect(parsed.privacy.excludedPaths).toEqual(DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths);
     expect(parsed.privacy).not.toHaveProperty("providerPolicy");
+  });
+
+  it("should accept and discard the legacy discovery setting", () => {
+    const parsed = parseContextConfig(
+      JSON.stringify({
+        schemaVersion: 2,
+        domain: "general",
+        discovery: { subagentCount: 4 },
+        context: { recentJournalEntries: 3 },
+        privacy: { excludedPaths: [] },
+        instructions: { updateClaudeMd: false, updateAgentsMd: false },
+      }),
+    );
+
+    expect(parsed).not.toHaveProperty("discovery");
   });
 
   it("should reject unknown settings", () => {

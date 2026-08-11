@@ -18,7 +18,7 @@ describe("filterExcludedPaths", () => {
       [],
     );
 
-    expect(result.included).toEqual(["src/main.py"]);
-    expect(result.excluded).toHaveLength(8);
+    expect(result.included).toEqual(["src/main.py", "fixtures/student-data/records.csv"]);
+    expect(result.excluded).toHaveLength(7);
   });
 });

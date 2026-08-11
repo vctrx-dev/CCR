@@ -1,7 +1,7 @@
 # CCR — Critical Code Reviewer
 
-CCR is research-backed tooling for maintaining concise, human-correctable context used by ethical
-reviews of educational software. The first package targets Claude Code while keeping its repository
+CCR is research-backed tooling for maintaining concise, human-correctable context used by code
+review workflows. The first package targets Claude Code while keeping its repository
 context as plain Markdown and JSON.
 
 The planned complete product combines:
@@ -23,7 +23,7 @@ the developer chooses which components to enable:
 |---|---|---|
 | Editable settings and configuration manual | `ccr config init --apply` | Yes |
 | Claude manual, context skill, and shared context | `ccr setup --apply` | Yes |
-| Advisory context hooks (pre-commit + post-commit) | `hooks.enabled: true` (default) plus `ccr setup --apply` | Yes |
+| Advisory context hooks (pre-commit + post-commit) | `hooks.enabled: true` (default) plus `/ccr-context initialize` or `/ccr-hooks sync` | Yes |
 | `CLAUDE.md` or `AGENTS.md` pointer | Enable its config setting before setup | Yes |
 | Local continuity journal | Created by `/ccr-context` operations when needed | Yes |
 
@@ -46,8 +46,8 @@ npx --no-install ccr config init --apply
 npx --no-install ccr setup --apply
 ```
 
-Hooks are controlled by the generated `.ccr/config.json`; setup applies the default
-`hooks.enabled: true` policy after you review and apply the configuration.
+Hooks are controlled by the generated `.ccr/config.json`. Setup installs the repository-aware
+`/ccr-hooks` skill; `/ccr-context initialize` invokes it when `hooks.enabled` is true.
 
 ### Global CLI install
 
@@ -69,8 +69,8 @@ CCR is not published yet. To test a packed build from this repository:
 ```bash
 pnpm verify
 npm pack
-npm install --save-dev /path/to/vctrx-ccr-0.3.0.tgz
-# or globally: npm install --global /path/to/vctrx-ccr-0.3.0.tgz
+npm install --save-dev /path/to/vctrx-ccr-0.4.0.tgz
+# or globally: npm install --global /path/to/vctrx-ccr-0.4.0.tgz
 ```
 
 Then use the same project-local or global commands above.
@@ -93,17 +93,24 @@ Then open Claude Code:
 | Command | Purpose |
 |---|---|
 | `/ccr` | Explain the installed package, safety boundaries, commands, and roadmap |
+| `/ccr-hooks sync` | Choose and apply the repository's native hook integration |
+| `/ccr-hooks status` | Explain the active hook strategy and CCR checks |
+| `/ccr-hooks remove` | Remove only CCR-managed hook integration |
 | `/ccr-context initialize` | Ask for optional outside context, discover with subagents, then verify |
 | `/ccr-context update` | Update context from the staged diff |
 | `/ccr-context verify` | Check all context against the current index and latest five local commits |
 | `/ccr-context addition` | Add human-provided plans, specifications, or other context |
 | `/ccr-context compact` | Remove at most the configured 20–30% while preserving key knowledge |
 
-Initialization uses focused discovery subagents that follow end-to-end evidence traces through real
-workflows and constraints. A separate subagent verifies the synthesis before one bounded correction
-pass. `project.md` is written as one connected, evidence-backed narrative, including small details
-that can affect safe future changes rather than fixed technical categories. Every operation asks the
-developer to review proposed context changes.
+Initialization maps independent end-to-end evidence traces, then uses an adaptive parallel discovery
+wave: one agent for a small cohesive repository and more agents for multi-language, multi-surface, or
+very large repositories, up to the harness's useful concurrency. A separate subagent verifies the
+synthesis before one bounded correction pass. `project.md` is one connected, evidence-backed
+narrative rather than fixed technical categories. Focused later operations use no discovery agent
+for one evidence trace and one bounded parallel wave only when traces are independent. Update,
+verify, and addition target five minutes; semantic compact targets eight. Their verifier receives
+the bounded draft/evidence packet and performs no new repository search. Every operation asks the
+developer to review it.
 
 `ccr config init` is preview-only. Add `--apply` only after reviewing the proposed files; the flag
 is the explicit write confirmation. After it succeeds, `.ccr/config-manual.md` explains every key
@@ -128,10 +135,16 @@ npx --no-install ccr setup --apply
 npx --no-install ccr uninstall
 ```
 
-The Git hooks are optional and advisory. `.ccr/config.json` is the control plane:
-`hooks.enabled: true` (the default) makes `ccr setup --apply` install or maintain the marked
-pre-commit and post-commit blocks; `hooks.enabled: false` makes setup remove only those CCR-managed
-blocks. `hooks.checkBeforeCommit` controls the advisory pre-commit warning. The pre-commit hook warns
+The Git hooks are optional and advisory. `.ccr/config.json` is the control plane. When
+`hooks.enabled` is true (the default), `/ccr-context initialize` runs `/ccr-hooks sync`. The skill
+inspects `core.hooksPath`, existing hook runners, repository hook frameworks, manifests, and current
+hook semantics before choosing the least invasive repository-native integration. When the setting
+is false, setup removes legacy CCR-managed blocks and the skill does not install hooks.
+For composed native hooks, local provenance records the original byte length/hash and any managed
+separator bytes so removal can verify exact restoration. While that provenance state exists,
+`/ccr-hooks status|remove` is the lifecycle authority; CLI uninstall stops and asks you to run
+`/ccr-hooks remove` first. The CLI directly inspects or removes only legacy native marker blocks.
+`hooks.checkBeforeCommit` controls the advisory pre-commit warning. The pre-commit hook warns
 when repository files are staged without a staged shared `.ccr/` file. The post-commit hook starts a
 local journal entry and prints a copy-paste prompt that updates the shared context and completes the
 journal in Claude Code. Hooks never invoke Claude automatically, commit, push, or edit shared context

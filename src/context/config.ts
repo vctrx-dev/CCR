@@ -45,7 +45,6 @@ const resolvedConfigSchema = z
   .object({
     domain: z.string().trim().min(1).max(80),
     hooks: hooksSettingsSchema,
-    discovery: z.object({ subagentCount: z.number().int().min(1).max(4) }).strict(),
     context: contextSettingsSchema,
     privacy: z.object({ excludedPaths: z.array(z.string().min(1)).max(100) }).strict(),
     instructions: instructionsSchema,
@@ -97,7 +96,6 @@ const DEFAULT_EXCLUDED_PATHS = [
   "**/*.key",
   "**/*.p12",
   "**/*.pfx",
-  "**/student-data/**",
 ] as const;
 
 export type ContextConfig = z.infer<typeof resolvedConfigSchema>;
@@ -107,7 +105,6 @@ export type LocalContextConfig = z.infer<typeof localConfigSchema>;
 export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
   domain: "unspecified",
   hooks: { enabled: true, checkBeforeCommit: true },
-  discovery: { subagentCount: 3 },
   context: {
     recentJournalEntries: 3,
     maxCompactionPercent: 25,
@@ -151,10 +148,6 @@ function migrateLegacyConfig(config: z.infer<typeof legacyConfigSchema>): Contex
     hooks: {
       enabled: config.hooks ?? true,
       checkBeforeCommit: config.automation?.checkBeforeCommit ?? true,
-    },
-    discovery: {
-      subagentCount:
-        config.discovery?.subagentCount ?? DEFAULT_CONTEXT_CONFIG.discovery.subagentCount,
     },
     context: {
       ...DEFAULT_CONTEXT_CONFIG.context,

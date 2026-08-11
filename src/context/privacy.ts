@@ -24,7 +24,7 @@ const MANDATORY_EXCLUDED_PATHS = [
   "**/*.{pem,key,p12,pfx,jks,keystore}",
   "**/{id_rsa,id_dsa,id_ecdsa,id_ed25519,credentials.json,service-account*.json}",
   "**/*.response.*",
-  "**/{secrets,student-data}/**",
+  "**/secrets/**",
 ] as const;
 
 export interface FilteredPaths {

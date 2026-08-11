@@ -1,11 +1,15 @@
+import path from "node:path";
 import { DEFAULT_CONTEXT_CONFIG, parseContextConfig, serializeContextConfig } from "./config";
 import type { ContextConfig } from "./config";
 import { CONFIG_MANUAL } from "./config-manual";
 import { readManagedTextIfExists, writeManagedText } from "./files";
-import { MANAGED_ARTIFACTS, isPackageManagedSkill } from "./managed-artifacts";
+import {
+  MANAGED_ARTIFACTS,
+  MANAGED_BLOCK_ARTIFACTS,
+  managedSkillOwnership,
+} from "./managed-artifacts";
 import type { ManagedArtifact } from "./managed-artifacts";
 import { managedBlock, upsertManagedBlock } from "./managed-block";
-import { CLAUDE_BLOCK, IGNORE_BLOCK } from "./templates";
 
 /**
  * Setup orchestration for the managed-artifact registry. New generated artifacts belong in that
@@ -18,6 +22,7 @@ export interface SetupChange {
   path: string;
   action: SetupAction;
   content: string;
+  expectedContent: string | undefined;
 }
 
 export interface SetupPreview {
@@ -33,12 +38,8 @@ async function readSetupConfig(root: string): Promise<ContextConfig> {
 
 function planArtifactChange(artifact: ManagedArtifact, existing: string | undefined): SetupChange {
   const { content, path: relativePath, setupPolicy } = artifact;
-  const isManagedSkill = existing !== undefined && isPackageManagedSkill(existing);
-  if (
-    setupPolicy === "upgrade-if-marked" &&
-    existing?.includes("<!-- managed by CCR skill;") &&
-    !isManagedSkill
-  ) {
+  const skillOwnership = existing === undefined ? "user" : managedSkillOwnership(existing);
+  if (setupPolicy === "upgrade-if-marked" && skillOwnership === "foreign") {
     throw new Error(`CCR managed file conflict in ${relativePath}.`);
   }
 
@@ -46,40 +47,24 @@ function planArtifactChange(artifact: ManagedArtifact, existing: string | undefi
   if (existing === undefined) action = "create";
   else if (setupPolicy === "preserve-existing") action = "preserve";
   else if (existing === content) action = "unchanged";
-  else if (setupPolicy === "upgrade-if-marked" && isManagedSkill) action = "modify";
+  else if (setupPolicy === "upgrade-if-marked" && skillOwnership === "package") action = "modify";
   else action = "preserve";
 
   return {
     path: relativePath,
     action,
-    content: setupPolicy === "preserve-existing" && existing ? existing : content,
+    content: setupPolicy === "preserve-existing" && existing !== undefined ? existing : content,
+    expectedContent: existing,
   };
 }
 
 /** Returns every proposed setup change without writing to the target repository. */
 export async function previewSetup(root: string): Promise<SetupPreview> {
   const config = await readSetupConfig(root);
-  const requested: Record<string, string> = {
-    ".gitignore": upsertManagedBlock(
-      await readManagedTextIfExists(root, ".gitignore"),
-      managedBlock(IGNORE_BLOCK),
-      ".gitignore",
-    ),
-  };
-  if (config.instructions.updateClaudeMd) {
-    requested["CLAUDE.md"] = upsertManagedBlock(
-      await readManagedTextIfExists(root, "CLAUDE.md"),
-      managedBlock(CLAUDE_BLOCK),
-      "CLAUDE.md",
-    );
-  }
-  if (config.instructions.updateAgentsMd) {
-    requested["AGENTS.md"] = upsertManagedBlock(
-      await readManagedTextIfExists(root, "AGENTS.md"),
-      managedBlock(CLAUDE_BLOCK),
-      "AGENTS.md",
-    );
-  }
+  const blockArtifacts = MANAGED_BLOCK_ARTIFACTS.filter(
+    ({ setupCondition }) =>
+      setupCondition === "always" || config.instructions[setupCondition] === true,
+  );
   const managedEntries = await Promise.all(
     MANAGED_ARTIFACTS.map(async (artifact): Promise<SetupChange> => {
       const existing = await readManagedTextIfExists(root, artifact.path);
@@ -87,12 +72,15 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
     }),
   );
   const changes = await Promise.all(
-    Object.entries(requested).map(async ([relativePath, content]): Promise<SetupChange> => {
+    blockArtifacts.map(async (artifact): Promise<SetupChange> => {
+      const relativePath = artifact.path;
       const existing = await readManagedTextIfExists(root, relativePath);
+      const content = upsertManagedBlock(existing, managedBlock(artifact.content), relativePath);
       return {
         path: relativePath,
         action: existing === undefined ? "create" : existing === content ? "unchanged" : "modify",
         content,
+        expectedContent: existing,
       };
     }),
   );
@@ -100,8 +88,21 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
 }
 
 /** Applies the preview while preserving existing context and user-authored files. */
-export async function applySetup(root: string): Promise<{ changedPaths: string[] }> {
-  const preview = await previewSetup(root);
+export async function applySetup(
+  root: string,
+  suppliedPreview?: SetupPreview,
+): Promise<{ changedPaths: string[] }> {
+  const preview = suppliedPreview ?? (await previewSetup(root));
+  if (path.resolve(preview.root) !== path.resolve(root)) {
+    throw new Error("CCR setup preview belongs to a different repository.");
+  }
+  for (const change of preview.changes) {
+    if (change.action === "unchanged" || change.action === "preserve") continue;
+    const current = await readManagedTextIfExists(root, change.path);
+    if (current !== change.expectedContent) {
+      throw new Error(`CCR managed file changed after preview: ${change.path}.`);
+    }
+  }
   const changedPaths: string[] = [];
   for (const change of preview.changes) {
     if (change.action === "unchanged" || change.action === "preserve") continue;
@@ -119,7 +120,7 @@ export interface ConfigSetupResult {
 function planConfigFile(path: string, content: string, existing: string | undefined): SetupChange {
   const action: SetupAction =
     existing === undefined ? "create" : existing === content ? "unchanged" : "modify";
-  return { path, action, content };
+  return { path, action, content, expectedContent: existing };
 }
 
 /** Explicitly creates or upgrades the human-owned configuration and its companion manual. */

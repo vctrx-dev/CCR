@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import packageJson from "../../package.json";
+import { registerConfigCommands } from "./config";
 import { registerContextCommands } from "./context";
 import { registerHooksCommands } from "./hooks";
+import { formatCliError } from "./output";
 
 export interface CliIo {
   cwd: string;
@@ -24,9 +27,10 @@ function defaultIo(): CliIo {
 export function createCli(io: CliIo = defaultIo()): Command {
   const program = new Command()
     .name("ccr")
-    .description("Context management for ethical review of educational software")
-    .version("0.3.0");
+    .description("Repository context management for code review")
+    .version(packageJson.version);
   registerContextCommands(program, io);
+  registerConfigCommands(program, io);
   registerHooksCommands(program, io);
   return program;
 }
@@ -35,8 +39,7 @@ if (typeof require !== "undefined" && require.main === module) {
   createCli()
     .parseAsync()
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : "Unknown CCR error";
-      process.stderr.write(`CCR: ${message}\n`);
+      process.stderr.write(`CCR: ${formatCliError(error)}\n`);
       process.exitCode = 1;
     });
 }

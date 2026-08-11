@@ -118,10 +118,19 @@ prompting best practices:
 
 <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>
 
+For Claude Code skills, also read and follow Anthropic's complete skill-building guide:
+
+<https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf>
+
 Key practices to apply: be clear and direct with specific output constraints; give Claude a role;
 provide context and motivation for instructions; use 3-5 relevant, structured few-shot examples;
 structure complex prompts with XML tags; direct tool use explicitly; and define success criteria
 and when to stop. Prefer telling Claude what to do over what not to do.
+
+Skill-specific practices: define concrete use cases and measurable success criteria; include both
+what and when in frontmatter; keep `SKILL.md` concise through progressive disclosure; provide error
+handling and examples; use deterministic scripts for critical validation; and test triggering,
+non-triggering, functional behavior, repeated runs, and first-use clarity.
 
 ## Repository Quality Gates
 

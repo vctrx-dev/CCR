@@ -1,5 +1,5 @@
 import { CCR_SKILLS, MANAGED_SKILL_MARKER } from "./skills";
-import { CONTEXT_FILES } from "./templates";
+import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
 
 /**
  * Reusable registry for every generated CCR artifact. Add new integrations here (and a skill
@@ -20,6 +20,17 @@ export interface ManagedArtifact {
   path: string;
   setupPolicy: SetupPolicy;
   uninstallPolicy: UninstallPolicy;
+}
+
+export type BlockSetupCondition = "always" | "updateAgentsMd" | "updateClaudeMd";
+export type BlockUninstallCondition = "always" | "without-local-state";
+
+/** Defines one CCR-owned span inside an otherwise user-owned text file. */
+export interface ManagedBlockArtifact {
+  content: string;
+  path: string;
+  setupCondition: BlockSetupCondition;
+  uninstallCondition: BlockUninstallCondition;
 }
 
 const contextArtifacts: readonly ManagedArtifact[] = Object.entries(CONTEXT_FILES).map(
@@ -47,7 +58,47 @@ export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
   })),
 ];
 
-/** Returns whether a skill carries CCR's exact package-owned update marker. */
+/** Single lifecycle inventory for non-executable marked integrations. */
+export const MANAGED_BLOCK_ARTIFACTS: readonly ManagedBlockArtifact[] = [
+  {
+    content: IGNORE_BLOCK,
+    path: ".gitignore",
+    setupCondition: "always",
+    uninstallCondition: "without-local-state",
+  },
+  {
+    content: CLAUDE_BLOCK,
+    path: "CLAUDE.md",
+    setupCondition: "updateClaudeMd",
+    uninstallCondition: "always",
+  },
+  {
+    content: CLAUDE_BLOCK,
+    path: "AGENTS.md",
+    setupCondition: "updateAgentsMd",
+    uninstallCondition: "always",
+  },
+];
+
+export type ManagedSkillOwnership = "foreign" | "package" | "user";
+
+/** Classifies only a canonical post-frontmatter header as skill ownership. */
+export function managedSkillOwnership(content: string): ManagedSkillOwnership {
+  const lines = content.split(/\r?\n/);
+  if (lines[0] !== "---") return "user";
+  const frontmatterEnd = lines.indexOf("---", 1);
+  if (frontmatterEnd < 2) return "user";
+  const frontmatter = lines.slice(1, frontmatterEnd);
+  const hasName = frontmatter.some((line) => /^name:\s*\S/.test(line));
+  const hasDescription = frontmatter.some((line) => /^description:\s*\S/.test(line));
+  if (!hasName || !hasDescription || lines[frontmatterEnd + 1] !== "") return "user";
+  const marker = lines[frontmatterEnd + 2];
+  if (!marker?.startsWith("<!-- managed by CCR skill;")) return "user";
+  if (marker !== MANAGED_SKILL_MARKER) return "foreign";
+  return content.split(MANAGED_SKILL_MARKER).length === 2 ? "package" : "user";
+}
+
+/** Returns whether a skill carries CCR's canonical package-owned update header. */
 export function isPackageManagedSkill(content: string): boolean {
-  return content.split(MANAGED_SKILL_MARKER).length === 2;
+  return managedSkillOwnership(content) === "package";
 }

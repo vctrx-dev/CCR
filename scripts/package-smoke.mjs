@@ -86,8 +86,14 @@ try {
     process.platform === "win32" ? "ccr.cmd" : "ccr",
   );
   const installedHelp = runInstalled(installedBin, ["--help"], consumer);
-  if (!installedHelp.includes("Context management for ethical review")) {
+  if (!installedHelp.includes("Repository context management")) {
     throw new Error("Installed CLI help did not run.");
+  }
+  const installedVersion = runInstalled(installedBin, ["--version"], consumer).trim();
+  if (installedVersion !== packageJson.version) {
+    throw new Error(
+      `Installed CLI version ${installedVersion} does not match package ${packageJson.version}.`,
+    );
   }
 
   execFileSync("git", ["init", "--quiet"], { cwd: consumer, windowsHide: true });
@@ -134,14 +140,15 @@ try {
     throw new Error("config init did not create the configuration manual.");
   }
   runInstalled(installedBin, ["setup", "--apply"], scripted);
-  if (!existsSync(preCommitPath) || !readFileSync(preCommitPath, "utf8").includes("# ccr:start")) {
-    throw new Error("setup did not install the configured pre-commit hook.");
+  if (existsSync(preCommitPath) || existsSync(postCommitPath)) {
+    throw new Error("setup installed hooks without repository-aware skill analysis.");
   }
+  const hooksSkillPath = path.join(scripted, ".claude", "skills", "ccr-hooks", "SKILL.md");
   if (
-    !existsSync(postCommitPath) ||
-    !readFileSync(postCommitPath, "utf8").includes("# ccr:start - post-commit context check")
+    !existsSync(hooksSkillPath) ||
+    !readFileSync(hooksSkillPath, "utf8").includes("name: ccr-hooks")
   ) {
-    throw new Error("setup did not install the configured post-commit hook.");
+    throw new Error("setup did not install the repository-aware hook skill.");
   }
   if (
     !existsSync(ignorePath) ||
