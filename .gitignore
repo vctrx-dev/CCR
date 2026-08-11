@@ -61,6 +61,7 @@ service-account*.json
 .claude/worktrees/
 .superpowers/
 docs/
+TEST.md
 
 # Per-developer CCR continuity. Shared context remains tracked.
 .ccr/config.local.json
