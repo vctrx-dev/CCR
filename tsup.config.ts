@@ -19,13 +19,4 @@ export default defineConfig([
     clean: false,
     outDir: "dist/cli",
   },
-  {
-    entry: { index: "src/action/index.ts" },
-    format: "cjs",
-    platform: "node",
-    target: "node22",
-    sourcemap: true,
-    clean: false,
-    outDir: "dist/action",
-  },
 ]);

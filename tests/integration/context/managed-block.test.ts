@@ -15,7 +15,32 @@ describe("managed text blocks", () => {
 
     expect(appended).toBe("user\n\n# ccr:start\nmanaged\n# ccr:end\n");
     expect(replaced).toBe("user\n\n# ccr:start\nmanaged\n# ccr:end\n");
-    expect(removeManagedBlock(replaced, block)).toBe("user\n\n");
+    expect(removeManagedBlock(appended, block, "notes.md", { terminalSeparator: "owned" })).toBe(
+      "user\n",
+    );
+    expect(removeManagedBlock(replaced, block, "notes.md", { terminalSeparator: "owned" })).toBe(
+      "user\n",
+    );
+  });
+
+  it.each(["user", "user\n", "user\n\n", "user\r\n", "user\r\n\r\n"])(
+    "should exactly restore an appended file ending %j",
+    (existing) => {
+      const block = managedBlock(BLOCK);
+
+      expect(
+        removeManagedBlock(upsertManagedBlock(existing, block, "notes.md"), block, "notes.md", {
+          terminalSeparator: "owned",
+        }),
+      ).toBe(existing);
+    },
+  );
+
+  it("should preserve a preceding line ending unless the caller declares it owned", () => {
+    const block = managedBlock(BLOCK);
+    const direct = `user\n${BLOCK}\n`;
+
+    expect(removeManagedBlock(direct, block)).toBe("user\n");
   });
 
   it("should reject malformed or duplicate blocks", () => {
@@ -45,7 +70,7 @@ describe("managed text blocks", () => {
 
     const updated = upsertManagedBlock(prose, block, "notes.md");
 
-    expect(updated).toBe(`${prose}\n\n${BLOCK}\n`);
+    expect(updated).toBe(`${prose}\n${BLOCK}\n`);
     expect(removeManagedBlock(prose, block)).toBe(prose);
   });
 

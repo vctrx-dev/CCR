@@ -8,8 +8,10 @@ import {
 import { findRepositoryRoot, isGitIgnored, readStagedContextState } from "../context/git";
 import {
   hasSkillManagedHookState,
+  previewContextHookRemoval,
   readContextHookStatus,
   removeAllContextHooks,
+  validateContextHookRemoval,
 } from "../context/hooks";
 import { createJournalEntry, readRecentJournalEntries } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
@@ -39,8 +41,14 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   const isSkillManaged = hasSkillManagedHookState(root);
   const hookStatus = isSkillManaged
     ? {
-        preCommit: { path: ".ccr/private/hooks-state.json", status: "unsupported" as const },
-        postCommit: { path: ".ccr/private/hooks-state.json", status: "unsupported" as const },
+        preCommit: {
+          path: ".ccr/private/hooks-state.json",
+          status: "provenance-managed" as const,
+        },
+        postCommit: {
+          path: ".ccr/private/hooks-state.json",
+          status: "provenance-managed" as const,
+        },
       }
     : {
         preCommit: await readContextHookStatus(root, "pre-commit"),
@@ -95,6 +103,22 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
     ]);
     return;
   }
+  const hasHookStatus = (status: string) =>
+    hookStatus.preCommit.status === status || hookStatus.postCommit.status === status;
+  if (!preview.config.hooks.enabled && !isSkillManaged && hasHookStatus("malformed")) {
+    throw new Error(
+      "CCR hooks are disabled, but a legacy hook has malformed CCR markers. Repair the markers or run `/ccr-hooks remove` before setup.",
+    );
+  }
+  const hookRemovalPreview =
+    !preview.config.hooks.enabled &&
+    !isSkillManaged &&
+    !hasHookStatus("unsafe") &&
+    !hasHookStatus("unavailable")
+      ? await previewContextHookRemoval(root)
+      : undefined;
+  if (hookRemovalPreview) await validateContextHookRemoval(root, hookRemovalPreview);
+
   const result = await applySetup(root, preview);
   let hookLine: string;
   if (preview.config.hooks.enabled) {
@@ -103,14 +127,14 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   } else if (isSkillManaged) {
     hookLine =
       "CCR hooks are provenance-managed. Run `/ccr-hooks remove` before CLI legacy cleanup.";
-  } else if (
-    hookStatus.preCommit.status === "unsupported" ||
-    hookStatus.postCommit.status === "unsupported"
-  ) {
+  } else if (hasHookStatus("unsafe")) {
     hookLine =
-      "CCR hooks are disabled, but the external hook path is unsupported by CLI legacy cleanup. No hook files were changed; use `/ccr-hooks remove` if CCR integration exists.";
+      "CCR hooks are disabled, but Git configured an unsafe external hook path. No hook files were changed; use `/ccr-hooks remove` if CCR integration exists.";
+  } else if (hasHookStatus("unavailable")) {
+    hookLine =
+      "CCR hooks are disabled, but Git hook metadata is unavailable. No hook files were changed; inspect the repository and use `/ccr-hooks remove` if CCR integration exists.";
   } else {
-    const hookResult = await removeAllContextHooks(root);
+    const hookResult = await removeAllContextHooks(root, hookRemovalPreview);
     hookLine = `CCR hooks disabled by .ccr/config.json: pre-commit ${hookResult.preCommit.status}, post-commit ${hookResult.postCommit.status}.`;
   }
   writeLines(io, [
@@ -160,8 +184,10 @@ export function registerContextCommands(program: Command, io: CliIo): void {
         return;
       }
       const shouldRemoveContext = options.removeContext ?? false;
+      const hookRemovalPreview = await previewContextHookRemoval(root);
+      await validateContextHookRemoval(root, hookRemovalPreview);
       await applyUninstall(root, shouldRemoveContext, preview);
-      await removeAllContextHooks(root);
+      await removeAllContextHooks(root, hookRemovalPreview);
       writeLines(io, [
         `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
         "Local context was preserved and remains ignored.",

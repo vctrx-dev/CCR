@@ -50,8 +50,6 @@
     "*.{js,json,jsonc,jsx,mjs,mts,ts,tsx}": ["biome check --write"]
   },
   "devDependencies": {
-    "@actions/core": "^3.0.1",
-    "@actions/github": "^9.1.1",
     "@biomejs/biome": "^1.9.4",
     "@commitlint/cli": "^21.2.1",
     "@types/node": "^24.0.0",

@@ -87,17 +87,6 @@ const localConfigSchema = z
   })
   .strict();
 
-const DEFAULT_EXCLUDED_PATHS = [
-  ".env*",
-  "**/.env*",
-  "**/secrets/**",
-  "**/credentials/**",
-  "**/*.pem",
-  "**/*.key",
-  "**/*.p12",
-  "**/*.pfx",
-] as const;
-
 export type ContextConfig = z.infer<typeof resolvedConfigSchema>;
 export type PublicContextConfig = z.infer<typeof publicConfigSchema>;
 export type LocalContextConfig = z.infer<typeof localConfigSchema>;
@@ -109,7 +98,7 @@ export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
     recentJournalEntries: 3,
     maxCompactionPercent: 25,
   },
-  privacy: { excludedPaths: [...DEFAULT_EXCLUDED_PATHS] },
+  privacy: { excludedPaths: [] },
   instructions: {
     updateClaudeMd: false,
     updateAgentsMd: false,

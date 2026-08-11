@@ -7,6 +7,20 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+### Changed
+
+- Legacy hook cleanup now shares the byte-preserving managed-block parser, validates both hooks
+  before writing, and reports malformed, unsafe, or unavailable hook state distinctly.
+- ASU provider settings and cost estimates use one strict validation boundary; non-retryable HTTP
+  client errors now fail after one request.
+- Mandatory privacy exclusions have one runtime source of truth instead of overlapping config
+  defaults.
+
+### Removed
+
+- The premature GitHub Action manifest and provider-only entry point, which advertised review
+  behavior that is still on the roadmap.
+
 ## 0.4.0 - 2026-08-11
 
 ### Added

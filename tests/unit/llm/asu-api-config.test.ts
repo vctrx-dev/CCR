@@ -64,6 +64,22 @@ describe("createAsuAimlProviderConfig", () => {
       "model must not be empty.",
     );
   });
+
+  it.each([
+    { field: "baseUrl", value: "not a URL" },
+    { field: "baseUrl", value: "ftp://example.com/query" },
+    { field: "temperature", value: -0.1 },
+    { field: "temperature", value: 2.1 },
+    { field: "temperature", value: Number.NaN },
+    { field: "temperature", value: Number.POSITIVE_INFINITY },
+    { field: "timeoutMs", value: 0 },
+    { field: "timeoutMs", value: 1.5 },
+    { field: "timeoutMs", value: Number.POSITIVE_INFINITY },
+  ])("should reject invalid $field value $value", ({ field, value }) => {
+    expect(() =>
+      createAsuAimlProviderConfig({ apiKey: "key", model: "gpt-5", [field]: value }),
+    ).toThrow();
+  });
 });
 
 describe("readAsuAimlProviderConfig", () => {
@@ -112,6 +128,22 @@ describe("readAsuAimlProviderConfig", () => {
       "ASU_API_KEY and ASU_MODEL are required",
     );
   });
+
+  it.each([
+    ["ASU_TEMPERATURE", "0.7junk"],
+    ["ASU_TEMPERATURE", "Infinity"],
+    ["ASU_TIMEOUT_MS", "60000ms"],
+    ["ASU_TIMEOUT_MS", "1.5"],
+  ])("should reject malformed numeric environment value %s=%s", (name, value) => {
+    process.env = {
+      ...originalEnv,
+      ASU_API_KEY: "env-key",
+      ASU_MODEL: "gpt-5.2",
+      [name]: value,
+    };
+
+    expect(() => readAsuAimlProviderConfig(process.env)).toThrow();
+  });
 });
 
 describe("estimateCostUsd", () => {
@@ -122,5 +154,23 @@ describe("estimateCostUsd", () => {
   it("should calculate cost with default rates", () => {
     const cost = estimateCostUsd(1000, 500);
     expect(cost).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [-1, 0],
+    [1.5, 0],
+    [Number.NaN, 0],
+    [0, Number.POSITIVE_INFINITY],
+  ])("should reject invalid token counts %s and %s", (promptTokens, completionTokens) => {
+    expect(() => estimateCostUsd(promptTokens, completionTokens)).toThrow();
+  });
+
+  it.each([
+    ["CCR_EST_INPUT_COST_PER_1M_USD", "4.5junk"],
+    ["CCR_EST_INPUT_COST_PER_1M_USD", "Infinity"],
+    ["CCR_EST_OUTPUT_COST_PER_1M_USD", "-1"],
+  ])("should reject invalid cost rate %s=%s", (name, value) => {
+    process.env = { ...originalEnv, [name]: value };
+    expect(() => estimateCostUsd(1000, 500)).toThrow();
   });
 });

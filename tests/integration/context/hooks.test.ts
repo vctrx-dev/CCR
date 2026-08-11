@@ -5,9 +5,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it } from "vitest";
 import {
+  previewContextHookRemoval,
   readContextHookStatus,
   removeAllContextHooks,
   removeContextHook,
+  validateContextHookRemoval,
 } from "../../../src/context/hooks";
 
 const run = promisify(execFile);
@@ -24,7 +26,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-it("should report an external configured hooks path as unsupported without throwing", async () => {
+it("should report an external configured hooks path as unsafe without throwing", async () => {
   const parent = await mkdtemp(path.join(tmpdir(), "ccr-hooks-boundary-"));
   roots.push(parent);
   const root = path.join(parent, "repository");
@@ -34,7 +36,7 @@ it("should report an external configured hooks path as unsupported without throw
 
   const result = await readContextHookStatus(root);
 
-  expect(result.status).toBe("unsupported");
+  expect(result.status).toBe("unsafe");
   expect(result.path).toBe(path.join(parent, "external-hooks", "pre-commit"));
 });
 
@@ -76,7 +78,7 @@ it("should reject a configured hook directory that crosses a symlink", async () 
   await symlink(external, path.join(root, ".managed-hooks"), "junction");
   await run("git", ["config", "core.hooksPath", ".managed-hooks"], { cwd: root });
 
-  expect((await readContextHookStatus(root)).status).toBe("unsupported");
+  expect((await readContextHookStatus(root)).status).toBe("unsafe");
   await expect(removeContextHook(root)).rejects.toThrow(/outside the repository/i);
 });
 
@@ -99,8 +101,19 @@ it("should distinguish current, stale, malformed, and absent legacy blocks", asy
   );
   expect((await readContextHookStatus(root)).status).toBe("current");
 
+  const current = await readFile(hookPath, "utf8");
+  await writeFile(hookPath, current.replaceAll("\n", "\r\n"), "utf8");
+  expect((await readContextHookStatus(root)).status).toBe("current");
+
   await writeFile(hookPath, "#!/bin/sh\n# ccr:start - advisory context check\n", "utf8");
-  expect((await readContextHookStatus(root)).status).toBe("unsupported");
+  expect((await readContextHookStatus(root)).status).toBe("malformed");
+});
+
+it("should report unavailable Git hook metadata without throwing", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-unavailable-"));
+  roots.push(root);
+
+  expect((await readContextHookStatus(root)).status).toBe("unavailable");
 });
 
 it("should preserve unrelated hook bytes during legacy cleanup", async () => {
@@ -116,6 +129,23 @@ it("should preserve unrelated hook bytes during legacy cleanup", async () => {
   expect((await removeContextHook(root)).status).toBe("removed");
   expect(await readFile(hookPath, "utf8")).toBe(original);
 });
+
+it.each(["\n", "\r\n"])(
+  "should preserve a direct-append hook line ending %j during legacy cleanup",
+  async (newline) => {
+    const root = await createRepository();
+    const hookPath = path.join(root, ".git/hooks/pre-commit");
+    const original = `#!/bin/sh${newline}`;
+    await writeFile(
+      hookPath,
+      `${original}# ccr:start - advisory context check${newline}legacy command${newline}# ccr:end${newline}`,
+      "utf8",
+    );
+
+    expect((await removeContextHook(root)).status).toBe("removed");
+    expect(await readFile(hookPath, "utf8")).toBe(original);
+  },
+);
 
 it.each([
   "#!/bin/sh\n# ccr:start - advisory context check\nmissing end\n",
@@ -134,7 +164,7 @@ it.each([
   const hookPath = path.join(root, ".git/hooks/pre-commit");
   await writeFile(hookPath, existing, "utf8");
 
-  await expect(removeContextHook(root)).rejects.toThrow(/managed markers/i);
+  await expect(removeContextHook(root)).rejects.toThrow(/managed block conflict/i);
   expect(await readFile(hookPath, "utf8")).toBe(existing);
 });
 
@@ -168,4 +198,38 @@ it("should remove both legacy advisory hooks", async () => {
   const removed = await removeAllContextHooks(root);
   expect(removed.preCommit.status).toBe("removed");
   expect(removed.postCommit.status).toBe("removed");
+});
+
+it("should validate both legacy hooks before writing either one", async () => {
+  const root = await createRepository();
+  const preCommitPath = path.join(root, ".git/hooks/pre-commit");
+  const preCommit =
+    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
+  await writeFile(preCommitPath, preCommit, "utf8");
+  await writeFile(
+    path.join(root, ".git/hooks/post-commit"),
+    "#!/bin/sh\n# ccr:start - post-commit context check\nmissing end\n",
+    "utf8",
+  );
+
+  await expect(removeAllContextHooks(root)).rejects.toThrow(/managed block conflict/i);
+  expect(await readFile(preCommitPath, "utf8")).toBe(preCommit);
+});
+
+it("should reject drift after a two-hook removal preview before writing", async () => {
+  const root = await createRepository();
+  const preCommitPath = path.join(root, ".git/hooks/pre-commit");
+  const postCommitPath = path.join(root, ".git/hooks/post-commit");
+  const preCommit =
+    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
+  const postCommit =
+    '#!/bin/sh\n\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n';
+  await writeFile(preCommitPath, preCommit, "utf8");
+  await writeFile(postCommitPath, postCommit, "utf8");
+  const preview = await previewContextHookRemoval(root);
+  await writeFile(postCommitPath, `${postCommit}changed after preview\n`, "utf8");
+
+  await expect(validateContextHookRemoval(root, preview)).rejects.toThrow(/changed after preview/i);
+  await expect(removeAllContextHooks(root, preview)).rejects.toThrow(/changed after preview/i);
+  expect(await readFile(preCommitPath, "utf8")).toBe(preCommit);
 });

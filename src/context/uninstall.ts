@@ -99,6 +99,7 @@ export async function previewUninstall(
       content,
       managedBlock(blockArtifact.content),
       blockArtifact.path,
+      { terminalSeparator: "owned" },
     );
     if (updatedContent !== content) {
       modifyPaths.push(blockArtifact.path);

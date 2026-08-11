@@ -77,6 +77,9 @@ count, allowing removal to verify exact restoration without storing hook content
 While `.ccr/private/hooks-state.json` exists, use `/ccr-hooks status` or `/ccr-hooks remove`.
 The CLI cannot safely interpret every repository-native framework or language hook, so its uninstall
 commands stop without changing files until the skill has removed and verified that managed state.
+Legacy CLI status distinguishes malformed CCR markers, unsafe configured paths, and unavailable Git
+metadata. Cleanup validates both legacy hooks before changing either one; setup and uninstall stop
+before their managed-file writes when those markers are malformed.
 
 ## 2. Configure
 

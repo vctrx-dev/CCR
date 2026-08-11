@@ -56,10 +56,64 @@ describe("hooks CLI", () => {
     clear();
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
 
-    expect(output()).toContain("external hook path is unsupported");
+    expect(output()).toContain("unsafe external hook path");
     await expect(
       readFile(path.join(parent, "external-hooks/pre-commit"), "utf8"),
     ).rejects.toThrow();
+  });
+
+  it("should reject malformed legacy hooks before setup writes managed files", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-malformed-setup-"));
+    roots.push(root);
+    await run("git", ["init", "--quiet"], { cwd: root });
+    const { io, output, clear } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.enabled",
+      "false",
+      "--apply",
+    ]);
+    await writeFile(
+      path.join(root, ".git/hooks/pre-commit"),
+      "#!/bin/sh\n# ccr:start - advisory context check\nmissing end\n",
+      "utf8",
+    );
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall"]);
+    expect(output()).toContain("malformed");
+    expect(output()).not.toContain("uninstall --apply");
+
+    await expect(createCli(io).parseAsync(["node", "ccr", "setup", "--apply"])).rejects.toThrow(
+      /malformed CCR markers/i,
+    );
+    await expect(
+      readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("should reject malformed legacy hooks before uninstall removes managed files", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-malformed-uninstall-"));
+    roots.push(root);
+    await run("git", ["init", "--quiet"], { cwd: root });
+    const { io } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+    const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+    const originalSkill = await readFile(skillPath, "utf8");
+    await writeFile(
+      path.join(root, ".git/hooks/post-commit"),
+      "#!/bin/sh\n# ccr:start - post-commit context check\nmissing end\n",
+      "utf8",
+    );
+
+    await expect(createCli(io).parseAsync(["node", "ccr", "uninstall", "--apply"])).rejects.toThrow(
+      /managed block conflict/i,
+    );
+    expect(await readFile(skillPath, "utf8")).toBe(originalSkill);
   });
 
   it("should defer status and removal when skill provenance exists", async () => {
@@ -73,6 +127,13 @@ describe("hooks CLI", () => {
     const hookPath = path.join(root, ".git/hooks/pre-commit");
     const existing = "#!/bin/sh\n# ccr:start - advisory context check\ncustom\n# ccr:end\n";
     await writeFile(hookPath, existing, "utf8");
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--json"]);
+    const setupPreview = JSON.parse(output());
+    expect(setupPreview.hooks.preCommit.status).toBe("provenance-managed");
+    expect(setupPreview.hooks.postCommit.status).toBe("provenance-managed");
+
     clear();
     await createCli(io).parseAsync(["node", "ccr", "hooks", "status"]);
     expect(output()).toContain("provenance-managed by `/ccr-hooks`");

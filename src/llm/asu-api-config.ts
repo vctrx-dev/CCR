@@ -1,54 +1,49 @@
+import { z } from "zod";
 import type { AsuAimlProviderConfig } from "./types.js";
 
-/**
- * Default model provider identifier sent in query requests.
- */
-export const DEFAULT_ASU_MODEL_PROVIDER = "openai";
+const ASU_DEFAULTS = {
+  baseUrl: "https://api-main.aiml.asu.edu/queryV2",
+  modelProvider: "openai",
+  temperature: 0.2,
+  timeoutMs: 120000,
+  inputCostPer1MUsd: 5,
+  outputCostPer1MUsd: 15,
+} as const;
 
-const DEFAULT_ASU_BASE_URL = "https://api-main.aiml.asu.edu/queryV2";
-const DEFAULT_ASU_TEMPERATURE = 0.2;
-const DEFAULT_ASU_TIMEOUT_MS = 120000;
-const DEFAULT_INPUT_COST_PER_1M_USD = 5;
-const DEFAULT_OUTPUT_COST_PER_1M_USD = 15;
+/** Default model provider identifier sent in query requests. */
+export const DEFAULT_ASU_MODEL_PROVIDER = ASU_DEFAULTS.modelProvider;
 
-function readNumberEnv(value: string | undefined, fallback: number): number {
-  if (!value || value.trim().length === 0) {
-    return fallback;
-  }
+const httpUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => value.startsWith("https://") || value.startsWith("http://"), {
+    message: "Expected an HTTP or HTTPS URL.",
+  });
 
-  const parsed = Number.parseFloat(value);
-  if (Number.isNaN(parsed)) {
-    throw new Error(`Expected a numeric value for environment variable, received "${value}".`);
-  }
+const providerConfigSchema = z.object({
+  apiKey: z.string().trim().min(1, "apiKey must not be empty."),
+  baseUrl: httpUrlSchema,
+  modelProvider: z.string().trim().min(1),
+  model: z.string().trim().min(1, "model must not be empty."),
+  temperature: z.number().finite().min(0).max(2),
+  timeoutMs: z.number().finite().int().positive(),
+});
 
-  return parsed;
-}
+const costEstimateSchema = z.object({
+  promptTokens: z.number().finite().int().nonnegative(),
+  completionTokens: z.number().finite().int().nonnegative(),
+  inputRate: z.number().finite().nonnegative(),
+  outputRate: z.number().finite().nonnegative(),
+});
 
-function readIntegerEnv(value: string | undefined, fallback: number): number {
-  if (!value || value.trim().length === 0) {
-    return fallback;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed < 1) {
-    throw new Error(`Expected a positive integer for environment variable, received "${value}".`);
-  }
-
-  return parsed;
+function readNumericEnv(value: string | undefined, fallback: number): number {
+  const normalized = value?.trim();
+  return normalized ? Number(normalized) : fallback;
 }
 
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
-}
-
-function assertNonEmpty(value: string, label: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    throw new Error(`${label} must not be empty.`);
-  }
-
-  return trimmed;
 }
 
 /**
@@ -65,14 +60,14 @@ export function createAsuAimlProviderConfig(input: {
   temperature?: number;
   timeoutMs?: number;
 }): AsuAimlProviderConfig {
-  return {
-    apiKey: assertNonEmpty(input.apiKey, "apiKey"),
-    baseUrl: input.baseUrl?.trim() || DEFAULT_ASU_BASE_URL,
-    modelProvider: normalizeOptionalString(input.modelProvider) ?? DEFAULT_ASU_MODEL_PROVIDER,
-    model: assertNonEmpty(input.model, "model"),
-    temperature: input.temperature ?? DEFAULT_ASU_TEMPERATURE,
-    timeoutMs: input.timeoutMs ?? DEFAULT_ASU_TIMEOUT_MS,
-  };
+  return providerConfigSchema.parse({
+    apiKey: input.apiKey,
+    baseUrl: input.baseUrl?.trim() || ASU_DEFAULTS.baseUrl,
+    modelProvider: normalizeOptionalString(input.modelProvider) ?? ASU_DEFAULTS.modelProvider,
+    model: input.model,
+    temperature: input.temperature ?? ASU_DEFAULTS.temperature,
+    timeoutMs: input.timeoutMs ?? ASU_DEFAULTS.timeoutMs,
+  });
 }
 
 /**
@@ -93,10 +88,10 @@ export function readAsuAimlProviderConfig(
   return createAsuAimlProviderConfig({
     apiKey,
     baseUrl: env.ASU_BASE_URL,
-    modelProvider: normalizeOptionalString(env.ASU_MODEL_PROVIDER) ?? DEFAULT_ASU_MODEL_PROVIDER,
+    modelProvider: env.ASU_MODEL_PROVIDER,
     model,
-    temperature: readNumberEnv(env.ASU_TEMPERATURE, DEFAULT_ASU_TEMPERATURE),
-    timeoutMs: readIntegerEnv(env.ASU_TIMEOUT_MS, DEFAULT_ASU_TIMEOUT_MS),
+    temperature: readNumericEnv(env.ASU_TEMPERATURE, ASU_DEFAULTS.temperature),
+    timeoutMs: readNumericEnv(env.ASU_TIMEOUT_MS, ASU_DEFAULTS.timeoutMs),
   });
 }
 
@@ -108,12 +103,18 @@ export function readAsuAimlProviderConfig(
  * @returns Estimated cost in USD rounded to six decimal places.
  */
 export function estimateCostUsd(promptTokens: number, completionTokens: number): number {
-  const inputRate = Number(
-    process.env.CCR_EST_INPUT_COST_PER_1M_USD ?? DEFAULT_INPUT_COST_PER_1M_USD,
-  );
-  const outputRate = Number(
-    process.env.CCR_EST_OUTPUT_COST_PER_1M_USD ?? DEFAULT_OUTPUT_COST_PER_1M_USD,
-  );
+  const { inputRate, outputRate } = costEstimateSchema.parse({
+    promptTokens,
+    completionTokens,
+    inputRate: readNumericEnv(
+      process.env.CCR_EST_INPUT_COST_PER_1M_USD,
+      ASU_DEFAULTS.inputCostPer1MUsd,
+    ),
+    outputRate: readNumericEnv(
+      process.env.CCR_EST_OUTPUT_COST_PER_1M_USD,
+      ASU_DEFAULTS.outputCostPer1MUsd,
+    ),
+  });
   return Number(
     ((promptTokens / 1_000_000) * inputRate + (completionTokens / 1_000_000) * outputRate).toFixed(
       6,

@@ -163,7 +163,7 @@ export async function requestAsuAimlChatCompletion(
       if (!response.ok) {
         const requestError = createRequestError(
           `ASU AIML request failed with status ${response.status}: ${rawBody}`,
-          !isPersistentRateLimitBody(rawBody),
+          RETRYABLE_STATUS_CODES.has(response.status) && !isPersistentRateLimitBody(rawBody),
         );
 
         if (

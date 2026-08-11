@@ -19,6 +19,7 @@ describe("parseContextConfig", () => {
       context: { recentJournalEntries: 3, maxCompactionPercent: 25 },
       instructions: { updateClaudeMd: false, updateAgentsMd: false },
     });
+    expect(parsed.privacy.excludedPaths).toEqual([]);
   });
 
   it("should not serialize runtime-only discovery or privacy settings", () => {
@@ -64,7 +65,7 @@ describe("parseContextConfig", () => {
     expect(parsed.domain).toBe("education");
     expect(parsed.context.recentJournalEntries).toBe(3);
     expect(parsed.context.maxCompactionPercent).toBe(25);
-    expect(parsed.privacy.excludedPaths).toEqual(DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths);
+    expect(parsed.privacy.excludedPaths).toEqual([".env*"]);
     expect(parsed.privacy).not.toHaveProperty("providerPolicy");
   });
 

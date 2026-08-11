@@ -13,11 +13,11 @@ function rootFor(io: CliIo): string {
   return findRepositoryRoot(io.cwd);
 }
 
-async function isHooksEnabled(root: string): Promise<boolean> {
+async function readHookSettings(root: string) {
   try {
-    return (await readResolvedContextConfig(root)).hooks.enabled;
+    return (await readResolvedContextConfig(root)).hooks;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -55,7 +55,14 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
         io.write(
           `CCR hook uninstall preview: pre-commit ${preCommit.status}, post-commit ${postCommit.status}.\n`,
         );
-        io.write("Run `ccr hooks uninstall --apply` to remove both advisory hooks.\n");
+        const isCleanupBlocked = [preCommit.status, postCommit.status].some(
+          (status) => status === "malformed" || status === "unsafe" || status === "unavailable",
+        );
+        io.write(
+          isCleanupBlocked
+            ? "Cleanup cannot be applied until the reported hook state is repaired.\n"
+            : "Run `ccr hooks uninstall --apply` to remove both advisory hooks.\n",
+        );
         return;
       }
       const result = await removeAllContextHooks(root);
@@ -65,7 +72,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     });
   hooks.command("after-commit").action(async () => {
     const root = rootFor(io);
-    if (!(await isHooksEnabled(root))) return;
+    if (!(await readHookSettings(root))?.enabled) return;
     const result = await runAfterCommitCheck(root);
     if (result.journalCreated && result.journalPath) {
       io.write(`CCR: started local journal entry ${result.journalPath}.\n`);
@@ -82,14 +89,8 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
   });
   hooks.command("check").action(async () => {
     const root = rootFor(io);
-    if (!(await isHooksEnabled(root))) return;
-    let shouldCheck = false;
-    try {
-      shouldCheck = (await readResolvedContextConfig(root)).hooks.checkBeforeCommit;
-    } catch {
-      return;
-    }
-    if (!shouldCheck) return;
+    const settings = await readHookSettings(root);
+    if (!settings?.enabled || !settings.checkBeforeCommit) return;
     const state = readStagedContextState(root);
     if (state.shouldWarn) {
       const warning = [

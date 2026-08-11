@@ -1,6 +1,6 @@
 /**
- * Exact-line marked-text operations for non-executable integration files. Marker recognition and
- * mutations are byte-bounded: content outside the owned marker lines is never normalized.
+ * Exact-line marked-text operations for integration files. Marker recognition and mutations are
+ * byte-bounded: content outside the block and its explicitly selected separator is never normalized.
  */
 export interface ManagedBlock {
   content: string;
@@ -19,6 +19,11 @@ export type ManagedBlockInspection =
   | { status: "absent" }
   | { status: "conflict" }
   | { end: number; endWithNewline: number; start: number; status: "valid" };
+
+/** Selects whether terminal cleanup owns the appended EOL or only a legacy blank separator. */
+export interface ManagedBlockRemovalOptions {
+  terminalSeparator?: "legacy-blank" | "owned" | "preserve";
+}
 
 /** Builds a block whose start and end markers are the first and last lines of the content. */
 export function managedBlock(content: string): ManagedBlock {
@@ -70,17 +75,14 @@ function normalizeBlock(content: string, newline: "\r\n" | "\n"): string {
 }
 
 function appendSeparator(content: string, newline: "\r\n" | "\n"): string {
-  if (!content) return "";
-  if (content.endsWith(`${newline}${newline}`)) return "";
-  if (content.endsWith(newline)) return newline;
-  return `${newline}${newline}`;
+  return content ? newline : "";
 }
 
 function conflict(relativePath: string): Error {
   return new Error(`CCR managed block conflict in ${relativePath}.`);
 }
 
-/** Upserts one exact-line marked block while preserving every byte outside the owned span. */
+/** Upserts one exact-line block, adding exactly one owned line ending when appending to content. */
 export function upsertManagedBlock(
   existing: string | undefined,
   block: ManagedBlock,
@@ -97,14 +99,34 @@ export function upsertManagedBlock(
   return `${current}${appendSeparator(current, newline)}${managedContent}${newline}`;
 }
 
-/** Removes one validated marked span while preserving every byte outside its marker lines. */
+function precedingLineEndingStart(content: string, index: number): number | undefined {
+  if (content.slice(index - 2, index) === "\r\n") return index - 2;
+  if (content[index - 1] === "\n") return index - 1;
+  return undefined;
+}
+
+/** Removes one validated marked span and its explicitly owned terminal separator. */
 export function removeManagedBlock(
   content: string,
   block: ManagedBlock,
   relativePath = "managed file",
+  options: ManagedBlockRemovalOptions = {},
 ): string {
   const inspection = inspectManagedBlock(content, block);
   if (inspection.status === "conflict") throw conflict(relativePath);
   if (inspection.status === "absent") return content;
-  return `${content.slice(0, inspection.start)}${content.slice(inspection.endWithNewline)}`;
+  let ownedStart = inspection.start;
+  if (inspection.endWithNewline === content.length) {
+    const separatorStart = precedingLineEndingStart(content, ownedStart);
+    const mode = options.terminalSeparator ?? "preserve";
+    if (mode === "owned" && separatorStart !== undefined) ownedStart = separatorStart;
+    if (
+      mode === "legacy-blank" &&
+      separatorStart !== undefined &&
+      precedingLineEndingStart(content, separatorStart) !== undefined
+    ) {
+      ownedStart = separatorStart;
+    }
+  }
+  return `${content.slice(0, ownedStart)}${content.slice(inspection.endWithNewline)}`;
 }
