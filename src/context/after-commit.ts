@@ -1,5 +1,6 @@
-import { isSharedContext, readGitValue, readLastCommitPaths } from "./git";
-import { createJournalEntry, journalEntryExistsForCommit } from "./journal";
+import { classifyContextChanges, readChangedPaths, readGitValue } from "./git";
+import { branchDetails, createJournalEntry, journalEntryExistsForCommit } from "./journal";
+import type { JournalDetails } from "./journal";
 
 /**
  * Post-commit advisory check: keeps shared context and branch-local continuity journals current
@@ -27,19 +28,29 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
   } catch {
     return { commit: "", journalCreated: false, journalPath: undefined, shouldWarn: false };
   }
-  const changed = readLastCommitPaths(root);
-  const repositoryChanges = changed.filter((relativePath) => !relativePath.startsWith(".ccr/"));
-  const contextTouched = changed.some(isSharedContext);
-  const journalCreated = !(await journalEntryExistsForCommit(root, commit));
-  const journalPath = journalCreated
-    ? (await createJournalEntry(root, new Date(), repositoryChanges)).path
-    : undefined;
-  const shouldWarn = repositoryChanges.length > 0 && !contextTouched;
+  const changed = readChangedPaths(root, 1);
+  const { hasRepositoryChanges, shouldWarn } = classifyContextChanges(changed);
+
+  let journalCreated = false;
+  let journalPath: string | undefined;
+  try {
+    const { branch, directory } = branchDetails(root);
+    const details: JournalDetails = { branch, directory, commit };
+    if (!(await journalEntryExistsForCommit(root, commit, directory))) {
+      const created = await createJournalEntry(root, new Date(), changed, details);
+      journalPath = created.path;
+      journalCreated = true;
+    }
+  } catch {
+    // Journaling must never break the advisory hook; the context warning still applies.
+  }
+
   return {
     commit,
     journalCreated,
     journalPath,
     shouldWarn,
-    prompt: shouldWarn || journalCreated ? AFTER_COMMIT_PROMPT : undefined,
+    prompt:
+      shouldWarn || (journalCreated && hasRepositoryChanges) ? AFTER_COMMIT_PROMPT : undefined,
   };
 }

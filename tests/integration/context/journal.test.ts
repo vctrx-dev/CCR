@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, expect, it } from "vitest";
-import { DEFAULT_CONTEXT_CONFIG } from "../../../src/context/config";
+import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import {
   createJournalEntry,
   journalEntryExistsForCommit,
@@ -27,7 +27,7 @@ it("should derive journal path and metadata from Git and UTC time", async () => 
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    `${JSON.stringify(DEFAULT_CONTEXT_CONFIG)}\n`,
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
@@ -84,7 +84,7 @@ it("should not overwrite a journal entry created in the same second", async () =
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    `${JSON.stringify(DEFAULT_CONTEXT_CONFIG)}\n`,
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "file.txt"), "test\n", "utf8");

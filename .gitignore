@@ -79,3 +79,11 @@ docs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# ccr:start - local context continuity
+.ccr/config.local.json
+.ccr/journal/
+.ccr/private/
+.ccr/cache/
+.ccr/tmp/
+# ccr:end

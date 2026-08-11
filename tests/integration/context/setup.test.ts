@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_CONTEXT_CONFIG } from "../../../src/context/config";
+import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import { applyConfigSetup, applySetup, previewSetup } from "../../../src/context/setup";
 
 const roots: string[] = [];
@@ -24,6 +24,7 @@ describe("CCR setup", () => {
     const preview = await previewSetup(root);
 
     expect(preview.changes.map((change) => change.path)).toContain(".ccr/config.json");
+    expect(preview.changes.map((change) => change.path)).toContain(".ccr/config-manual.md");
     expect(preview.changes.map((change) => change.path)).toContain(".claude/skills/ccr/SKILL.md");
     expect(preview.changes.map((change) => change.path)).toContain(
       ".claude/skills/ccr-context/SKILL.md",
@@ -41,14 +42,10 @@ describe("CCR setup", () => {
     await mkdir(path.join(root, ".ccr"));
     await writeFile(
       path.join(root, ".ccr/config.json"),
-      `${JSON.stringify(
-        {
-          ...DEFAULT_CONTEXT_CONFIG,
-          instructions: { updateClaudeMd: true, updateAgentsMd: false },
-        },
-        null,
-        2,
-      )}\n`,
+      serializeContextConfig({
+        ...DEFAULT_CONTEXT_CONFIG,
+        instructions: { updateClaudeMd: true, updateAgentsMd: false },
+      }),
       "utf8",
     );
     await writeFile(path.join(root, "CLAUDE.md"), "# Existing instructions\n", "utf8");
@@ -81,14 +78,10 @@ describe("CCR setup", () => {
     await mkdir(path.join(root, ".ccr"));
     await writeFile(
       path.join(root, ".ccr/config.json"),
-      `${JSON.stringify(
-        {
-          ...DEFAULT_CONTEXT_CONFIG,
-          instructions: { updateClaudeMd: false, updateAgentsMd: true },
-        },
-        null,
-        2,
-      )}\n`,
+      serializeContextConfig({
+        ...DEFAULT_CONTEXT_CONFIG,
+        instructions: { updateClaudeMd: false, updateAgentsMd: true },
+      }),
       "utf8",
     );
 
@@ -123,8 +116,7 @@ describe("CCR setup", () => {
     );
 
     const preview = await previewSetup(root);
-    expect(preview.config.schemaVersion).toBe(2);
-    expect(preview.config.automation.checkBeforeCommit).toBe(false);
+    expect(preview.config.hooks).toEqual({ enabled: true, checkBeforeCommit: false });
     expect(preview.changes.find((change) => change.path === ".ccr/config.json")?.action).toBe(
       "preserve",
     );
@@ -138,9 +130,47 @@ describe("CCR setup", () => {
 
     const explicitUpgrade = await applyConfigSetup(root);
     const upgraded = JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"));
-    expect(explicitUpgrade.action).toBe("modify");
-    expect(upgraded.schemaVersion).toBe(2);
-    expect(upgraded._help).toBeTruthy();
+    expect(explicitUpgrade.config.action).toBe("modify");
+    expect(explicitUpgrade.manual.action).toBe("unchanged");
+    expect(upgraded.schemaVersion).toBeUndefined();
+    expect(upgraded._help).toBeUndefined();
+    expect(upgraded._comment).toBeUndefined();
+    expect(upgraded.hooks).toEqual({ enabled: true, checkBeforeCommit: false });
+    expect(upgraded.discovery).toBeUndefined();
+    expect(upgraded.privacy).toBeUndefined();
+  });
+
+  it("should update config without depending on unrelated managed files", async () => {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    const root = await makeRepository();
+    await mkdir(path.join(root, ".ccr"));
+    await writeFile(
+      path.join(root, ".ccr/config.json"),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        domain: "education",
+        automation: { mode: "warn", checkBeforeCommit: true },
+        context: { maxIndexCharacters: 6000, maxFileCharacters: 10_000, recentJournalEntries: 2 },
+        privacy: { providerPolicy: "claude-code-only", excludedPaths: [".env*"] },
+        instructions: { updateClaudeMd: false, updateAgentsMd: false },
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, ".gitignore"),
+      "# ccr:start - local context continuity\n.ccr/journal/\n",
+      "utf8",
+    );
+
+    const result = await applyConfigSetup(root);
+
+    expect(result.config.action).toBe("modify");
+    expect(result.manual.action).toBe("create");
+    expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"))).toMatchObject({
+      domain: "education",
+      hooks: { enabled: true, checkBeforeCommit: true },
+      context: { recentJournalEntries: 2 },
+    });
   });
 
   it("should update only a package-managed Claude skill", async () => {

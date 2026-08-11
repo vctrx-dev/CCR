@@ -10,7 +10,7 @@ import {
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
 } from "../../../src/context/broker";
-import { DEFAULT_CONTEXT_CONFIG } from "../../../src/context/config";
+import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 
 const run = promisify(execFile);
 const roots: string[] = [];
@@ -27,9 +27,10 @@ it("should list privacy-filtered paths from recent commits", async () => {
   await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
   await mkdir(path.join(root, ".ccr"));
   await mkdir(path.join(root, "src"));
+  await mkdir(path.join(root, "src2"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    `${JSON.stringify(DEFAULT_CONTEXT_CONFIG)}\n`,
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "src/main.ts"), "export {};\n", "utf8");
@@ -49,15 +50,19 @@ it("should expose only approved index content and never unstaged or symlink cont
   await run("git", ["init", "--quiet"], { cwd: root });
   await mkdir(path.join(root, ".ccr"));
   await mkdir(path.join(root, "src"));
+  await mkdir(path.join(root, "src2"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    `${JSON.stringify(DEFAULT_CONTEXT_CONFIG)}\n`,
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "src/main.ts"), "export const value = 'staged-safe';\n", "utf8");
+  await writeFile(path.join(root, "src2/other.ts"), "export const other = true;\n", "utf8");
   await writeFile(path.join(root, ".NPMRC"), "token=private\n", "utf8");
   await writeFile(path.join(root, "link-target.txt"), "private-target\n", "utf8");
-  await run("git", ["add", "--", ".ccr/config.json", "src/main.ts"], { cwd: root });
+  await run("git", ["add", "--", ".ccr/config.json", "src/main.ts", "src2/other.ts"], {
+    cwd: root,
+  });
   await run("git", ["add", "--force", "--", ".NPMRC"], { cwd: root });
   const { stdout } = await run("git", ["hash-object", "-w", "link-target.txt"], { cwd: root });
   await run(
@@ -69,6 +74,7 @@ it("should expose only approved index content and never unstaged or symlink cont
 
   const listed = await listSafeRepositoryPaths(root, "src/");
   expect(listed.paths).toEqual(["src/main.ts"]);
+  expect((await listSafeRepositoryPaths(root, "src")).paths).toEqual(["src/main.ts"]);
   await expect(readSafeRepositoryFile(root, ".NPMRC")).rejects.toThrow("not an approved");
   await expect(readSafeRepositoryFile(root, "src/linked.txt")).rejects.toThrow("not an approved");
 

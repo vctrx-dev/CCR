@@ -6,7 +6,13 @@ import {
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
 } from "../context/broker";
-import { DEFAULT_CONTEXT_CONFIG, parseContextConfig, updateContextConfig } from "../context/config";
+import {
+  DEFAULT_CONTEXT_CONFIG,
+  parseContextConfig,
+  serializeContextConfig,
+  toPublicContextConfig,
+  updateContextConfig,
+} from "../context/config";
 import { assertSafeManagedPath, writeManagedText } from "../context/files";
 import { findRepositoryRoot, isGitIgnored, readStagedContextState } from "../context/git";
 import {
@@ -17,14 +23,15 @@ import {
 import { createJournalEntry, readRecentJournalEntries } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
 import { applyConfigSetup, applySetup, previewSetup } from "../context/setup";
+import type { SetupAction } from "../context/setup";
 import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { validateContext } from "../context/validate";
 import type { CliIo } from "./index";
+import { formatSuccess } from "./output";
 
 interface SetupOptions {
   apply?: boolean;
   dryRun?: boolean;
-  hooks?: boolean;
   json?: boolean;
 }
 
@@ -40,13 +47,33 @@ function writeLines(io: CliIo, lines: string[]): void {
   io.write(`${lines.join("\n")}\n`);
 }
 
+function configActionLabel(action: SetupAction): string {
+  switch (action) {
+    case "create":
+      return "created";
+    case "modify":
+      return "updated";
+    case "preserve":
+      return "preserved";
+    case "unchanged":
+      return "already current";
+    default: {
+      const exhaustiveAction: never = action;
+      return exhaustiveAction;
+    }
+  }
+}
+
 async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   const root = rootFor(io);
   const preview = await previewSetup(root);
   const isSkillLocal = isGitIgnored(root, ".claude/skills/ccr/SKILL.md");
+  const hookStatus = {
+    preCommit: await readContextHookStatus(root, "pre-commit"),
+    postCommit: await readContextHookStatus(root, "post-commit"),
+  };
   const compatibility = "Requires Claude Code 2.1.0 or later; setup executes no Claude command.";
   if (!options.apply) {
-    const hookPreview = options.hooks ? await readContextHookStatus(root) : undefined;
     if (options.json) {
       io.write(
         `${JSON.stringify(
@@ -56,11 +83,15 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
             sendsData: false,
             skillVisibility: isSkillLocal ? "local" : "shareable",
             contextSettings: preview.config.context,
+            hooks: {
+              enabled: preview.config.hooks.enabled,
+              preCommit: hookStatus.preCommit,
+              postCommit: hookStatus.postCommit,
+            },
             changes: preview.changes.map(({ action, path: relativePath }) => ({
               action,
               path: relativePath,
             })),
-            hook: hookPreview,
             rollback: "ccr uninstall --apply [--remove-context]",
           },
           null,
@@ -74,11 +105,12 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
       compatibility,
       `Claude skill: ${isSkillLocal ? "local (ignored by Git)" : "shareable"}`,
       ...preview.changes.map((change) => `  ${change.action.padEnd(9)} ${change.path}`),
-      ...(hookPreview ? [`  hook       ${hookPreview.path}`] : []),
+      `Hooks: ${preview.config.hooks.enabled ? "enabled; setup will install or maintain advisory hooks" : "disabled; setup will remove CCR-managed hook blocks"}.`,
+      `  pre-commit ${hookStatus.preCommit.status}`,
+      `  post-commit ${hookStatus.postCommit.status}`,
       "Local-only ignore rules: config.local.json, journal/, private/, cache/, and tmp/.",
       "Data boundary: setup sends nothing; later repository reads use the filtered Git-index broker.",
       `Context settings: recent journals ${preview.config.context.recentJournalEntries}, compaction cap ${preview.config.context.maxCompactionPercent}%.`,
-      `Hook behavior: ${options.hooks ? "marked advisory warning requested" : "not requested"}.`,
       "Conflicts: none. Malformed managed blocks or symlinked managed paths stop setup.",
       "Rollback: `ccr uninstall --apply` (add `--remove-context` to remove shared context).",
       "Run `ccr setup --apply` to create these files.",
@@ -86,13 +118,21 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
     return;
   }
   const result = await applySetup(root);
-  if (options.hooks) await installAllContextHooks(root);
+  let hookLine: string;
+  if (preview.config.hooks.enabled) {
+    const hookResult = await installAllContextHooks(root);
+    hookLine = `CCR hooks enabled: pre-commit ${hookResult.preCommit.status}, post-commit ${hookResult.postCommit.status}; local ignore rules ${hookResult.ignore}.`;
+  } else {
+    const hookResult = await removeAllContextHooks(root);
+    hookLine = `CCR hooks disabled by .ccr/config.json: pre-commit ${hookResult.preCommit.status}, post-commit ${hookResult.postCommit.status}.`;
+  }
   writeLines(io, [
     compatibility,
     `Claude skill: ${isSkillLocal ? "local (ignored by Git)" : "shareable"}`,
     result.changedPaths.length
       ? `CCR setup wrote ${result.changedPaths.length} file(s).`
       : "CCR setup is already current.",
+    hookLine,
     "Next: open Claude Code and run `/ccr-context initialize`.",
   ]);
 }
@@ -105,7 +145,6 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .option("--apply", "write the previewed files")
     .option("--dry-run", "preview only (the default)")
     .option("--json", "print a machine-readable preview")
-    .option("--hooks", "install the optional advisory pre-commit check")
     .action((options: SetupOptions) => showSetup(io, options));
 
   program
@@ -197,7 +236,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
   config.action(async () => {
     const configPath = await assertSafeManagedPath(rootFor(io), ".ccr/config.json");
     const content = await readFile(configPath, "utf8");
-    io.write(`${JSON.stringify(parseContextConfig(content), null, 2)}\n`);
+    io.write(`${JSON.stringify(toPublicContextConfig(parseContextConfig(content)), null, 2)}\n`);
   });
   config.command("validate").action(async () => {
     const configPath = await assertSafeManagedPath(rootFor(io), ".ccr/config.json");
@@ -206,24 +245,38 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     writeLines(io, ["CCR configuration is valid."]);
   });
   config.command("defaults").action(() => {
-    io.write(`${JSON.stringify(DEFAULT_CONTEXT_CONFIG, null, 2)}\n`);
+    io.write(serializeContextConfig(DEFAULT_CONTEXT_CONFIG));
   });
   config
     .command("init")
-    .description("Create only editable settings before installing the Claude skill")
-    .option("--apply", "write .ccr/config.json")
+    .description("Create editable settings and their manual before installing the Claude skill")
+    .option("--apply", "write .ccr/config.json and .ccr/config-manual.md")
     .action(async (options: { apply?: boolean }) => {
       if (!options.apply) {
         writeLines(io, [
-          "Would create or upgrade .ccr/config.json only.",
-          "Run `ccr config init --apply`, review it, then run `ccr setup --apply`.",
+          "Would create or upgrade .ccr/config.json and .ccr/config-manual.md only.",
+          "Preview only: no files changed.",
+          "Review the proposed settings, then add `--apply` to write the file.",
         ]);
         return;
       }
       const change = await applyConfigSetup(rootFor(io));
+      io.write(
+        `${formatSuccess(
+          `CCR configuration ${configActionLabel(change.config.action)}: .ccr/config.json`,
+          io.isColorEnabled === true,
+        )}\n\n`,
+      );
       writeLines(io, [
-        `CCR configuration: ${change.action}.`,
-        "Review .ccr/config.json, run `ccr config validate`, then `ccr setup --apply`.",
+        `Configuration manual ${configActionLabel(change.manual.action)}: .ccr/config-manual.md`,
+        "Next steps:",
+        "  1. Edit .ccr/config.json, or use `ccr config set <key> <value> --apply`.",
+        "  2. Run `ccr config validate`.",
+        "  3. Run `ccr setup --apply` to apply the settings during setup.",
+        "Examples:",
+        "  ccr config set hooks.enabled false --apply",
+        "  ccr config set hooks.checkBeforeCommit false --apply",
+        "  ccr config set instructions.updateClaudeMd true --apply",
       ]);
     });
   config
@@ -243,7 +296,12 @@ export function registerContextCommands(program: Command, io: CliIo): void {
         ]);
         return;
       }
-      await writeManagedText(root, ".ccr/config.json", `${JSON.stringify(updated, null, 2)}\n`);
-      writeLines(io, [`Updated ${key}.`]);
+      await writeManagedText(root, ".ccr/config.json", serializeContextConfig(updated));
+      writeLines(io, [
+        `Updated ${key}.`,
+        ...(key === "hooks" || key.startsWith("hooks.")
+          ? ["Run `ccr setup --apply` to reconcile CCR-managed hooks."]
+          : []),
+      ]);
     });
 }

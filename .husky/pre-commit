@@ -5,3 +5,7 @@ pnpm check:staged
 pnpm run audit
 pnpm typecheck
 pnpm test:changed
+
+# ccr:start - advisory context check
+npx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2
+# ccr:end

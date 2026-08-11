@@ -3,44 +3,41 @@ import {
   DEFAULT_CONTEXT_CONFIG,
   parseContextConfig,
   resolveContextConfig,
+  serializeContextConfig,
+  toPublicContextConfig,
   updateContextConfig,
 } from "../../../src/context/config";
 
 describe("parseContextConfig", () => {
-  it("should accept the documented defaults", () => {
-    expect(parseContextConfig(JSON.stringify(DEFAULT_CONTEXT_CONFIG))).toEqual(
-      DEFAULT_CONTEXT_CONFIG,
-    );
-    expect(DEFAULT_CONTEXT_CONFIG.instructions).toMatchObject({
-      updateClaudeMd: false,
-      updateAgentsMd: false,
+  it("should accept and preserve the minimal documented defaults", () => {
+    const parsed = parseContextConfig(serializeContextConfig(DEFAULT_CONTEXT_CONFIG));
+
+    expect(parsed).toEqual(DEFAULT_CONTEXT_CONFIG);
+    expect(toPublicContextConfig(parsed)).toEqual({
+      domain: "unspecified",
+      hooks: { enabled: true, checkBeforeCommit: true },
+      context: { recentJournalEntries: 3, maxCompactionPercent: 25 },
+      instructions: { updateClaudeMd: false, updateAgentsMd: false },
     });
-    expect(DEFAULT_CONTEXT_CONFIG.domain).toBe("unspecified");
-    expect(DEFAULT_CONTEXT_CONFIG._comment).toMatch(/human-owned/i);
-    expect(DEFAULT_CONTEXT_CONFIG._help["context.maxCompactionPercent"]).toMatch(/integer.*20-30/i);
-    expect(DEFAULT_CONTEXT_CONFIG.discovery.subagentCount).toBe(3);
-    expect(DEFAULT_CONTEXT_CONFIG.context.maxCompactionPercent).toBe(25);
-    expect(DEFAULT_CONTEXT_CONFIG.privacy).not.toHaveProperty("providerPolicy");
-    expect(DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths).toEqual(
-      expect.arrayContaining([
-        ".env*",
-        "**/.env*",
-        "**/secrets/**",
-        "**/credentials/**",
-        "**/*.pem",
-        "**/*.key",
-      ]),
-    );
-    expect(DEFAULT_CONTEXT_CONFIG.context).not.toHaveProperty("maxIndexCharacters");
-    expect(DEFAULT_CONTEXT_CONFIG.context).not.toHaveProperty("maxFileCharacters");
+  });
+
+  it("should not serialize runtime-only discovery or privacy settings", () => {
+    const output = serializeContextConfig(DEFAULT_CONTEXT_CONFIG);
+
+    expect(output).not.toContain("schemaVersion");
+    expect(output).not.toContain("discovery");
+    expect(output).not.toContain("privacy");
+    expect(output).not.toContain("_comment");
+    expect(output).not.toContain("_help");
+    expect(output).toContain('"hooks": {');
   });
 
   it("should accept a repository-specific domain", () => {
     expect(
       parseContextConfig(
-        JSON.stringify({ ...DEFAULT_CONTEXT_CONFIG, domain: "civic-tech/elections" }),
+        JSON.stringify({ ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG), domain: "civic-tech" }),
       ).domain,
-    ).toBe("civic-tech/elections");
+    ).toBe("civic-tech");
   });
 
   it("should migrate supported settings from the previous schema", () => {
@@ -62,8 +59,7 @@ describe("parseContextConfig", () => {
       }),
     );
 
-    expect(parsed.schemaVersion).toBe(2);
-    expect(parsed._comment).toMatch(/human-owned/i);
+    expect(parsed.hooks).toEqual({ enabled: true, checkBeforeCommit: true });
     expect(parsed.discovery.subagentCount).toBe(3);
     expect(parsed.domain).toBe("education");
     expect(parsed.context.recentJournalEntries).toBe(3);
@@ -73,7 +69,7 @@ describe("parseContextConfig", () => {
   });
 
   it("should reject unknown settings", () => {
-    const input = { ...DEFAULT_CONTEXT_CONFIG, hiddenBehavior: true };
+    const input = { ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG), hiddenBehavior: true };
     expect(() => parseContextConfig(JSON.stringify(input))).toThrow(/hiddenBehavior/);
   });
 });
@@ -89,7 +85,7 @@ describe("resolveContextConfig", () => {
       ...DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths,
       "private/**",
     ]);
-    expect(resolved.automation.checkBeforeCommit).toBe(false);
+    expect(resolved.hooks.checkBeforeCommit).toBe(false);
   });
 });
 
@@ -99,6 +95,13 @@ describe("updateContextConfig", () => {
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "instructions.updateClaudeMd", "true")
         .instructions.updateClaudeMd,
     ).toBe(true);
+    expect(
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.enabled", "false").hooks.enabled,
+    ).toBe(false);
+    expect(
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.checkBeforeCommit", "false").hooks
+        .checkBeforeCommit,
+    ).toBe(false);
     expect(
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.recentJournalEntries", "2").context
         .recentJournalEntries,
@@ -110,10 +113,6 @@ describe("updateContextConfig", () => {
     expect(updateContextConfig(DEFAULT_CONTEXT_CONFIG, "domain", "civic-tech").domain).toBe(
       "civic-tech",
     );
-    expect(
-      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "discovery.subagentCount", "4").discovery
-        .subagentCount,
-    ).toBe(4);
   });
 
   it("should reject unknown settings and malformed values", () => {
@@ -121,7 +120,7 @@ describe("updateContextConfig", () => {
       /Supported settings/,
     );
     expect(() =>
-      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "automation.checkBeforeCommit", "maybe"),
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.checkBeforeCommit", "maybe"),
     ).toThrow(/true or false/);
     expect(() =>
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.maxCompactionPercent", "31"),

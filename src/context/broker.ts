@@ -1,4 +1,4 @@
-import { readGitBlob, readIndexEntries, readRecentChangedPaths, readStagedDiff } from "./git";
+import { readChangedPaths, readGitBlob, readIndexEntries, readStagedDiff } from "./git";
 import {
   filterExcludedPaths,
   hasControlCharacters,
@@ -70,8 +70,11 @@ export async function listSafeRepositoryPaths(
   ) {
     throw new Error("Prefix must be a safe repository-relative path.");
   }
-  const candidates = normalizedPrefix
-    ? safe.paths.filter((candidate) => candidate.startsWith(normalizedPrefix))
+  const pathPrefix = normalizedPrefix?.replace(/\/+$/u, "");
+  const candidates = pathPrefix
+    ? safe.paths.filter(
+        (candidate) => candidate === pathPrefix || candidate.startsWith(`${pathPrefix}/`),
+      )
     : [...new Set(safe.paths.map((candidate) => candidate.split("/")[0] ?? candidate))];
   const paths: string[] = [];
   let usedCharacters = 0;
@@ -90,7 +93,7 @@ export async function listSafeRepositoryPaths(
 /** Lists readable current files touched by the latest five commits after privacy filtering. */
 export async function listSafeRecentPaths(root: string): Promise<SafeRecentPaths> {
   const safe = await safeRegularPaths(root);
-  const recent = readRecentChangedPaths(root);
+  const recent = readChangedPaths(root, 5);
   const filtered = filterExcludedPaths(recent, safe.config.privacy.excludedPaths);
   const paths = filtered.included
     .filter((candidate) => safe.pathSet.has(candidate))

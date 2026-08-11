@@ -21,9 +21,9 @@ the developer chooses which components to enable:
 
 | Component | Enable it | Optional? |
 |---|---|---|
-| Editable settings only | `ccr config init --apply` | Yes |
+| Editable settings and configuration manual | `ccr config init --apply` | Yes |
 | Claude manual, context skill, and shared context | `ccr setup --apply` | Yes |
-| Advisory context hooks (pre-commit + post-commit) | `ccr hooks install --apply` | Yes |
+| Advisory context hooks (pre-commit + post-commit) | `hooks.enabled: true` (default) plus `ccr setup --apply` | Yes |
 | `CLAUDE.md` or `AGENTS.md` pointer | Enable its config setting before setup | Yes |
 | Local continuity journal | Created by `/ccr-context` operations when needed | Yes |
 
@@ -31,27 +31,61 @@ Setup previews changes unless `--apply` is supplied. Components can be removed i
 the matching uninstall command. Reviewer skills and the GitHub Action will join this same package in
 later versions and remain opt-in; they are not available yet.
 
-## Install the development package
+## Install in a project or globally
 
-CCR is not published yet. Test a packed build from this repository:
+Choose a project-local install when CCR belongs to the repository and should be available through its
+package scripts. Choose a global install when you want the `ccr` CLI available across repositories.
+
+### Project-local install
+
+```bash
+npm install --save-dev @vctrx/ccr
+# or: pnpm add --save-dev @vctrx/ccr
+
+npx --no-install ccr config init --apply
+npx --no-install ccr setup --apply
+```
+
+Hooks are controlled by the generated `.ccr/config.json`; setup applies the default
+`hooks.enabled: true` policy after you review and apply the configuration.
+
+### Global CLI install
+
+```bash
+npm install --global @vctrx/ccr
+# or: pnpm add --global @vctrx/ccr
+
+cd /path/to/your/repository
+ccr config init --apply
+ccr setup --apply
+```
+
+The global install provides the CLI only. It does not modify a repository until you run the commands
+from that repository. Neither installation creates the shared `.ccr` context files or Git hooks by
+itself.
+
+CCR is not published yet. To test a packed build from this repository:
 
 ```bash
 pnpm verify
 npm pack
 npm install --save-dev /path/to/vctrx-ccr-0.3.0.tgz
-pnpm add --save-dev /path/to/vctrx-ccr-0.3.0.tgz
+# or globally: npm install --global /path/to/vctrx-ccr-0.3.0.tgz
+```
+
+Then use the same project-local or global commands above.
+
+Useful first commands:
+
+```bash
 npx --no-install ccr config defaults
 npx --no-install ccr config init
-npx --no-install ccr config init --apply
-npx --no-install ccr config set domain your-domain --apply
-npx --no-install ccr config set discovery.subagentCount 3 --apply
 npx --no-install ccr setup
 npx --no-install ccr setup --json
-npx --no-install ccr setup --apply
 ```
 
 For an existing CCR installation, `ccr setup --apply` preserves `config.json`. Run
-`ccr config init` to preview an explicit schema upgrade, then add `--apply` if the new commented
+`ccr config init` to preview a minimal configuration upgrade, then add `--apply` if the proposed
 settings are correct.
 
 Then open Claude Code:
@@ -71,9 +105,15 @@ pass. `project.md` is written as one connected, evidence-backed narrative, inclu
 that can affect safe future changes rather than fixed technical categories. Every operation asks the
 developer to review proposed context changes.
 
-Setup creates only `index.md`, `project.md`, and `stakeholders.md` as shared context. It preserves
-existing context and instructions, executes no repository-resolved Claude command, and never commits
-or pushes.
+`ccr config init` is preview-only. Add `--apply` only after reviewing the proposed files; the flag
+is the explicit write confirmation. After it succeeds, `.ccr/config-manual.md` explains every key
+in the same order as `.ccr/config.json`. Edit `.ccr/config.json` directly or use
+`ccr config set <key> <value> --apply`, validate it, and then run setup. `ccr config init --apply`
+creates `.ccr/config.json` and `.ccr/config-manual.md`. `ccr setup --apply` then creates
+`.ccr/index.md`, `.ccr/project.md`, and `.ccr/stakeholders.md` as shared context. The initial
+`/ccr-context initialize` prompt fills the context from repository evidence; it is not the command
+that creates the `.ccr` folder structure. Setup preserves existing context and instructions, executes
+no repository-resolved Claude command, and never commits or pushes.
 
 Useful commands:
 
@@ -82,24 +122,46 @@ npx --no-install ccr context status
 npx --no-install ccr context validate
 npx --no-install ccr context journal
 npx --no-install ccr context journals
-npx --no-install ccr hooks install
-npx --no-install ccr hooks install --apply
 npx --no-install ccr hooks status
+npx --no-install ccr config set hooks.enabled false --apply
+npx --no-install ccr setup --apply
 npx --no-install ccr uninstall
 ```
 
-The Git hooks are optional and advisory and install automatically when the package is installed
-(npm/yarn; with pnpm, approve `@vctrx/ccr` in `pnpm.onlyBuiltDependencies`). The pre-commit hook
-warns when repository files are staged without a staged shared `.ccr/` file. The post-commit hook
-starts a local journal entry for each commit and prints a copy-paste prompt that updates the shared
-context and completes the journal in Claude Code. Claude receives repository evidence through a
-Git-index broker with mandatory credential/local-path exclusions, so staged review never reads a
-newer unstaged file. Branch-local journals remain ignored and are preserved safely during uninstall.
+The Git hooks are optional and advisory. `.ccr/config.json` is the control plane:
+`hooks.enabled: true` (the default) makes `ccr setup --apply` install or maintain the marked
+pre-commit and post-commit blocks; `hooks.enabled: false` makes setup remove only those CCR-managed
+blocks. `hooks.checkBeforeCommit` controls the advisory pre-commit warning. The pre-commit hook warns
+when repository files are staged without a staged shared `.ccr/` file. The post-commit hook starts a
+local journal entry and prints a copy-paste prompt that updates the shared context and completes the
+journal in Claude Code. Hooks never invoke Claude automatically, commit, push, or edit shared context
+without the reviewed context operation. Branch-local journals remain ignored and are preserved safely
+during uninstall.
 
-`.ccr/config.json` is human-owned. Its top `_help` map documents every setting, datatype, allowed
-range, and effect. CCR and Claude do not change it unless the developer explicitly requests or
-approves the exact change. Default exclusions cover environment files, credential/secret
-directories, private-key formats, and student-data directories.
+`.ccr/config.json` is human-owned. CCR, Claude, and other AI coding agents must not change it
+without approval of the exact setting and value. The generated file is intentionally strict JSON, so
+it contains no fake comment fields; JSON does not support `//` comments. Runtime privacy exclusions
+remain mandatory defaults and are not user-editable settings.
+
+The complete default file is:
+
+```json
+{
+  "domain": "unspecified",
+  "hooks": {
+    "enabled": true,
+    "checkBeforeCommit": true
+  },
+  "context": {
+    "recentJournalEntries": 3,
+    "maxCompactionPercent": 25
+  },
+  "instructions": {
+    "updateClaudeMd": false,
+    "updateAgentsMd": false
+  }
+}
+```
 
 When upgrading from `0.1.x`, remove `.ccr/architecture.md`, `.ccr/decisions.md`, and
 `.ccr/risks.md`, plus their routes in `.ccr/index.md`. Setup does not delete existing context

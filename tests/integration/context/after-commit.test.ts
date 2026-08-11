@@ -65,11 +65,46 @@ describe("runAfterCommitCheck", () => {
     expect(result.shouldWarn).toBe(false);
   });
 
-  it("should return a no-op result when the repository has no HEAD commit", async () => {
+  it("should record shared context paths and not prompt for a context-only commit", async () => {
     const root = await makeRepository();
+    await mkdir(path.join(root, ".ccr"), { recursive: true });
+    await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
+    await run("git", ["add", "."], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "context only"], { cwd: root });
+
     const result = await runAfterCommitCheck(root);
-    expect(result.commit).toBe("");
-    expect(result.journalCreated).toBe(false);
     expect(result.shouldWarn).toBe(false);
+    expect(result.prompt).toBeUndefined();
+    const journalPath = result.journalPath;
+    if (journalPath === undefined) throw new Error("Expected a journal path.");
+    const content = await readFile(path.join(root, journalPath), "utf8");
+    expect(content).toContain("- .ccr/project.md");
+    expect(content).not.toContain("None recorded.");
+  });
+
+  it("should keep the context warning when journal creation fails", async () => {
+    const root = await makeRepository();
+    await commitPath(root, "main.py", "print('x')\n");
+    await mkdir(path.join(root, ".ccr"), { recursive: true });
+    await writeFile(path.join(root, ".ccr/journal"), "", "utf8");
+
+    const result = await runAfterCommitCheck(root);
+    expect(result.journalCreated).toBe(false);
+    expect(result.journalPath).toBeUndefined();
+    expect(result.shouldWarn).toBe(true);
+    expect(result.prompt).toBeTruthy();
+  });
+
+  it("should not prompt for a commit containing only local context state", async () => {
+    const root = await makeRepository();
+    await mkdir(path.join(root, ".ccr"), { recursive: true });
+    await writeFile(path.join(root, ".ccr/config.local.json"), "{}\n", "utf8");
+    await run("git", ["add", "--force", "--", ".ccr/config.local.json"], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "local context only"], { cwd: root });
+
+    const result = await runAfterCommitCheck(root);
+
+    expect(result.shouldWarn).toBe(false);
+    expect(result.prompt).toBeUndefined();
   });
 });

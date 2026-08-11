@@ -17,6 +17,15 @@ export interface JournalEntry extends JournalResult {
   content: string;
 }
 
+/** Pre-resolved branch identity and commit, supplied by hot paths that already hold them. */
+export interface JournalDetails {
+  branch: string;
+  directory: string;
+  commit: string;
+}
+
+const JOURNAL_FILENAME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u;
+
 /** Resolves the current branch (falling back to "detached") and the journal directory derived from it. */
 export function branchDetails(root: string): { branch: string; directory: string } {
   const branch = readGitValue(root, ["branch", "--show-current"]) || "detached";
@@ -46,16 +55,33 @@ async function freeJournalPath(
   }
 }
 
-/** Creates a journal skeleton whose timestamp, branch, commit, and path come from deterministic inputs. */
+async function readJournalNames(root: string, relativeDirectory: string): Promise<string[]> {
+  try {
+    return (
+      await readdir(await assertSafeManagedPath(root, relativeDirectory), { withFileTypes: true })
+    )
+      .filter((entry) => entry.isFile() && JOURNAL_FILENAME_PATTERN.test(entry.name))
+      .map((entry) => entry.name);
+  } catch (error: unknown) {
+    if (isFileNotFound(error)) return [];
+    throw error;
+  }
+}
+
+/**
+ * Creates a journal skeleton whose timestamp, branch, commit, and path come from deterministic
+ * inputs. Pass `details` when the caller already resolved branch and commit to avoid Git round-trips.
+ */
 export async function createJournalEntry(
   root: string,
   now: Date = new Date(),
   changedPaths: string[] = [],
+  details?: JournalDetails,
 ): Promise<JournalResult> {
   const isoTimestamp = now.toISOString().replace(/\.\d{3}Z$/, "Z");
   const timestamp = isoTimestamp.replaceAll(":", "-");
-  const { branch, directory } = branchDetails(root);
-  const commit = readGitValue(root, ["rev-parse", "HEAD"]);
+  const { branch, directory } = details ?? branchDetails(root);
+  const commit = details?.commit ?? readGitValue(root, ["rev-parse", "HEAD"]);
   const relativePath = await freeJournalPath(root, `.ccr/journal/${directory}`, timestamp);
   const paths = changedPaths.length
     ? changedPaths.map((relativePath) => `- ${relativePath}`).join("\n")
@@ -68,25 +94,18 @@ export async function createJournalEntry(
   return { path: relativePath };
 }
 
-/** Returns whether any journal entry on the current branch already records the given commit. */
-export async function journalEntryExistsForCommit(root: string, commit: string): Promise<boolean> {
-  const { directory } = branchDetails(root);
-  const relativeDirectory = `.ccr/journal/${directory}`;
-  let names: string[];
-  try {
-    names = (
-      await readdir(await assertSafeManagedPath(root, relativeDirectory), { withFileTypes: true })
-    )
-      .filter(
-        (entry) =>
-          entry.isFile() &&
-          /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u.test(entry.name),
-      )
-      .map((entry) => entry.name);
-  } catch (error: unknown) {
-    if (isFileNotFound(error)) return false;
-    throw error;
-  }
+/**
+ * Returns whether any journal entry already records the given commit. Pass `directory` when the
+ * caller already resolved the branch to avoid a Git round-trip.
+ */
+export async function journalEntryExistsForCommit(
+  root: string,
+  commit: string,
+  directory?: string,
+): Promise<boolean> {
+  const resolvedDirectory = directory ?? branchDetails(root).directory;
+  const relativeDirectory = `.ccr/journal/${resolvedDirectory}`;
+  const names = await readJournalNames(root, relativeDirectory);
   for (const name of names) {
     const content = await readFile(
       await assertSafeManagedPath(root, `${relativeDirectory}/${name}`),
@@ -102,23 +121,10 @@ export async function readRecentJournalEntries(root: string): Promise<JournalEnt
   const config = await readResolvedContextConfig(root);
   const { branch, directory } = branchDetails(root);
   const relativeDirectory = `.ccr/journal/${directory}`;
-  const directoryPath = await assertSafeManagedPath(root, relativeDirectory);
-  let names: string[];
-  try {
-    names = (await readdir(directoryPath, { withFileTypes: true }))
-      .filter(
-        (entry) =>
-          entry.isFile() &&
-          /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u.test(entry.name),
-      )
-      .map((entry) => entry.name)
-      .sort()
-      .reverse()
-      .slice(0, config.context.recentJournalEntries);
-  } catch (error: unknown) {
-    if (isFileNotFound(error)) return [];
-    throw error;
-  }
+  const names = (await readJournalNames(root, relativeDirectory))
+    .sort()
+    .reverse()
+    .slice(0, config.context.recentJournalEntries);
   return Promise.all(
     names.map(async (name) => {
       const relativePath = `${relativeDirectory}/${name}`;

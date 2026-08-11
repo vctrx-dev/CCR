@@ -5,9 +5,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  classifyContextChanges,
   isGitIgnored,
   isSharedContext,
-  readLastCommitPaths,
+  readChangedPaths,
   readStagedContextState,
 } from "../../../src/context/git";
 
@@ -57,7 +58,7 @@ describe("readStagedContextState", () => {
   });
 });
 
-describe("readLastCommitPaths", () => {
+describe("readChangedPaths", () => {
   it("should list the latest commit's changed paths", async () => {
     const root = await makeRepository();
     await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
@@ -66,12 +67,54 @@ describe("readLastCommitPaths", () => {
     await writeFile(path.join(root, "b.txt"), "b\n", "utf8");
     await run("git", ["add", "."], { cwd: root });
     await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
-    expect(readLastCommitPaths(root)).toEqual(["a.txt", "b.txt"]);
+    expect(readChangedPaths(root, 1)).toEqual(["a.txt", "b.txt"]);
+  });
+
+  it("should list paths across the requested number of commits", async () => {
+    const root = await makeRepository();
+    await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    await writeFile(path.join(root, "a.txt"), "a\n", "utf8");
+    await run("git", ["add", "."], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+    await writeFile(path.join(root, "b.txt"), "b\n", "utf8");
+    await run("git", ["add", "."], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "second"], { cwd: root });
+    expect(readChangedPaths(root, 5).sort()).toEqual(["a.txt", "b.txt"]);
   });
 
   it("should return an empty array for a repository without commits", async () => {
     const root = await makeRepository();
-    expect(readLastCommitPaths(root)).toEqual([]);
+    expect(readChangedPaths(root, 1)).toEqual([]);
+  });
+});
+
+describe("classifyContextChanges", () => {
+  it("should separate repository changes from shared context changes", () => {
+    expect(classifyContextChanges(["main.py", ".ccr/project.md"])).toEqual({
+      repositoryChanges: ["main.py"],
+      hasRepositoryChanges: true,
+      hasContextChanges: true,
+      shouldWarn: false,
+    });
+  });
+
+  it("should warn when only repository files changed", () => {
+    expect(classifyContextChanges(["main.py"])).toEqual({
+      repositoryChanges: ["main.py"],
+      hasRepositoryChanges: true,
+      hasContextChanges: false,
+      shouldWarn: true,
+    });
+  });
+
+  it("should not warn for a context-only change", () => {
+    expect(classifyContextChanges([".ccr/project.md"])).toEqual({
+      repositoryChanges: [],
+      hasRepositoryChanges: false,
+      hasContextChanges: true,
+      shouldWarn: false,
+    });
   });
 });
 

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { DEFAULT_CONTEXT_CONFIG } from "../../../src/context/config";
+import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import { applySetup } from "../../../src/context/setup";
 import { applyUninstall, previewUninstall } from "../../../src/context/uninstall";
 
@@ -19,14 +19,10 @@ it("should preview safely and preserve context unless removal is explicit", asyn
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    `${JSON.stringify(
-      {
-        ...DEFAULT_CONTEXT_CONFIG,
-        instructions: { updateClaudeMd: true, updateAgentsMd: false },
-      },
-      null,
-      2,
-    )}\n`,
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      instructions: { updateClaudeMd: true, updateAgentsMd: false },
+    }),
     "utf8",
   );
   await applySetup(root);

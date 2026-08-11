@@ -1,9 +1,11 @@
-import { DEFAULT_CONTEXT_CONFIG, parseContextConfig } from "./config";
+import { DEFAULT_CONTEXT_CONFIG, parseContextConfig, serializeContextConfig } from "./config";
 import type { ContextConfig } from "./config";
+import { CONFIG_MANUAL } from "./config-manual";
 import { readManagedTextIfExists, writeManagedText } from "./files";
 import { MANAGED_ARTIFACTS, isPackageManagedSkill } from "./managed-artifacts";
-import { upsertManagedBlock } from "./managed-block";
-import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
+import type { ManagedArtifact } from "./managed-artifacts";
+import { managedBlock, upsertManagedBlock } from "./managed-block";
+import { CLAUDE_BLOCK, IGNORE_BLOCK } from "./templates";
 
 /**
  * Setup orchestration for the managed-artifact registry. New generated artifacts belong in that
@@ -24,18 +26,39 @@ export interface SetupPreview {
   changes: SetupChange[];
 }
 
-function managedBlock(content: string) {
+async function readSetupConfig(root: string): Promise<ContextConfig> {
+  const configText = await readManagedTextIfExists(root, ".ccr/config.json");
+  return configText ? parseContextConfig(configText) : DEFAULT_CONTEXT_CONFIG;
+}
+
+function planArtifactChange(artifact: ManagedArtifact, existing: string | undefined): SetupChange {
+  const { content, path: relativePath, setupPolicy } = artifact;
+  const isManagedSkill = existing !== undefined && isPackageManagedSkill(existing);
+  if (
+    setupPolicy === "upgrade-if-marked" &&
+    existing?.includes("<!-- managed by CCR skill;") &&
+    !isManagedSkill
+  ) {
+    throw new Error(`CCR managed file conflict in ${relativePath}.`);
+  }
+
+  let action: SetupAction;
+  if (existing === undefined) action = "create";
+  else if (setupPolicy === "preserve-existing") action = "preserve";
+  else if (existing === content) action = "unchanged";
+  else if (setupPolicy === "upgrade-if-marked" && isManagedSkill) action = "modify";
+  else action = "preserve";
+
   return {
-    content,
-    end: content.slice(content.lastIndexOf("\n") + 1),
-    start: content.slice(0, content.indexOf("\n")),
+    path: relativePath,
+    action,
+    content: setupPolicy === "preserve-existing" && existing ? existing : content,
   };
 }
 
 /** Returns every proposed setup change without writing to the target repository. */
 export async function previewSetup(root: string): Promise<SetupPreview> {
-  const configText = await readManagedTextIfExists(root, ".ccr/config.json");
-  const config = configText ? parseContextConfig(configText) : DEFAULT_CONTEXT_CONFIG;
+  const config = await readSetupConfig(root);
   const requested: Record<string, string> = {
     ".gitignore": upsertManagedBlock(
       await readManagedTextIfExists(root, ".gitignore"),
@@ -58,33 +81,10 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
     );
   }
   const managedEntries = await Promise.all(
-    MANAGED_ARTIFACTS.map(
-      async ({ content, path: relativePath, setupPolicy }): Promise<SetupChange> => {
-        const existing = await readManagedTextIfExists(root, relativePath);
-        const isManagedSkill = existing !== undefined && isPackageManagedSkill(existing);
-        if (
-          setupPolicy === "upgrade-if-marked" &&
-          existing?.includes("<!-- managed by CCR skill;") &&
-          !isManagedSkill
-        ) {
-          throw new Error(`CCR managed file conflict in ${relativePath}.`);
-        }
-        return {
-          path: relativePath,
-          action:
-            existing === undefined
-              ? "create"
-              : setupPolicy === "preserve-existing"
-                ? "preserve"
-                : existing === content
-                  ? "unchanged"
-                  : setupPolicy === "upgrade-if-marked" && isManagedSkill
-                    ? "modify"
-                    : "preserve",
-          content: setupPolicy === "preserve-existing" && existing ? existing : content,
-        };
-      },
-    ),
+    MANAGED_ARTIFACTS.map(async (artifact): Promise<SetupChange> => {
+      const existing = await readManagedTextIfExists(root, artifact.path);
+      return planArtifactChange(artifact, existing);
+    }),
   );
   const changes = await Promise.all(
     Object.entries(requested).map(async ([relativePath, content]): Promise<SetupChange> => {
@@ -111,14 +111,30 @@ export async function applySetup(root: string): Promise<{ changedPaths: string[]
   return { changedPaths };
 }
 
-/** Explicitly creates or upgrades only the human-owned team configuration. */
-export async function applyConfigSetup(root: string): Promise<SetupChange> {
-  const preview = await previewSetup(root);
-  const path = ".ccr/config.json";
-  const existing = await readManagedTextIfExists(root, path);
-  const content = `${JSON.stringify(preview.config, null, 2)}\n`;
+export interface ConfigSetupResult {
+  config: SetupChange;
+  manual: SetupChange;
+}
+
+function planConfigFile(path: string, content: string, existing: string | undefined): SetupChange {
   const action: SetupAction =
     existing === undefined ? "create" : existing === content ? "unchanged" : "modify";
-  if (action !== "unchanged") await writeManagedText(root, path, content);
   return { path, action, content };
+}
+
+/** Explicitly creates or upgrades the human-owned configuration and its companion manual. */
+export async function applyConfigSetup(root: string): Promise<ConfigSetupResult> {
+  const config = await readSetupConfig(root);
+  const configPath = ".ccr/config.json";
+  const manualPath = ".ccr/config-manual.md";
+  const [existingConfig, existingManual] = await Promise.all([
+    readManagedTextIfExists(root, configPath),
+    readManagedTextIfExists(root, manualPath),
+  ]);
+  const configChange = planConfigFile(configPath, serializeContextConfig(config), existingConfig);
+  const manualChange = planConfigFile(manualPath, CONFIG_MANUAL, existingManual);
+  for (const change of [configChange, manualChange]) {
+    if (change.action !== "unchanged") await writeManagedText(root, change.path, change.content);
+  }
+  return { config: configChange, manual: manualChange };
 }

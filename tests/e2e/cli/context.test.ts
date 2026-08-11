@@ -21,6 +21,7 @@ describe("context CLI", () => {
     let output = "";
     const io = {
       cwd: root,
+      isColorEnabled: true,
       write: (message: string) => {
         output += message;
       },
@@ -28,15 +29,41 @@ describe("context CLI", () => {
 
     await createCli(io).parseAsync(["node", "ccr", "config", "defaults"]);
     expect(output).toContain('"checkBeforeCommit": true');
-    expect(output).toContain('"subagentCount": 3');
-    expect(output).toContain('"_comment"');
-    expect(output).toContain('"_help"');
+    expect(output).toContain('"enabled": true');
+    expect(output).not.toContain('"schemaVersion"');
+    expect(output).not.toContain('"discovery"');
+    expect(output).not.toContain('"privacy"');
+    expect(output).not.toContain('"_comment"');
+    expect(output).not.toContain('"_help"');
     expect(output).not.toContain("providerPolicy");
     expect(output).not.toContain("maxIndexCharacters");
     expect(output).not.toContain("maxFileCharacters");
 
     await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
-    expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).toBeTruthy();
+    const configText = await readFile(path.join(root, ".ccr/config.json"), "utf8");
+    const manualText = await readFile(path.join(root, ".ccr/config-manual.md"), "utf8");
+    expect(JSON.parse(configText).hooks).toEqual({ enabled: true, checkBeforeCommit: true });
+    expect(manualText).toContain("# CCR configuration manual");
+    expect(manualText).toContain("## `domain`");
+    expect(manualText).toContain("### `hooks.enabled`");
+    const manualKeys = [
+      "## `domain`",
+      "### `hooks.enabled`",
+      "### `hooks.checkBeforeCommit`",
+      "### `context.recentJournalEntries`",
+      "### `context.maxCompactionPercent`",
+      "### `instructions.updateClaudeMd`",
+      "### `instructions.updateAgentsMd`",
+    ];
+    expect(manualKeys.map((key) => manualText.indexOf(key))).toEqual(
+      [...manualKeys]
+        .map((_, index) => manualText.indexOf(manualKeys[index]))
+        .sort((a, b) => a - b),
+    );
+    expect(output).toContain("Configuration manual created: .ccr/config-manual.md");
+    expect(output).toContain("\u001b[1;32m✔ CCR configuration created: .ccr/config.json\u001b[0m");
+    expect(output).toContain("ccr config set <key> <value> --apply");
+    expect(output).toContain("ccr setup --apply` to apply the settings during setup");
     await expect(
       readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
     ).rejects.toThrow();
@@ -64,9 +91,11 @@ describe("context CLI", () => {
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
-    expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).toContain(
-      '"schemaVersion": 2',
-    );
+    const config = JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"));
+    expect(config.hooks).toEqual({ enabled: true, checkBeforeCommit: true });
+    expect(config.schemaVersion).toBeUndefined();
+    expect(config.discovery).toBeUndefined();
+    expect(config.privacy).toBeUndefined();
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "context", "validate"]);
@@ -79,7 +108,7 @@ describe("context CLI", () => {
       "ccr",
       "config",
       "set",
-      "automation.checkBeforeCommit",
+      "hooks.checkBeforeCommit",
       "false",
       "--apply",
     ]);
@@ -88,10 +117,9 @@ describe("context CLI", () => {
     expect(output).toBe("");
 
     const hookPath = path.join(root, ".git/hooks/pre-commit");
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "install"]);
-    await expect(readFile(hookPath, "utf8")).rejects.toThrow();
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "install", "--apply"]);
     expect(await readFile(hookPath, "utf8")).toContain("# ccr:start");
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "status"]);
+    expect(output).toContain("pre-commit already-installed");
     await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall"]);
     expect(await readFile(hookPath, "utf8")).toContain("# ccr:start");
     await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--apply"]);
@@ -100,5 +128,5 @@ describe("context CLI", () => {
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "uninstall", "--apply", "--remove-context"]);
     expect(output).toContain("Shared context removed.");
-  });
+  }, 15_000);
 });

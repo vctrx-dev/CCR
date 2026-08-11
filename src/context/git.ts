@@ -18,6 +18,13 @@ export interface StagedContextState {
   shouldWarn: boolean;
 }
 
+export interface ContextClassification {
+  repositoryChanges: string[];
+  hasRepositoryChanges: boolean;
+  hasContextChanges: boolean;
+  shouldWarn: boolean;
+}
+
 const LOCAL_CONTEXT_PREFIXES = [".ccr/journal/", ".ccr/private/", ".ccr/cache/", ".ccr/tmp/"];
 const DEFAULT_GIT_BUFFER_BYTES = 16 * 1024 * 1024;
 
@@ -50,6 +57,10 @@ function parseGitEntries(output: string, oidIndex: number): IndexEntry[] {
     });
 }
 
+function parseGitPaths(output: string): string[] {
+  return [...new Set(output.split("\0").filter(Boolean))];
+}
+
 /** Classifies a repo path as shared context when it lives under `.ccr/` and is not local-only state. */
 export function isSharedContext(relativePath: string): boolean {
   return (
@@ -59,20 +70,29 @@ export function isSharedContext(relativePath: string): boolean {
   );
 }
 
-/** Reads only staged path names to implement CCR's advisory pre-commit signal. */
-export function readStagedContextState(root: string): StagedContextState {
-  const output = runGit(root, ["diff", "--cached", "--name-only", "-z"]);
-  const stagedPaths = output.split("\0").filter(Boolean);
-  const hasContextChanges = stagedPaths.some(isSharedContext);
-  const hasRepositoryChanges = stagedPaths.some(
-    (relativePath) => !relativePath.startsWith(".ccr/"),
-  );
+/**
+ * Separates changed paths into repository work and shared context, deriving the advisory warn
+ * decision. Shared by the pre-commit and post-commit checks so the two signals cannot drift.
+ */
+export function classifyContextChanges(paths: string[]): ContextClassification {
+  const repositoryChanges = paths.filter((relativePath) => !relativePath.startsWith(".ccr/"));
+  const hasRepositoryChanges = repositoryChanges.length > 0;
+  const hasContextChanges = paths.some(isSharedContext);
   return {
-    stagedPaths,
+    repositoryChanges,
     hasRepositoryChanges,
     hasContextChanges,
     shouldWarn: hasRepositoryChanges && !hasContextChanges,
   };
+}
+
+/** Reads only staged path names to implement CCR's advisory pre-commit signal. */
+export function readStagedContextState(root: string): StagedContextState {
+  const output = runGit(root, ["diff", "--cached", "--name-only", "-z"]);
+  const stagedPaths = parseGitPaths(output);
+  const { hasRepositoryChanges, hasContextChanges, shouldWarn } =
+    classifyContextChanges(stagedPaths);
+  return { stagedPaths, hasRepositoryChanges, hasContextChanges, shouldWarn };
 }
 
 /** Reads regular-file and symlink metadata from Git's index without opening worktree files. */
@@ -107,12 +127,12 @@ export function readStagedDiff(root: string, relativePath: string): string {
   return runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--", relativePath]);
 }
 
-/** Lists path names touched by the latest five local commits without reading their content. */
-export function readRecentChangedPaths(root: string): string[] {
+/** Lists path names touched by the latest `count` local commits without reading their content. */
+export function readChangedPaths(root: string, count: number): string[] {
   try {
     const output = execFileSync(
       "git",
-      ["log", "-5", "--name-only", "--pretty=format:", "--no-renames"],
+      ["log", `-${count}`, "--name-only", "-z", "--pretty=format:", "--no-renames"],
       {
         cwd: root,
         encoding: "utf8",
@@ -121,27 +141,7 @@ export function readRecentChangedPaths(root: string): string[] {
         windowsHide: true,
       },
     );
-    return [...new Set(output.split(/\r?\n/u).filter(Boolean))];
-  } catch {
-    return [];
-  }
-}
-
-/** Lists path names touched by the latest local commit without reading their content. */
-export function readLastCommitPaths(root: string): string[] {
-  try {
-    const output = execFileSync(
-      "git",
-      ["log", "-1", "--name-only", "--pretty=format:", "--no-renames"],
-      {
-        cwd: root,
-        encoding: "utf8",
-        maxBuffer: 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-        windowsHide: true,
-      },
-    );
-    return [...new Set(output.split(/\r?\n/u).filter(Boolean))];
+    return parseGitPaths(output);
   } catch {
     return [];
   }

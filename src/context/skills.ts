@@ -23,8 +23,9 @@ CCR is one opt-in package for ethical review of educational software:
 
 - \`/ccr-context\` manages concise repository context.
 - \`/ccr-review\` will run ethical review in a future release; it is not available yet.
-- \`npx --no-install ccr hooks install --apply\` enables an advisory context warning.
 - \`npx --no-install ccr setup\` previews installation; add \`--apply\` to write it.
+- \`.ccr/config.json\` controls CCR behavior; set \`hooks.enabled\` to \`true\` or \`false\` before setup.
+- \`ccr setup --apply\` installs or removes CCR-managed advisory hooks according to that setting.
 - \`npx --no-install ccr uninstall\` previews safe removal.
 
 Explain the requested topic from this manual. Do not interpret arguments as context operations.
@@ -48,6 +49,18 @@ Use the installed CLI only through \`npx --no-install ccr\`. Run \`config\` firs
 immediately on a schema/version error. Never edit \`.ccr/config.json\` automatically. It is
 human-owned: propose an exact setting change and apply it only after the human explicitly requests
 or approves that exact change.
+
+<configuration_and_hooks>
+Treat \`.ccr/config.json\` as the human-owned control plane for every CCR action. The file itself
+is the permission boundary. Read the configured values before acting, never rewrite or normalize
+the file as a side effect, and never change \`hooks\` or another setting without explicit human
+approval of the exact command and value. When \`hooks.enabled\` is \`true\`, \`ccr setup --apply\`
+may install or maintain CCR's marked advisory pre-commit and post-commit blocks; when \`false\`,
+setup removes only those marked CCR blocks. \`hooks.checkBeforeCommit\` controls the advisory
+pre-commit warning. Hooks may warn, start a local journal, or print a copy-paste update prompt, but
+they never invoke Claude automatically, commit, push, or change shared context without the context
+operation's review flow.
+</configuration_and_hooks>
 
 ## Shared rules
 
@@ -91,8 +104,8 @@ If the human provides nothing, continue normally. If supplied, read it alongside
 evidence and connect intended future behavior to the current system without claiming it exists.
 
 Run \`context files\`, discover repository instructions, manifests, source roots, entry points,
-schemas, tests, and documentation, then fan out the configured number of parallel discovery
-subagents (1-4; default 3). Give each an end-to-end evidence trace rather than a category: follow a
+schemas, tests, and documentation, then fan out three bounded, read-only discovery subagents. Give
+each an end-to-end evidence trace rather than a category: follow a
 real workflow or constraint across user need, configuration, runtime behavior, code, failures, and
 verification. Let traces overlap when that helps find missing details. Every subagent is read-only,
 repeats the shared rules, uses only broker commands, and returns evidence-backed claims, subtle
@@ -102,8 +115,8 @@ single, connected project narrative in \`.ccr/project.md\` and a focused people-
 
 Ask one verification subagent to independently re-query important evidence, reject unsupported
 claims, find contradictions and missing context, and perform the single correction pass. If visible
-filenames suggest additional secrets, propose exact \`privacy.excludedPaths\` entries, but do not
-change config without explicit approval. Validate, then create one local journal entry.
+filenames suggest additional sensitive paths, report them without changing the human-owned config.
+Validate, then create one local journal entry.
 
 ## Update
 

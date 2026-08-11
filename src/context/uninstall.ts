@@ -6,7 +6,8 @@ import {
   writeManagedText,
 } from "./files";
 import { MANAGED_ARTIFACTS, isPackageManagedSkill } from "./managed-artifacts";
-import { removeManagedBlock } from "./managed-block";
+import type { ManagedArtifact } from "./managed-artifacts";
+import { managedBlock, removeManagedBlock } from "./managed-block";
 import { CLAUDE_BLOCK, IGNORE_BLOCK } from "./templates";
 
 /**
@@ -27,12 +28,20 @@ export interface UninstallPreview {
   modifyPaths: string[];
 }
 
-function managedBlock(content: string) {
-  return {
-    content,
-    end: content.slice(content.lastIndexOf("\n") + 1),
-    start: content.slice(0, content.indexOf("\n")),
-  };
+function shouldRemoveArtifact(
+  artifact: ManagedArtifact,
+  existing: string | undefined,
+  shouldRemoveContext: boolean,
+): boolean {
+  if (existing === undefined) return false;
+  switch (artifact.uninstallPolicy) {
+    case "preserve":
+      return false;
+    case "remove-if-marked":
+      return existing === artifact.content || isPackageManagedSkill(existing);
+    case "remove-with-context":
+      return shouldRemoveContext;
+  }
 }
 
 async function hasLocalState(root: string): Promise<boolean> {
@@ -56,22 +65,8 @@ export async function previewUninstall(
   const removePaths: string[] = [];
   for (const artifact of MANAGED_ARTIFACTS) {
     const existing = await readManagedTextIfExists(root, artifact.path);
-    if (
-      artifact.uninstallPolicy === "remove-if-marked" &&
-      existing &&
-      (existing === artifact.content || isPackageManagedSkill(existing))
-    ) {
+    if (shouldRemoveArtifact(artifact, existing, shouldRemoveContext)) {
       removePaths.push(artifact.path);
-    }
-  }
-  if (shouldRemoveContext) {
-    for (const artifact of MANAGED_ARTIFACTS) {
-      if (
-        artifact.uninstallPolicy === "remove-with-context" &&
-        (await readManagedTextIfExists(root, artifact.path)) !== undefined
-      ) {
-        removePaths.push(artifact.path);
-      }
     }
   }
   const modifyPaths: string[] = [];

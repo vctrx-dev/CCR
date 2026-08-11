@@ -8,6 +8,15 @@ export interface ManagedBlock {
   start: string;
 }
 
+/** Builds a block whose start and end markers are the first and last lines of the content. */
+export function managedBlock(content: string): ManagedBlock {
+  return {
+    content,
+    end: content.slice(content.lastIndexOf("\n") + 1),
+    start: content.slice(0, content.indexOf("\n")),
+  };
+}
+
 function markerCount(content: string, marker: string): number {
   return content.split(marker).length - 1;
 }

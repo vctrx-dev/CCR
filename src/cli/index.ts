@@ -7,11 +7,13 @@ import { registerHooksCommands } from "./hooks";
 export interface CliIo {
   cwd: string;
   write(message: string): void;
+  isColorEnabled?: boolean;
 }
 
 function defaultIo(): CliIo {
   return {
     cwd: process.cwd(),
+    isColorEnabled: process.stdout.isTTY === true,
     write(message: string) {
       process.stdout.write(message);
     },

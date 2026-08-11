@@ -1,3 +1,4 @@
+import { parseAsuAimlResponse } from "./asu-api-response.js";
 import type {
   AsuAimlProviderConfig,
   ReviewProvider,
@@ -11,32 +12,6 @@ export {
   estimateCostUsd,
   readAsuAimlProviderConfig,
 } from "./asu-api-config.js";
-
-type UnknownRecord = Record<string, unknown>;
-
-/**
- * Type guard: checks whether a value is a non-null, non-array object.
- *
- * @param value - Value to check.
- * @returns True if value is a record.
- */
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Extracts a finite number from an unknown value.
- *
- * @param value - Value to coerce.
- * @returns Finite number or undefined.
- */
-function toFiniteNumber(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return undefined;
-  }
-
-  return value;
-}
 
 /**
  * Converts provider messages to ASU AIML system prompt + query format.
@@ -62,67 +37,6 @@ function convertMessagesToAsuFormat(messages: ReviewProviderMessage[]): {
     systemPrompt: systemParts.join("\n\n"),
     query: lastUserMessage.content,
   };
-}
-
-/**
- * Parses the ASU AIML API response JSON into a standard ReviewProviderResult.
- * Handles multiple response field name conventions: response, output, result, content,
- * OpenAI-style choices array, and nested response object.
- *
- * @param rawBody - Raw response body string.
- * @returns Parsed result with output and optional usage.
- */
-function parseAsuAimlResponse(rawBody: string): ReviewProviderResult {
-  const parsed: unknown = JSON.parse(rawBody);
-
-  if (!isRecord(parsed)) {
-    throw new Error(`Unexpected ASU AIML response format: ${rawBody.slice(0, 500)}`);
-  }
-
-  const usageCandidate: UnknownRecord | undefined = isRecord(parsed.usage)
-    ? parsed.usage
-    : isRecord(parsed.metrics)
-      ? parsed.metrics
-      : undefined;
-
-  const usage = usageCandidate
-    ? {
-        promptTokens: toFiniteNumber(usageCandidate.prompt_tokens ?? usageCandidate.input_tokens),
-        completionTokens: toFiniteNumber(
-          usageCandidate.completion_tokens ?? usageCandidate.output_tokens,
-        ),
-        totalTokens: toFiniteNumber(usageCandidate.total_tokens),
-      }
-    : undefined;
-
-  const resultPrefix = { usage };
-
-  if (typeof parsed.response === "string") return { output: parsed.response, ...resultPrefix };
-  if (typeof parsed.output === "string") return { output: parsed.output, ...resultPrefix };
-  if (typeof parsed.result === "string") return { output: parsed.result, ...resultPrefix };
-  if (typeof parsed.content === "string") return { output: parsed.content, ...resultPrefix };
-
-  if (Array.isArray(parsed.choices) && parsed.choices.length > 0) {
-    const firstChoice = parsed.choices[0];
-    if (
-      isRecord(firstChoice) &&
-      isRecord(firstChoice.message) &&
-      typeof firstChoice.message.content === "string"
-    ) {
-      return { output: firstChoice.message.content, ...resultPrefix };
-    }
-  }
-
-  if (isRecord(parsed.response)) {
-    if (typeof parsed.response.content === "string")
-      return { output: parsed.response.content, ...resultPrefix };
-    if (typeof parsed.response.text === "string")
-      return { output: parsed.response.text, ...resultPrefix };
-    if (typeof parsed.response.message === "string")
-      return { output: parsed.response.message, ...resultPrefix };
-  }
-
-  throw new Error(`Unexpected ASU AIML response format: ${rawBody.slice(0, 500)}`);
 }
 
 const MAX_RETRY_ATTEMPTS = 3;

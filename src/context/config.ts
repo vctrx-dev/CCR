@@ -1,91 +1,81 @@
 import { z } from "zod";
 
 /**
- * Versioned configuration boundary for all CCR context features. Add a setting through its schema,
- * defaults, migration, help text, and typed updater so shared and local policy cannot drift.
+ * Human-owned CCR settings. Keep this public shape small; runtime safety defaults belong in the
+ * resolved configuration below and must not become user-editable by accident.
  */
 
-const CONFIG_COMMENT =
-  "Human-owned committed settings. CCR and Claude must not change this file unless a human explicitly requests or approves the exact change.";
-
-const CONFIG_HELP = {
-  schemaVersion: "integer; fixed: 2; identifies the config format",
-  domain: "string; 1-80 characters; short repository domain or `unspecified`",
-  "automation.checkBeforeCommit":
-    "boolean; true or false; show an advisory warning when staged code has no staged context",
-  "discovery.subagentCount":
-    "integer; 1-4; parallel read-only discovery agents used by `/ccr-context initialize`",
-  "context.recentJournalEntries":
-    "integer; 1-10; local continuity entries available to `/ccr-context update`",
-  "context.maxCompactionPercent":
-    "integer; 20-30; maximum percentage `/ccr-context compact` may remove in one run",
-  "privacy.excludedPaths": "string[]; 0-100 Git globs; paths the context broker must never expose",
-  "instructions.updateClaudeMd":
-    "boolean; true or false; allow setup to maintain a small CCR block in CLAUDE.md",
-  "instructions.updateAgentsMd":
-    "boolean; true or false; allow setup to maintain a small CCR block in AGENTS.md",
-} as const;
-
-const helpSchema = z
+const contextSettingsSchema = z
   .object({
-    schemaVersion: z.literal(CONFIG_HELP.schemaVersion),
-    domain: z.literal(CONFIG_HELP.domain),
-    "automation.checkBeforeCommit": z.literal(CONFIG_HELP["automation.checkBeforeCommit"]),
-    "discovery.subagentCount": z.literal(CONFIG_HELP["discovery.subagentCount"]),
-    "context.recentJournalEntries": z.literal(CONFIG_HELP["context.recentJournalEntries"]),
-    "context.maxCompactionPercent": z.literal(CONFIG_HELP["context.maxCompactionPercent"]),
-    "privacy.excludedPaths": z.literal(CONFIG_HELP["privacy.excludedPaths"]),
-    "instructions.updateClaudeMd": z.literal(CONFIG_HELP["instructions.updateClaudeMd"]),
-    "instructions.updateAgentsMd": z.literal(CONFIG_HELP["instructions.updateAgentsMd"]),
+    recentJournalEntries: z.number().int().min(1).max(10),
+    maxCompactionPercent: z.number().int().min(20).max(30),
   })
   .strict();
 
-const contextConfigSchema = z
+const hooksSettingsSchema = z
   .object({
-    _comment: z.string().trim().min(1).max(500),
-    _help: helpSchema,
-    schemaVersion: z.literal(2),
+    enabled: z.boolean(),
+    checkBeforeCommit: z.boolean(),
+  })
+  .strict();
+
+const instructionsSchema = z
+  .object({
+    updateClaudeMd: z.boolean(),
+    updateAgentsMd: z.boolean(),
+  })
+  .strict();
+
+const publicConfigSchema = z
+  .object({
+    domain: z.string().trim().min(1).max(80).default("unspecified"),
+    hooks: hooksSettingsSchema.default({ enabled: true, checkBeforeCommit: true }),
+    context: contextSettingsSchema.default({
+      recentJournalEntries: 3,
+      maxCompactionPercent: 25,
+    }),
+    instructions: instructionsSchema.default({
+      updateClaudeMd: false,
+      updateAgentsMd: false,
+    }),
+  })
+  .strict();
+
+const resolvedConfigSchema = z
+  .object({
     domain: z.string().trim().min(1).max(80),
-    automation: z.object({ checkBeforeCommit: z.boolean() }).strict(),
+    hooks: hooksSettingsSchema,
     discovery: z.object({ subagentCount: z.number().int().min(1).max(4) }).strict(),
-    context: z
-      .object({
-        recentJournalEntries: z.number().int().min(1).max(10),
-        maxCompactionPercent: z.number().int().min(20).max(30),
-      })
-      .strict(),
+    context: contextSettingsSchema,
     privacy: z.object({ excludedPaths: z.array(z.string().min(1)).max(100) }).strict(),
-    instructions: z
-      .object({
-        updateClaudeMd: z.boolean(),
-        updateAgentsMd: z.boolean(),
-      })
-      .strict(),
+    instructions: instructionsSchema,
   })
   .strict();
 
-const previousConfigSchema = z
+const legacyConfigSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     domain: z.string().trim().min(1).max(80),
-    automation: z.object({ checkBeforeCommit: z.boolean() }).passthrough(),
+    hooks: z.boolean().optional(),
+    automation: z.object({ checkBeforeCommit: z.boolean() }).passthrough().optional(),
     discovery: z
       .object({ subagentCount: z.number().int().min(1).max(4) })
       .passthrough()
       .optional(),
-    context: z.object({ recentJournalEntries: z.number().int().min(1).max(10) }).passthrough(),
-    privacy: z.object({ excludedPaths: z.array(z.string().min(1)).max(100) }).passthrough(),
-    instructions: z
+    context: z
       .object({
-        updateClaudeMd: z.boolean(),
-        updateAgentsMd: z.boolean(),
+        recentJournalEntries: z.number().int().min(1).max(10),
+        maxCompactionPercent: z.number().int().min(20).max(30).optional(),
       })
       .passthrough(),
+    privacy: z.object({ excludedPaths: z.array(z.string().min(1)).max(100) }).passthrough(),
+    instructions: instructionsSchema.passthrough(),
   })
   .passthrough();
 
 const localConfigSchema = z
   .object({
+    hooks: z.object({ checkBeforeCommit: z.boolean().optional() }).strict().optional(),
     automation: z.object({ checkBeforeCommit: z.boolean().optional() }).strict().optional(),
     context: z
       .object({ recentJournalEntries: z.number().int().min(1).max(10) })
@@ -98,71 +88,101 @@ const localConfigSchema = z
   })
   .strict();
 
-export type ContextConfig = z.infer<typeof contextConfigSchema>;
+const DEFAULT_EXCLUDED_PATHS = [
+  ".env*",
+  "**/.env*",
+  "**/secrets/**",
+  "**/credentials/**",
+  "**/*.pem",
+  "**/*.key",
+  "**/*.p12",
+  "**/*.pfx",
+  "**/student-data/**",
+] as const;
+
+export type ContextConfig = z.infer<typeof resolvedConfigSchema>;
+export type PublicContextConfig = z.infer<typeof publicConfigSchema>;
 export type LocalContextConfig = z.infer<typeof localConfigSchema>;
 
 export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
-  _comment: CONFIG_COMMENT,
-  _help: CONFIG_HELP,
-  schemaVersion: 2,
   domain: "unspecified",
-  automation: { checkBeforeCommit: true },
+  hooks: { enabled: true, checkBeforeCommit: true },
   discovery: { subagentCount: 3 },
   context: {
     recentJournalEntries: 3,
     maxCompactionPercent: 25,
   },
-  privacy: {
-    excludedPaths: [
-      ".env*",
-      "**/.env*",
-      "**/secrets/**",
-      "**/credentials/**",
-      "**/*.pem",
-      "**/*.key",
-      "**/*.p12",
-      "**/*.pfx",
-      "**/student-data/**",
-    ],
-  },
+  privacy: { excludedPaths: [...DEFAULT_EXCLUDED_PATHS] },
   instructions: {
     updateClaudeMd: false,
     updateAgentsMd: false,
   },
 };
 
-/** Parses current settings or removes retired fields from the previous schema. */
-export function parseContextConfig(input: string): ContextConfig {
-  const value: unknown = JSON.parse(input);
-  const current = contextConfigSchema.safeParse(value);
-  if (current.success) return current.data;
-  const previous = previousConfigSchema.safeParse(value);
-  if (!previous.success) throw current.error;
-  return {
+function fromPublicConfig(config: PublicContextConfig): ContextConfig {
+  return resolvedConfigSchema.parse({
     ...DEFAULT_CONTEXT_CONFIG,
-    domain: previous.data.domain,
-    automation: { checkBeforeCommit: previous.data.automation.checkBeforeCommit },
+    domain: config.domain,
+    hooks: config.hooks,
+    context: config.context,
+    instructions: config.instructions,
+  });
+}
+
+/** Returns only the human-editable settings written to `.ccr/config.json`. */
+export function toPublicContextConfig(config: ContextConfig): PublicContextConfig {
+  return publicConfigSchema.parse({
+    domain: config.domain,
+    hooks: config.hooks,
+    context: config.context,
+    instructions: config.instructions,
+  });
+}
+
+/** Serializes the minimal, strict-JSON configuration file. */
+export function serializeContextConfig(config: ContextConfig): string {
+  return `${JSON.stringify(toPublicContextConfig(config), null, 2)}\n`;
+}
+
+function migrateLegacyConfig(config: z.infer<typeof legacyConfigSchema>): ContextConfig {
+  return resolvedConfigSchema.parse({
+    ...DEFAULT_CONTEXT_CONFIG,
+    domain: config.domain,
+    hooks: {
+      enabled: config.hooks ?? true,
+      checkBeforeCommit: config.automation?.checkBeforeCommit ?? true,
+    },
     discovery: {
       subagentCount:
-        previous.data.discovery?.subagentCount ?? DEFAULT_CONTEXT_CONFIG.discovery.subagentCount,
+        config.discovery?.subagentCount ?? DEFAULT_CONTEXT_CONFIG.discovery.subagentCount,
     },
     context: {
       ...DEFAULT_CONTEXT_CONFIG.context,
-      recentJournalEntries: previous.data.context.recentJournalEntries,
+      recentJournalEntries: config.context.recentJournalEntries,
+      maxCompactionPercent:
+        config.context.maxCompactionPercent ?? DEFAULT_CONTEXT_CONFIG.context.maxCompactionPercent,
     },
     privacy: {
       excludedPaths: [
         ...new Set([
           ...DEFAULT_CONTEXT_CONFIG.privacy.excludedPaths,
-          ...previous.data.privacy.excludedPaths,
+          ...config.privacy.excludedPaths,
         ]),
       ],
     },
-    instructions: {
-      updateClaudeMd: previous.data.instructions.updateClaudeMd,
-      updateAgentsMd: previous.data.instructions.updateAgentsMd,
-    },
-  };
+    instructions: config.instructions,
+  });
+}
+
+/** Parses the minimal format and migrates supported legacy files in memory. */
+export function parseContextConfig(input: string): ContextConfig {
+  const value: unknown = JSON.parse(input);
+  const current = publicConfigSchema.safeParse(value);
+  if (current.success) return fromPublicConfig(current.data);
+
+  const legacy = legacyConfigSchema.safeParse(value);
+  if (!legacy.success) throw current.error;
+  return migrateLegacyConfig(legacy.data);
 }
 
 /** Parses the intentionally limited set of per-developer overrides. */
@@ -180,8 +200,12 @@ export function resolveContextConfig(
   ];
   return {
     ...shared,
-    automation: {
-      checkBeforeCommit: local.automation?.checkBeforeCommit ?? shared.automation.checkBeforeCommit,
+    hooks: {
+      ...shared.hooks,
+      checkBeforeCommit:
+        local.hooks?.checkBeforeCommit ??
+        local.automation?.checkBeforeCommit ??
+        shared.hooks.checkBeforeCommit,
     },
     context: {
       ...shared.context,
@@ -213,16 +237,15 @@ export function updateContextConfig(
     case "domain":
       updated = { ...config, domain: value };
       break;
+    case "hooks":
+    case "hooks.enabled":
+      updated = { ...config, hooks: { ...config.hooks, enabled: parseBooleanSetting(value) } };
+      break;
+    case "hooks.checkBeforeCommit":
     case "automation.checkBeforeCommit":
       updated = {
         ...config,
-        automation: { checkBeforeCommit: parseBooleanSetting(value) },
-      };
-      break;
-    case "discovery.subagentCount":
-      updated = {
-        ...config,
-        discovery: { subagentCount: parseIntegerSetting(value) },
+        hooks: { ...config.hooks, checkBeforeCommit: parseBooleanSetting(value) },
       };
       break;
     case "context.recentJournalEntries":
@@ -240,14 +263,6 @@ export function updateContextConfig(
         context: {
           ...config.context,
           maxCompactionPercent: parseIntegerSetting(value),
-        },
-      };
-      break;
-    case "privacy.excludedPaths":
-      updated = {
-        ...config,
-        privacy: {
-          excludedPaths: z.array(z.string().min(1)).max(100).parse(JSON.parse(value)),
         },
       };
       break;
@@ -271,8 +286,8 @@ export function updateContextConfig(
       break;
     default:
       throw new Error(
-        "Supported settings: domain, automation.checkBeforeCommit, discovery.subagentCount, context.recentJournalEntries, context.maxCompactionPercent, privacy.excludedPaths, and instruction-file opt-ins.",
+        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, context.recentJournalEntries, context.maxCompactionPercent, and instruction-file opt-ins.",
       );
   }
-  return contextConfigSchema.parse(updated);
+  return resolvedConfigSchema.parse(updated);
 }

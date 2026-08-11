@@ -1,11 +1,7 @@
 import type { Command } from "commander";
 import { runAfterCommitCheck } from "../context/after-commit";
 import { findRepositoryRoot, readStagedContextState } from "../context/git";
-import {
-  installAllContextHooks,
-  readContextHookStatus,
-  removeAllContextHooks,
-} from "../context/hooks";
+import { readContextHookStatus, removeAllContextHooks } from "../context/hooks";
 import { readResolvedContextConfig } from "../context/privacy";
 import type { CliIo } from "./index";
 
@@ -13,30 +9,17 @@ function rootFor(io: CliIo): string {
   return findRepositoryRoot(io.cwd);
 }
 
+async function isHooksEnabled(root: string): Promise<boolean> {
+  try {
+    return (await readResolvedContextConfig(root)).hooks.enabled;
+  } catch {
+    return false;
+  }
+}
+
 /** Registers advisory Git hook commands, including the post-commit context-and-journal check. */
 export function registerHooksCommands(program: Command, io: CliIo): void {
   const hooks = program.command("hooks").description("Manage the advisory context Git hooks");
-  hooks
-    .command("install")
-    .option("--apply", "write the previewed hook blocks")
-    .action(async (options: { apply?: boolean }) => {
-      const root = rootFor(io);
-      if (!options.apply) {
-        const preCommit = await readContextHookStatus(root, "pre-commit");
-        const postCommit = await readContextHookStatus(root, "post-commit");
-        io.write(
-          `CCR hook preview: pre-commit ${preCommit.status}, post-commit ${postCommit.status} (${preCommit.path})\n`,
-        );
-        io.write(
-          "Run `ccr hooks install --apply` to install both advisory hooks and the local-continuity ignore rules.\n",
-        );
-        return;
-      }
-      const result = await installAllContextHooks(root);
-      io.write(
-        `CCR hooks: pre-commit ${result.preCommit.status}, post-commit ${result.postCommit.status}; local ignore rules ${result.ignore}.\n`,
-      );
-    });
   hooks.command("status").action(async () => {
     const root = rootFor(io);
     const preCommit = await readContextHookStatus(root, "pre-commit");
@@ -66,6 +49,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     });
   hooks.command("after-commit").action(async () => {
     const root = rootFor(io);
+    if (!(await isHooksEnabled(root))) return;
     const result = await runAfterCommitCheck(root);
     if (result.journalCreated && result.journalPath) {
       io.write(`CCR: started local journal entry ${result.journalPath}.\n`);
@@ -81,14 +65,16 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     }
   });
   hooks.command("check").action(async () => {
+    const root = rootFor(io);
+    if (!(await isHooksEnabled(root))) return;
     let shouldCheck = false;
     try {
-      shouldCheck = (await readResolvedContextConfig(rootFor(io))).automation.checkBeforeCommit;
+      shouldCheck = (await readResolvedContextConfig(root)).hooks.checkBeforeCommit;
     } catch {
       return;
     }
     if (!shouldCheck) return;
-    const state = readStagedContextState(rootFor(io));
+    const state = readStagedContextState(root);
     if (state.shouldWarn) {
       const warning = [
         "CCR warning: context might need updating.",

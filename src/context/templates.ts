@@ -1,4 +1,5 @@
-import { DEFAULT_CONTEXT_CONFIG } from "./config";
+import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "./config";
+import { CONFIG_MANUAL } from "./config-manual";
 
 /**
  * Source templates for context files and optional instruction blocks. Add shared generated content
@@ -8,7 +9,8 @@ import { DEFAULT_CONTEXT_CONFIG } from "./config";
 const managedHeader = "<!-- managed by CCR; edit facts, keep headings -->";
 
 export const CONTEXT_FILES: Readonly<Record<string, string>> = {
-  ".ccr/config.json": `${JSON.stringify(DEFAULT_CONTEXT_CONFIG, null, 2)}\n`,
+  ".ccr/config.json": serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+  ".ccr/config-manual.md": CONFIG_MANUAL,
   ".ccr/index.md": `${managedHeader}
 # CCR Context Index
 
