@@ -17,7 +17,7 @@ describe("GitHub Action public surface", () => {
     expect(buildConfig).not.toContain("dist/action");
     expect(packageText).not.toContain('"@actions/core"');
     expect(packageText).not.toContain('"@actions/github"');
-    expect(readme).toContain("GitHub Action remain on the roadmap");
+    expect(readme).toMatch(/GitHub Action remains?\s+on the roadmap/);
     expect(readme).toContain("not claimed as available");
   });
 });

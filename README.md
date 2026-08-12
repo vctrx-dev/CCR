@@ -4,15 +4,15 @@ CCR is research-backed tooling for maintaining concise, human-correctable contex
 review workflows. The first package targets Claude Code while keeping its repository
 context as plain Markdown and JSON.
 
-The planned complete product combines:
+The complete product combines:
 
 - compact repository context management;
 - research-backed Claude Code reviewer skills;
 - branch-local continuity;
 - an advisory GitHub Action using the same review contracts.
 
-The staged roadmap reaches `v1.0.0` when context management, reviewer skills, and the advisory
-GitHub Action ship together.
+The staged roadmap reaches `v1.0.0` when the researched review-dimension set and advisory GitHub
+Action ship on top of the current context and review-skill foundations.
 
 ## One package, optional components
 
@@ -23,13 +23,13 @@ the developer chooses which components to enable:
 |---|---|---|
 | Editable settings and configuration manual | `ccr config init --apply` | Yes |
 | Claude manual, context skill, and shared context | `ccr setup --apply` | Yes |
+| Change and whole-codebase review skills | `ccr setup --apply`, then `/ccr-review` or `/ccr-codebase` | Yes |
 | Advisory context hooks (pre-commit + post-commit) | `hooks.enabled: true` (default) plus `/ccr-context initialize` or `/ccr-hooks sync` | Yes |
 | `CLAUDE.md` or `AGENTS.md` pointer | Enable its config setting before setup | Yes |
 | Local continuity journal | Created by `/ccr-context` operations when needed | Yes |
 
 Setup previews changes unless `--apply` is supplied. Components can be removed independently with
-the matching uninstall command. Reviewer skills and the GitHub Action will join this same package in
-later versions and remain opt-in; they are not available yet.
+the matching uninstall command. The GitHub Action remains a later opt-in component.
 
 ## Install in a project or globally
 
@@ -101,16 +101,32 @@ Then open Claude Code:
 | `/ccr-context verify` | Check all context against the current index and latest five local commits |
 | `/ccr-context addition` | Add human-provided plans, specifications, or other context |
 | `/ccr-context compact` | Remove at most the configured 20–30% while preserving key knowledge |
+| `/ccr-review [all\|dimension,...]` | Review staged, unstaged, and untracked changes without fixing them |
+| `/ccr-codebase [all\|dimension,...]` | Review the complete codebase and live changes without fixing them |
+
+Both review skills load their taxonomy from the validated data-only
+`src/review/dimensions.json` registry. Blank arguments default to all dimensions; comma-separated IDs
+select a subset. The registry is intentionally empty in this development revision because the nine
+research definitions were not supplied. A review stops and reports that condition instead of
+inventing criteria. Adding, deleting, reordering, or revising dimensions changes only that JSON file.
+
+Reviews always use adaptive subagents. They cluster related dimensions and evidence traces instead
+of always creating one agent per dimension, then verify and deduplicate the merged findings. Output
+contains severity, file, issue, triggering case, and dimension; source code is never changed without
+later approval. The privacy broker exposes staged, unstaged, and untracked evidence without exposing
+excluded paths.
 
 Initialization maps independent end-to-end evidence traces, then uses an adaptive parallel discovery
 wave: one agent for a small cohesive repository and more agents for multi-language, multi-surface, or
 very large repositories, up to the harness's useful concurrency. A separate subagent verifies the
 synthesis before one bounded correction pass. `project.md` is one connected, evidence-backed
 narrative rather than fixed technical categories. Focused later operations use no discovery agent
-for one evidence trace and one bounded parallel wave only when traces are independent. Update,
-verify, and addition target five minutes; semantic compact targets eight. Their verifier receives
-the bounded draft/evidence packet and performs no new repository search. Every operation asks the
-developer to review it.
+for one evidence trace and normally use one parallel wave only when traces are independent. Agent,
+read, and time budgets are starting guidance rather than hard ceilings: Claude chooses the smallest
+sufficient evidence plan and expands it only for a named unsupported, contradictory, truncated, or
+new consequential trace. It stops when every material claim is evidenced or explicitly unknown.
+Every operation's verifier receives the bounded draft/evidence packet and performs no repository
+search. Every operation asks the developer to review it.
 
 `ccr config init` is preview-only. Add `--apply` only after reviewing the proposed files; the flag
 is the explicit write confirmation. After it succeeds, `.ccr/config-manual.md` explains every key
@@ -185,8 +201,10 @@ Runtime requirement: Node.js 22.12 or later and Claude Code 2.1.0 or later.
 
 ## Current scope
 
-The package provides the context-management foundation. Ethical reviewer skills, human-feedback
-flows, and the GitHub Action remain on the roadmap and are not claimed as available.
+The package provides context management plus data-driven change and codebase review skills. The
+review workflow is installed and tested, but its research taxonomy is intentionally empty until the
+dimension definitions are added. Automated fixes, human-feedback flows, and the GitHub Action remain
+on the roadmap and are not claimed as available.
 
 ## Development
 

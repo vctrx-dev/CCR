@@ -7,8 +7,21 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+### Added
+
+- Data-driven `/ccr-review` and `/ccr-codebase` Claude skills support all, multiple, or individual
+  review dimensions without coupling dimension changes to setup or orchestration code.
+- A validated review-dimension registry and package-managed progressive-disclosure references. The
+  registry is intentionally empty until the research definitions are supplied.
+- Privacy-filtered staged, unstaged, and untracked review evidence commands.
+- Review continuity reuses one branch-local journal entry per commit and supports repeated run
+  sections without creating additional commit entries.
+
 ### Changed
 
+- Context discovery budgets are now adaptive starting guidance: Claude may expand a plan to close a
+  named material evidence gap, while every operation uses a tool-free evidence-packet verifier and
+  an explicit evidence-completeness stopping rule.
 - Legacy hook cleanup now shares the byte-preserving managed-block parser, validates both hooks
   before writing, and reports malformed, unsafe, or unavailable hook state distinctly.
 - ASU provider settings and cost estimates use one strict validation boundary; non-retryable HTTP

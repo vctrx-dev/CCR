@@ -32,6 +32,18 @@ describe("CCR setup", () => {
     expect(preview.changes.map((change) => change.path)).toContain(
       ".claude/skills/ccr-hooks/SKILL.md",
     );
+    expect(preview.changes.map((change) => change.path)).toContain(
+      ".claude/skills/ccr-review/SKILL.md",
+    );
+    expect(preview.changes.map((change) => change.path)).toContain(
+      ".claude/skills/ccr-codebase/SKILL.md",
+    );
+    expect(preview.changes.map((change) => change.path)).toContain(
+      ".claude/skills/ccr-review/references/dimensions.md",
+    );
+    expect(preview.changes.map((change) => change.path)).toContain(
+      ".claude/skills/ccr-codebase/references/dimensions.md",
+    );
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/risks.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/architecture.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/decisions.md");
@@ -193,7 +205,7 @@ describe("CCR setup", () => {
     const skill = await readFile(skillPath, "utf8");
     expect(skill).toMatch(/`initialize`, `update`, `verify`,\s*`addition`, or `compact`/);
     expect(skill).toContain("optional context that is not in this repository");
-    expect(skill).toContain("Use adaptive subagents");
+    expect(skill).toMatch(/adaptive subagents/i);
     expect(skill).toContain("verification subagent");
     expect(skill).toContain("single, connected project narrative");
     expect(skill).toContain("small but consequential");

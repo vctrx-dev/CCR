@@ -18,6 +18,7 @@ export interface SafePathList {
   paths: string[];
   excludedCount: number;
   omittedCount: number;
+  nextCursor?: string;
 }
 
 export interface SafeRecentPaths {
@@ -61,21 +62,31 @@ async function safeRegularPaths(root: string): Promise<{
 export async function listSafeRepositoryPaths(
   root: string,
   prefix?: string,
+  after?: string,
 ): Promise<SafePathList> {
   const safe = await safeRegularPaths(root);
   const normalizedPrefix = prefix?.replaceAll("\\", "/");
-  if (
-    normalizedPrefix &&
-    (/^\/|(?:^|\/)\.\.(?:\/|$)/u.test(normalizedPrefix) || hasControlCharacters(normalizedPrefix))
-  ) {
-    throw new Error("Prefix must be a safe repository-relative path.");
+  const normalizedAfter = after?.replaceAll("\\", "/");
+  for (const [label, candidate] of [
+    ["Prefix", normalizedPrefix],
+    ["Cursor", normalizedAfter],
+  ]) {
+    if (
+      candidate &&
+      (/^\/|(?:^|\/)\.\.(?:\/|$)/u.test(candidate) || hasControlCharacters(candidate))
+    ) {
+      throw new Error(`${label} must be a safe repository-relative path.`);
+    }
   }
   const pathPrefix = normalizedPrefix?.replace(/\/+$/u, "");
-  const candidates = pathPrefix
+  const matchingCandidates = pathPrefix
     ? safe.paths.filter(
         (candidate) => candidate === pathPrefix || candidate.startsWith(`${pathPrefix}/`),
       )
     : [...new Set(safe.paths.map((candidate) => candidate.split("/")[0] ?? candidate))];
+  const candidates = normalizedAfter
+    ? matchingCandidates.filter((candidate) => candidate.localeCompare(normalizedAfter) > 0)
+    : matchingCandidates;
   const paths: string[] = [];
   let usedCharacters = 0;
   for (const candidate of candidates) {
@@ -83,10 +94,13 @@ export async function listSafeRepositoryPaths(
     paths.push(candidate);
     usedCharacters += candidate.length + 3;
   }
+  const omittedCount = candidates.length - paths.length;
+  const nextCursor = omittedCount > 0 ? paths.at(-1) : undefined;
   return {
     paths,
     excludedCount: safe.excludedCount,
-    omittedCount: candidates.length - paths.length,
+    omittedCount,
+    ...(nextCursor ? { nextCursor } : {}),
   };
 }
 

@@ -7,6 +7,7 @@ import { afterEach, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import {
   createJournalEntry,
+  ensureJournalEntryForHead,
   journalEntryExistsForCommit,
   readRecentJournalEntries,
 } from "../../../src/context/journal";
@@ -103,4 +104,29 @@ it("should not overwrite a journal entry created in the same second", async () =
 
   const recent = await readRecentJournalEntries(root);
   expect(new Set(recent.map((entry) => entry.path))).toEqual(new Set([first.path, second.path]));
+});
+
+it("should reuse one review journal entry for repeated reviews of the same commit", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-review-journal-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    "utf8",
+  );
+  await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
+  await run("git", ["add", "file.txt"], { cwd: root });
+  await run("git", ["commit", "--quiet", "-m", "test"], { cwd: root });
+
+  const first = await ensureJournalEntryForHead(root, new Date("2026-07-29T11:00:00Z"));
+  const second = await ensureJournalEntryForHead(root, new Date("2026-07-29T12:00:00Z"));
+
+  expect(second).toEqual(first);
+  expect((await readRecentJournalEntries(root)).map(({ path: entryPath }) => entryPath)).toEqual([
+    first.path,
+  ]);
 });

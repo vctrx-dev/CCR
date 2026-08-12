@@ -95,6 +95,16 @@ export function readStagedContextState(root: string): StagedContextState {
   return { stagedPaths, hasRepositoryChanges, hasContextChanges, shouldWarn };
 }
 
+/** Lists tracked paths with unstaged worktree changes without reading file content. */
+export function readUnstagedPaths(root: string): string[] {
+  return parseGitPaths(runGit(root, ["diff", "--name-only", "-z"]));
+}
+
+/** Lists untracked, non-ignored paths without reading file content. */
+export function readUntrackedPaths(root: string): string[] {
+  return parseGitPaths(runGit(root, ["ls-files", "--others", "--exclude-standard", "-z"]));
+}
+
 /** Reads regular-file and symlink metadata from Git's index without opening worktree files. */
 export function readIndexEntries(root: string): IndexEntry[] {
   return parseGitEntries(runGit(root, ["ls-files", "--stage", "-z"]), 1);
@@ -125,6 +135,11 @@ export function readGitBlob(root: string, oid: string): string {
 /** Reads the staged diff for one exact path without invoking external diff drivers. */
 export function readStagedDiff(root: string, relativePath: string): string {
   return runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--", relativePath]);
+}
+
+/** Reads the unstaged diff for one exact path without invoking external diff drivers. */
+export function readUnstagedDiff(root: string, relativePath: string): string {
+  return runGit(root, ["diff", "--no-ext-diff", "--no-textconv", "--", relativePath]);
 }
 
 /** Lists path names touched by the latest `count` local commits without reading their content. */

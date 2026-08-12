@@ -88,3 +88,36 @@ it("should expose only approved index content and never unstaged or symlink cont
     "UNSTAGED_PRIVATE_VALUE",
   );
 });
+
+it("should paginate a large safe file inventory without gaps or duplicates", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-pages-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await mkdir(path.join(root, "source"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    "utf8",
+  );
+  const expected = Array.from(
+    { length: 120 },
+    (_, index) => `source/${index.toString().padStart(3, "0")}-${"long-name-".repeat(6)}.ts`,
+  );
+  await Promise.all(
+    expected.map((relativePath) =>
+      writeFile(path.join(root, relativePath), "export {};\n", "utf8"),
+    ),
+  );
+  await run("git", ["add", "--", ".ccr/config.json", "source"], { cwd: root });
+
+  const first = await listSafeRepositoryPaths(root, "source");
+  expect(first.omittedCount).toBeGreaterThan(0);
+  expect(first.nextCursor).toBe(first.paths.at(-1));
+  const second = await listSafeRepositoryPaths(root, "source", first.nextCursor);
+
+  expect(new Set([...first.paths, ...second.paths])).toEqual(new Set(expected));
+  expect(first.paths.filter((candidate) => second.paths.includes(candidate))).toEqual([]);
+  expect(second.omittedCount).toBe(0);
+  expect(second.nextCursor).toBeUndefined();
+});

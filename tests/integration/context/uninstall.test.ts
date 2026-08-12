@@ -32,6 +32,10 @@ it("should preview safely and preserve context unless removal is explicit", asyn
     ".claude/skills/ccr/SKILL.md",
     ".claude/skills/ccr-context/SKILL.md",
     ".claude/skills/ccr-hooks/SKILL.md",
+    ".claude/skills/ccr-review/SKILL.md",
+    ".claude/skills/ccr-codebase/SKILL.md",
+    ".claude/skills/ccr-review/references/dimensions.md",
+    ".claude/skills/ccr-codebase/references/dimensions.md",
   ]);
   expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain("<!-- ccr:start -->");
 

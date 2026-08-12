@@ -20,6 +20,7 @@ import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { validateContext } from "../context/validate";
 import type { CliIo } from "./index";
 import { formatAction, formatHeading, formatStatus, formatTone } from "./output";
+import { registerReviewContextCommands } from "./review-context";
 
 interface SetupOptions {
   apply?: boolean;
@@ -287,8 +288,11 @@ export function registerContextCommands(program: Command, io: CliIo): void {
   context
     .command("files [prefix]")
     .description("List safe index roots or files below a prefix")
-    .action(async (prefix?: string) => {
-      io.write(`${JSON.stringify(await listSafeRepositoryPaths(rootFor(io), prefix))}\n`);
+    .option("--after <path>", "continue a truncated listing after this cursor")
+    .action(async (prefix: string | undefined, options: { after?: string }) => {
+      io.write(
+        `${JSON.stringify(await listSafeRepositoryPaths(rootFor(io), prefix, options.after))}\n`,
+      );
     });
   context
     .command("read <file>")
@@ -312,4 +316,5 @@ export function registerContextCommands(program: Command, io: CliIo): void {
   context.command("journals").action(async () => {
     io.write(`${JSON.stringify(await readRecentJournalEntries(rootFor(io)))}\n`);
   });
+  registerReviewContextCommands(context, io);
 }

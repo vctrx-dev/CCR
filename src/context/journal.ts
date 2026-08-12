@@ -104,16 +104,46 @@ export async function journalEntryExistsForCommit(
   directory?: string,
 ): Promise<boolean> {
   const resolvedDirectory = directory ?? branchDetails(root).directory;
-  const relativeDirectory = `.ccr/journal/${resolvedDirectory}`;
-  const names = await readJournalNames(root, relativeDirectory);
+  return (await findJournalEntryForCommit(root, commit, resolvedDirectory)) !== undefined;
+}
+
+async function findJournalEntryForCommit(
+  root: string,
+  commit: string,
+  directory: string,
+): Promise<JournalResult | undefined> {
+  const relativeDirectory = `.ccr/journal/${directory}`;
+  const names = (await readJournalNames(root, relativeDirectory)).sort().reverse();
   for (const name of names) {
     const content = await readFile(
       await assertSafeManagedPath(root, `${relativeDirectory}/${name}`),
       "utf8",
     );
-    if (content.includes(`- **Commit**: \`${commit}\``)) return true;
+    if (content.includes(`- **Commit**: \`${commit}\``)) {
+      return { path: `${relativeDirectory}/${name}` };
+    }
   }
-  return false;
+  return undefined;
+}
+
+function currentCommit(root: string): string {
+  try {
+    return readGitValue(root, ["rev-parse", "HEAD"]);
+  } catch {
+    return "unborn";
+  }
+}
+
+/** Returns the existing current-commit journal or creates its sole review continuity entry. */
+export async function ensureJournalEntryForHead(
+  root: string,
+  now: Date = new Date(),
+): Promise<JournalResult> {
+  const { branch, directory } = branchDetails(root);
+  const commit = currentCommit(root);
+  const existing = await findJournalEntryForCommit(root, commit, directory);
+  if (existing) return existing;
+  return createJournalEntry(root, now, [], { branch, directory, commit });
 }
 
 /** Reads only the configured number of newest entries for the exact current branch. */

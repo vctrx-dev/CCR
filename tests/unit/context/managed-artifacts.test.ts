@@ -19,6 +19,11 @@ describe("managed artifact registry", () => {
     expect(
       MANAGED_ARTIFACTS.some((artifact) => artifact.path === ".claude/skills/ccr-hooks/SKILL.md"),
     ).toBe(true);
+    expect(
+      MANAGED_ARTIFACTS.some(
+        (artifact) => artifact.path === ".claude/skills/ccr-review/references/dimensions.md",
+      ),
+    ).toBe(true);
     expect(MANAGED_BLOCK_ARTIFACTS.map((artifact) => artifact.path)).toEqual([
       ".gitignore",
       "CLAUDE.md",

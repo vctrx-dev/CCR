@@ -1,5 +1,9 @@
-export const MANAGED_SKILL_MARKER =
-  "<!-- managed by CCR skill; package updates may replace this file -->";
+import { REVIEW_DIMENSION_REFERENCE } from "../review/dimensions";
+import { CCR_CODEBASE_SKILL, CCR_REVIEW_SKILL } from "../review/skills";
+import { CCR_MANUAL_SKILL } from "./manual-skill";
+import { MANAGED_SKILL_MARKER } from "./skill-marker";
+
+export { MANAGED_SKILL_MARKER } from "./skill-marker";
 
 /** Package-managed skill definition used by setup, upgrade, preview, and uninstall. */
 export interface SkillDefinition {
@@ -8,27 +12,11 @@ export interface SkillDefinition {
   content: string;
 }
 
-export const CCR_MANUAL_SKILL = `---
-name: ccr
-description: Explain CCR's installed commands, skills, safety boundaries, and current scope. Use when a developer asks how CCR works, what to run, or what CCR changes.
----
-
-${MANAGED_SKILL_MARKER}
-# CCR manual
-
-CCR is an opt-in repository-context package:
-
-- \`/ccr-context\` initializes, updates, verifies, adds to, or compacts context.
-- \`/ccr-hooks\` synchronizes advisory hooks using the repository's own conventions.
-- \`/ccr-review\` is planned, not available in this release.
-- \`npx --no-install ccr config init --apply\` creates human-owned settings.
-- \`npx --no-install ccr setup --apply\` installs skills and context skeletons. It does not design
-  or install hooks; \`/ccr-hooks sync\` does that after inspecting the repository.
-- \`npx --no-install ccr uninstall\` previews bounded removal.
-
-Explain only the requested topic. Arguments are not context operations. CCR never commits or pushes,
-and generated context remains subordinate to source, tests, schemas, and explicit human decisions.
-`;
+/** Package-managed progressive-disclosure resource installed below a skill directory. */
+export interface SkillResourceDefinition {
+  path: string;
+  content: string;
+}
 
 export const CCR_HOOKS_SKILL = `---
 name: ccr-hooks
@@ -196,29 +184,37 @@ during initialize. A later operation changes hooks only when the human explicitl
 </evidence_rules>
 
 <work_budget>
-- Use adaptive subagents based on the operation's evidence scope, not repository size alone. Initialize
-  with one subagent for a small cohesive repository, three to five for multiple runtime surfaces,
-  and six to eight for a very large repository when the harness supports them. Map distinct traces
-  from the initial file list and launch one parallel wave of independent traces, up to the
-  harness's available concurrency.
-- A focused one-trace operation uses zero discovery subagents. For update, verify, addition, or
-  compact, the main agent performs at most four broker reads. Use two or three parallel discovery
-  subagents only for two or more independent traces, never more than four for a non-initialize
-  operation. Each focused subagent gets at most three broker reads and six claims.
-- Use one verification subagent after the draft. A focused verifier uses no tools. Supply an
-  evidence packet containing the proposed diff, exact material claims, and relevant broker excerpts;
-  it returns defects only in one response and must not rediscover or inspect the repository.
-  During initialize the verifier may use at most six broker reads. Defect types are unsupported,
-  contradicted, stale, privacy-confused, materially missing, or imprecisely cited. The main agent
-  makes at most one correction pass and does not ask the verifier to repeat the discovery audit.
+- Claude owns the evidence plan. Choose the smallest sufficient combination of main-agent work and
+  adaptive subagents from the operation's material independent traces, not repository size alone.
+  Initialize with one subagent for a small cohesive repository, three to five for multiple runtime
+  surfaces, and six to eight for a very large repository when the harness supports them. Map traces
+  from the initial file list and use available harness concurrency.
+- These are starting guidance, not hard ceilings: a focused one-trace operation normally uses zero
+  discovery subagents and roughly four broker reads. A focused subagent normally uses roughly three
+  reads and returns no more than six candidate claims. Non-initialize operations normally use no
+  more than four discovery agents. Prefer one parallel discovery wave.
+- Acquire additional evidence only when a material selected claim remains unsupported or
+  contradicted, a broker result is truncated, or discovery reveals a distinct consequential trace.
+  Name the unresolved claim internally, then choose the smallest additional read or targeted trace
+  that can resolve it. Do not expand for curiosity, duplicate coverage, or already-supported detail.
+- Use one tool-free verifier after the draft for every operation. Supply an evidence packet with the
+  proposed diff, exact material claims, and relevant broker excerpts. The verifier uses no tools,
+  returns defects only, and must not rediscover or inspect the repository. If the packet is
+  materially missing evidence, it names the missing evidence instead of searching for it. Defect
+  types are unsupported, contradicted, stale, privacy-confused, materially missing, or imprecisely
+  cited. The main agent may acquire the smallest missing evidence and makes one correction pass; it
+  does not ask the verifier to repeat the audit.
 - Keep the draft in memory and pass it directly to the verifier. Never create scratch or temp files
   in the repository root. If the harness requires a temporary file, create it only under
   \`.ccr/tmp/\`, track the exact path, and remove every file created by this operation before final
   validation; never remove a pre-existing temporary file.
-- Target five minutes or less for update, verify, and addition; target eight minutes or less for
-  compact because it must preserve meaning while measuring the full shared context. After the single
-  discovery wave and verification pass, stop searching, reconcile evidence, validate, complete the
-  journal, and finish. Do not serialize independent traces or repeat subagent reads.
+- Five minutes for update, verify, and addition and eight minutes for compact are planning targets,
+  not a stop condition. Extend only to close a named material evidence gap; never stop with an
+  important unsupported claim merely because a time or read starter was reached.
+- Apply the evidence completeness stop rule: every material final claim has precise evidence or is
+  explicitly unknown, each selected workflow's consequential defaults, ownership, and failure
+  behavior were checked, and contradictions are preserved. Then stop searching, validate, complete
+  the journal, and finish. Do not serialize independent traces or repeat subagent reads.
 - Do not create task-manager bookkeeping for this bounded operation. Finish after validation and the
   required journal; do not continue searching for merely interesting details.
 </work_budget>
@@ -314,4 +310,22 @@ export const CCR_SKILLS: readonly SkillDefinition[] = [
     content: CCR_CONTEXT_SKILL,
   },
   { id: "ccr-hooks", path: ".claude/skills/ccr-hooks/SKILL.md", content: CCR_HOOKS_SKILL },
+  { id: "ccr-review", path: ".claude/skills/ccr-review/SKILL.md", content: CCR_REVIEW_SKILL },
+  {
+    id: "ccr-codebase",
+    path: ".claude/skills/ccr-codebase/SKILL.md",
+    content: CCR_CODEBASE_SKILL,
+  },
+];
+
+/** Shared dimension data rendered into each review skill for portable progressive disclosure. */
+export const CCR_SKILL_RESOURCES: readonly SkillResourceDefinition[] = [
+  {
+    path: ".claude/skills/ccr-review/references/dimensions.md",
+    content: REVIEW_DIMENSION_REFERENCE,
+  },
+  {
+    path: ".claude/skills/ccr-codebase/references/dimensions.md",
+    content: REVIEW_DIMENSION_REFERENCE,
+  },
 ];

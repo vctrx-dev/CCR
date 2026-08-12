@@ -150,6 +150,23 @@ try {
   ) {
     throw new Error("setup did not install the repository-aware hook skill.");
   }
+  const reviewSkillPath = path.join(scripted, ".claude", "skills", "ccr-review", "SKILL.md");
+  const codebaseSkillPath = path.join(scripted, ".claude", "skills", "ccr-codebase", "SKILL.md");
+  const dimensionsPath = path.join(
+    scripted,
+    ".claude",
+    "skills",
+    "ccr-review",
+    "references",
+    "dimensions.md",
+  );
+  if (
+    !readFileSync(reviewSkillPath, "utf8").includes("name: ccr-review") ||
+    !readFileSync(codebaseSkillPath, "utf8").includes("name: ccr-codebase") ||
+    !readFileSync(dimensionsPath, "utf8").includes('"dimensions": []')
+  ) {
+    throw new Error("setup did not install the data-driven review skills and dimensions.");
+  }
   if (
     !existsSync(ignorePath) ||
     !readFileSync(ignorePath, "utf8").includes("# ccr:start - local context continuity")

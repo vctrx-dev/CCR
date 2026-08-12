@@ -5,7 +5,7 @@ Update this file whenever a user-facing skill, command, setting, or setup flow c
 ## Quick flow
 
 ```text
-Install → Setup → Initialize → Review context → Claude updates context and journal after each commit
+Install → Setup → Initialize → Review changes/codebase → Review findings → Approve any later fixes
 ```
 
 ## 1. Install
@@ -147,7 +147,8 @@ npx --no-install ccr setup --apply
 - `.ccr/stakeholders.md`
 
 Existing context, `CLAUDE.md`, and `AGENTS.md` are preserved by default.
-Setup installs `/ccr-hooks`; it does not guess a hook strategy without repository analysis.
+Setup installs `/ccr-hooks`, `/ccr-review`, and `/ccr-codebase`; it does not guess a hook strategy
+without repository analysis.
 
 ## 4. Initialize
 
@@ -166,12 +167,15 @@ maps independent evidence traces and runs them in an adaptive parallel agent wav
 for multi-language or very large repositories, then performs a separate verification pass. The
 resulting `project.md` is one connected narrative that weaves real-world purpose, logic, technical
 constraints, and small but consequential details together instead of fixed categories. Focused
-later operations use no discovery subagent for one trace; update, verify, and addition target five
-minutes, while semantic compact targets eight. Broader repairs use one bounded parallel wave before
-verification. A focused verifier reviews the supplied draft and evidence packet without launching
-another repository search. Drafts stay in memory; CCR operations do not leave scratch files in the
-repository root. Any harness-required temporary file is confined to ignored `.ccr/tmp/` and removed
-before completion.
+later operations normally use no discovery subagent for one trace. The documented agent, read, and
+time budgets are starting guidance, not hard ceilings. Claude chooses the smallest sufficient plan
+and may expand it only to close a named material evidence gap, such as unsupported or contradictory
+claims, truncated evidence, or a newly discovered consequential trace. It stops when material
+claims are precisely evidenced or explicitly unknown and relevant exceptions are preserved. Every
+operation's verifier reviews the supplied draft and evidence packet without tools or another
+repository search. Drafts stay in memory; CCR operations do not leave scratch files in the repository
+root. Any harness-required temporary file is confined to ignored `.ccr/tmp/` and removed before
+completion.
 
 Material claims use full repository-relative files and concrete symbols, tests, commands, or prose
 contracts. Workflow/config summaries enumerate the collection and preserve trigger or role
@@ -179,6 +183,81 @@ exceptions instead of treating every member as uniform. Human-supplied additions
 omitting an implementation claim is not treated as proof that no implementation evidence exists.
 
 Review the resulting `.ccr` changes.
+
+## 5. Review changes or the complete codebase
+
+Review all configured dimensions by default:
+
+```text
+/ccr-review
+/ccr-review all
+/ccr-codebase
+```
+
+Review one or more dimensions by ID:
+
+```text
+/ccr-review equality, privacy
+/ccr-codebase privacy
+```
+
+`/ccr-review` reviews the privacy-approved staged, unstaged, and untracked change set.
+`/ccr-codebase` maps end-to-end traces across the complete safe Git index, then overlays those live
+changes. Both skills read `project.md` and `stakeholders.md` for product purpose, moral and logical
+constraints, stakeholder effects, and current or future plans. They may use recent branch-local
+journals to understand intent and prior outcomes, but live code, tests, and schemas remain
+authoritative.
+
+Both skills assign coherent groups of related dimensions and evidence traces to an adaptive number
+of subagents. They do not automatically create one subagent per dimension. A focused verification
+pass checks and deduplicates findings. Each reported bug includes:
+
+```text
+Severity: Critical | High | Medium | Low
+File: repository/relative/path
+Issue: evidence-backed incorrect behavior
+Case: condition that triggers the bug
+Dimension: selected dimension ID or IDs
+```
+
+Reviews report information only. They do not fix source code, tests, configuration, or generated
+application files without explicit approval after the report.
+
+After each completed review, CCR resolves one local journal entry for the current branch and commit.
+Each invocation appends a separate review-run section to that same entry, so five reviews before the
+next commit produce five run sections in one file. A review changes `.ccr/project.md` only when
+repository evidence proves a durable high-level omission, error, or change; most reviews leave the
+human-reviewed narrative untouched.
+
+### Maintain review dimensions
+
+The package source of truth is `src/review/dimensions.json`. Its order is canonical. Each dimension
+has this data-only shape:
+
+```json
+{
+  "id": "privacy",
+  "name": "Privacy",
+  "summary": "What this dimension reviews.",
+  "relatedDimensions": ["equality"],
+  "criteria": [
+    {
+      "id": "data-collection",
+      "name": "Data collection",
+      "details": "The complete research-backed criterion and review guidance."
+    }
+  ]
+}
+```
+
+IDs use lowercase kebab-case and are the slash-command selectors. Related IDs must exist. Dimension
+and criterion IDs must be unique. Adding, deleting, reordering, or changing dimension content
+requires no setup, CLI, subagent, or lifecycle code change; edit the JSON and run the quality gates.
+Setup renders the same validated registry into each review skill's `references/dimensions.md`.
+
+This development revision intentionally contains an empty array because the nine research-backed
+definitions have not been supplied. The skills stop clearly when the registry is empty rather than
+inventing dimensions or criteria.
 
 ## Context operations
 
@@ -193,6 +272,8 @@ Review the resulting `.ccr` changes.
 | `/ccr-context verify` | Check whether context is accurate and current |
 | `/ccr-context addition` | Add human-provided plans or knowledge |
 | `/ccr-context compact` | Remove repetition without losing key context |
+| `/ccr-review [all\|dimension,...]` | Review current changes and report bugs only |
+| `/ccr-codebase [all\|dimension,...]` | Review end-to-end codebase behavior and report bugs only |
 
 Review `.ccr` changes after every operation.
 

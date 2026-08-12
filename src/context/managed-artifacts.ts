@@ -1,4 +1,4 @@
-import { CCR_SKILLS, MANAGED_SKILL_MARKER } from "./skills";
+import { CCR_SKILLS, CCR_SKILL_RESOURCES, MANAGED_SKILL_MARKER } from "./skills";
 import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
 
 /**
@@ -50,6 +50,13 @@ const contextArtifacts: readonly ManagedArtifact[] = Object.entries(CONTEXT_FILE
 export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
   ...contextArtifacts,
   ...CCR_SKILLS.map(({ content, path }) => ({
+    content,
+    kind: "skill" as const,
+    path,
+    setupPolicy: "upgrade-if-marked" as const,
+    uninstallPolicy: "remove-if-marked" as const,
+  })),
+  ...CCR_SKILL_RESOURCES.map(({ content, path }) => ({
     content,
     kind: "skill" as const,
     path,
