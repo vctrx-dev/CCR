@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { formatCliError, formatSuccess } from "../../../src/cli/output";
+import {
+  formatAction,
+  formatCliError,
+  formatHeading,
+  formatStatus,
+  formatSuccess,
+} from "../../../src/cli/output";
 
 describe("CLI output", () => {
   it("should format interactive success messages in bold green", () => {
@@ -11,6 +17,13 @@ describe("CLI output", () => {
 
   it("should keep redirected success messages readable", () => {
     expect(formatSuccess("Configuration created")).toBe("✔ Configuration created");
+  });
+
+  it("should add visual hierarchy to interactive sections and statuses", () => {
+    expect(formatHeading("CCR setup preview", true)).toContain("\u001b[1;36m");
+    expect(formatAction("create", true)).toContain("\u001b[1;32m");
+    expect(formatStatus("malformed", true)).toContain("\u001b[1;31m");
+    expect(formatStatus("current")).toBe("current");
   });
 
   it("should turn schema failures into concise setting errors", () => {

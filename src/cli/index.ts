@@ -5,7 +5,7 @@ import packageJson from "../../package.json";
 import { registerConfigCommands } from "./config";
 import { registerContextCommands } from "./context";
 import { registerHooksCommands } from "./hooks";
-import { formatCliError } from "./output";
+import { formatCliError, formatTone } from "./output";
 
 export interface CliIo {
   cwd: string;
@@ -39,7 +39,9 @@ if (typeof require !== "undefined" && require.main === module) {
   createCli()
     .parseAsync()
     .catch((error: unknown) => {
-      process.stderr.write(`CCR: ${formatCliError(error)}\n`);
+      process.stderr.write(
+        `${formatTone("CCR", "error", process.stderr.isTTY === true)}: ${formatCliError(error)}\n`,
+      );
       process.exitCode = 1;
     });
 }

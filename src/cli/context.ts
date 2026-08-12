@@ -19,6 +19,7 @@ import { applySetup, previewSetup } from "../context/setup";
 import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { validateContext } from "../context/validate";
 import type { CliIo } from "./index";
+import { formatAction, formatHeading, formatStatus, formatTone } from "./output";
 
 interface SetupOptions {
   apply?: boolean;
@@ -83,23 +84,46 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
       return;
     }
     writeLines(io, [
-      "CCR setup preview (no files written):",
+      formatHeading("CCR setup preview · no files written", io.isColorEnabled === true),
       compatibility,
-      `Claude skill: ${isSkillLocal ? "local (ignored by Git)" : "shareable"}`,
-      ...preview.changes.map((change) => `  ${change.action.padEnd(9)} ${change.path}`),
-      `Hooks: ${preview.config.hooks.enabled ? "enabled; /ccr-hooks sync will choose the repository-native integration" : "disabled; setup will remove CCR-managed hook blocks"}.`,
+      `Claude skill: ${formatStatus(isSkillLocal ? "local" : "shareable", io.isColorEnabled === true)}${isSkillLocal ? " (ignored by Git)" : ""}`,
+      formatHeading("Planned changes", io.isColorEnabled === true),
+      ...preview.changes.map(
+        (change) =>
+          `  ${formatAction(change.action.padEnd(9), io.isColorEnabled === true)} ${change.path}`,
+      ),
+      formatHeading("Hooks", io.isColorEnabled === true),
+      `Hooks: ${formatStatus(preview.config.hooks.enabled ? "enabled" : "disabled", io.isColorEnabled === true)}; ${preview.config.hooks.enabled ? "/ccr-hooks sync will choose the repository-native integration" : "setup will remove CCR-managed hook blocks"}.`,
       ...(isSkillManaged
-        ? ["  provenance-managed; run `/ccr-hooks status` for strategy and drift"]
+        ? [
+            `  ${formatStatus("provenance-managed", io.isColorEnabled === true)}; run \`/ccr-hooks status\` for strategy and drift`,
+          ]
         : [
-            `  pre-commit ${hookStatus.preCommit.status}`,
-            `  post-commit ${hookStatus.postCommit.status}`,
+            `  pre-commit ${formatStatus(hookStatus.preCommit.status, io.isColorEnabled === true)}`,
+            `  post-commit ${formatStatus(hookStatus.postCommit.status, io.isColorEnabled === true)}`,
           ]),
-      "Local-only ignore rules: config.local.json, journal/, private/, cache/, and tmp/.",
-      "Data boundary: setup sends nothing; later repository reads use the filtered Git-index broker.",
+      formatTone(
+        "Local-only ignore rules: config.local.json, journal/, private/, cache/, and tmp/.",
+        "muted",
+        io.isColorEnabled === true,
+      ),
+      formatTone(
+        "Data boundary: setup sends nothing; later repository reads use the filtered Git-index broker.",
+        "muted",
+        io.isColorEnabled === true,
+      ),
       `Context settings: recent journals ${preview.config.context.recentJournalEntries}, compaction cap ${preview.config.context.maxCompactionPercent}%.`,
-      "Conflicts: none. Malformed managed blocks or symlinked managed paths stop setup.",
+      formatTone(
+        "Conflicts: none. Malformed managed blocks or symlinked managed paths stop setup.",
+        "warning",
+        io.isColorEnabled === true,
+      ),
       "Rollback: `ccr uninstall --apply` (add `--remove-context` to remove shared context).",
-      "Run `ccr setup --apply` to create these files.",
+      formatTone(
+        "Run `ccr setup --apply` to create these files.",
+        "success",
+        io.isColorEnabled === true,
+      ),
     ]);
     return;
   }
@@ -139,12 +163,20 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   }
   writeLines(io, [
     compatibility,
-    `Claude skill: ${isSkillLocal ? "local (ignored by Git)" : "shareable"}`,
+    `Claude skill: ${formatStatus(isSkillLocal ? "local" : "shareable", io.isColorEnabled === true)}${isSkillLocal ? " (ignored by Git)" : ""}`,
     result.changedPaths.length
-      ? `CCR setup wrote ${result.changedPaths.length} file(s).`
-      : "CCR setup is already current.",
+      ? formatTone(
+          `CCR setup wrote ${result.changedPaths.length} file(s).`,
+          "success",
+          io.isColorEnabled === true,
+        )
+      : formatTone("CCR setup is already current.", "success", io.isColorEnabled === true),
     hookLine,
-    "Next: open Claude Code and run `/ccr-context initialize`; it runs `/ccr-hooks sync` when hooks are enabled.",
+    formatTone(
+      "Next: open Claude Code and run `/ccr-context initialize`; it runs `/ccr-hooks sync` when hooks are enabled.",
+      "info",
+      io.isColorEnabled === true,
+    ),
   ]);
 }
 
@@ -167,7 +199,11 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       const root = rootFor(io);
       if (hasSkillManagedHookState(root)) {
         writeLines(io, [
-          "CCR hooks are provenance-managed; uninstall stopped before changing files.",
+          formatTone(
+            "CCR hooks are provenance-managed; uninstall stopped before changing files.",
+            "warning",
+            io.isColorEnabled === true,
+          ),
           "Run `/ccr-hooks remove` first, then rerun `ccr uninstall`.",
         ]);
         return;
@@ -175,11 +211,24 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       const preview = await previewUninstall(root, options.removeContext ?? false);
       if (!options.apply) {
         writeLines(io, [
-          "CCR uninstall preview (no files changed):",
-          ...preview.modifyPaths.map((file) => `  modify    ${file}`),
-          ...preview.removePaths.map((file) => `  remove    ${file}`),
-          "Local config, journals, private files, caches, and their ignore rules are preserved.",
-          "Run `ccr uninstall --apply` to remove the integration.",
+          formatHeading("CCR uninstall preview · no files changed", io.isColorEnabled === true),
+          formatHeading("Planned changes", io.isColorEnabled === true),
+          ...preview.modifyPaths.map(
+            (file) => `  ${formatAction("modify".padEnd(9), io.isColorEnabled === true)} ${file}`,
+          ),
+          ...preview.removePaths.map(
+            (file) => `  ${formatAction("remove".padEnd(9), io.isColorEnabled === true)} ${file}`,
+          ),
+          formatTone(
+            "Local config, journals, private files, caches, and their ignore rules are preserved.",
+            "muted",
+            io.isColorEnabled === true,
+          ),
+          formatTone(
+            "Run `ccr uninstall --apply` to remove the integration.",
+            "success",
+            io.isColorEnabled === true,
+          ),
         ]);
         return;
       }
@@ -189,7 +238,11 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       await applyUninstall(root, shouldRemoveContext, preview);
       await removeAllContextHooks(root, hookRemovalPreview);
       writeLines(io, [
-        `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
+        formatTone(
+          `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
+          "success",
+          io.isColorEnabled === true,
+        ),
         "Local context was preserved and remains ignored.",
       ]);
     });
@@ -199,7 +252,12 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     const result = await validateContext(rootFor(io));
     writeLines(
       io,
-      result.isValid ? ["CCR context is valid."] : ["CCR context is invalid:", ...result.issues],
+      result.isValid
+        ? [formatTone("✔ CCR context is valid.", "success", io.isColorEnabled === true)]
+        : [
+            formatTone("✖ CCR context is invalid:", "error", io.isColorEnabled === true),
+            ...result.issues,
+          ],
     );
     if (!result.isValid) process.exitCode = 1;
   });
@@ -208,10 +266,13 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     const validation = await validateContext(root);
     const staged = readStagedContextState(root);
     writeLines(io, [
-      `Context: ${validation.isValid ? "valid" : "invalid"}`,
-      `Staged repository files: ${staged.hasRepositoryChanges ? "yes" : "no"}`,
-      `Staged shared context: ${staged.hasContextChanges ? "yes" : "no"}`,
-      staged.shouldWarn ? "Warning: context might need updating." : "No context warning.",
+      formatHeading("CCR context status", io.isColorEnabled === true),
+      `Context: ${formatStatus(validation.isValid ? "valid" : "invalid", io.isColorEnabled === true)}`,
+      `Staged repository files: ${formatStatus(staged.hasRepositoryChanges ? "yes" : "no", io.isColorEnabled === true)}`,
+      `Staged shared context: ${formatStatus(staged.hasContextChanges ? "yes" : "no", io.isColorEnabled === true)}`,
+      staged.shouldWarn
+        ? formatTone("Warning: context might need updating.", "warning", io.isColorEnabled === true)
+        : formatTone("No context warning.", "success", io.isColorEnabled === true),
     ]);
   });
   context.command("changes").action(async () => {

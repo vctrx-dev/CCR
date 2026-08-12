@@ -12,7 +12,7 @@ import { findRepositoryRoot } from "../context/git";
 import { applyConfigSetup } from "../context/setup";
 import type { SetupAction } from "../context/setup";
 import type { CliIo } from "./index";
-import { formatSuccess } from "./output";
+import { formatHeading, formatStatus, formatSuccess, formatTone } from "./output";
 
 interface ApplyOptions {
   apply?: boolean;
@@ -63,8 +63,9 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
     .action(async (options: ApplyOptions) => {
       if (!options.apply) {
         writeLines(io, [
+          formatHeading("CCR configuration preview · no files changed", io.isColorEnabled === true),
           "Would create or upgrade .ccr/config.json and .ccr/config-manual.md only.",
-          "Preview only: no files changed.",
+          formatTone("Preview only: no files changed.", "muted", io.isColorEnabled === true),
           "Review the proposed settings, then add `--apply` to write the file.",
         ]);
         return;
@@ -78,7 +79,7 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
       );
       writeLines(io, [
         `Configuration manual ${configActionLabel(change.manual.action)}: .ccr/config-manual.md`,
-        "Next steps:",
+        formatHeading("Next steps", io.isColorEnabled === true),
         "  1. Edit .ccr/config.json, or use `ccr config set <key> <value> --apply`.",
         "  2. Run `ccr config validate`.",
         "  3. Run `ccr setup --apply` to apply the settings during setup.",
@@ -103,6 +104,7 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
       );
       if (!options.apply) {
         writeLines(io, [
+          formatHeading("CCR configuration change · preview", io.isColorEnabled === true),
           `Would set ${key} to ${value}.`,
           "Run the same command with `--apply` to write it.",
         ]);

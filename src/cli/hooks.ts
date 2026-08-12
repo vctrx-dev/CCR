@@ -8,6 +8,7 @@ import {
 } from "../context/hooks";
 import { readResolvedContextConfig } from "../context/privacy";
 import type { CliIo } from "./index";
+import { formatHeading, formatStatus, formatTone } from "./output";
 
 function rootFor(io: CliIo): string {
   return findRepositoryRoot(io.cwd);
@@ -34,9 +35,11 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     }
     const preCommit = await readContextHookStatus(root, "pre-commit");
     const postCommit = await readContextHookStatus(root, "post-commit");
+    io.write(`${formatHeading("CCR hooks", io.isColorEnabled === true)}\n`);
     io.write(
-      `CCR hooks: pre-commit ${preCommit.status}, post-commit ${postCommit.status} (${preCommit.path})\n`,
+      `pre-commit ${formatStatus(preCommit.status, io.isColorEnabled === true)}\npost-commit ${formatStatus(postCommit.status, io.isColorEnabled === true)}\n`,
     );
+    io.write(formatTone(`Hook path: ${preCommit.path}\n`, "muted", io.isColorEnabled === true));
   });
   hooks
     .command("uninstall")
@@ -45,7 +48,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
       const root = rootFor(io);
       if (hasSkillManagedHookState(root)) {
         io.write(
-          "CCR hooks are provenance-managed. Run `/ccr-hooks remove` before using CLI legacy cleanup.\n",
+          `${formatTone("CCR hooks are provenance-managed.", "warning", io.isColorEnabled === true)} Run \`/ccr-hooks remove\` before using CLI legacy cleanup.\n`,
         );
         return;
       }
@@ -53,21 +56,21 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
         const preCommit = await readContextHookStatus(root, "pre-commit");
         const postCommit = await readContextHookStatus(root, "post-commit");
         io.write(
-          `CCR hook uninstall preview: pre-commit ${preCommit.status}, post-commit ${postCommit.status}.\n`,
+          `${formatHeading("CCR hook uninstall preview", io.isColorEnabled === true)}\npre-commit ${formatStatus(preCommit.status, io.isColorEnabled === true)}\npost-commit ${formatStatus(postCommit.status, io.isColorEnabled === true)}\n`,
         );
         const isCleanupBlocked = [preCommit.status, postCommit.status].some(
           (status) => status === "malformed" || status === "unsafe" || status === "unavailable",
         );
         io.write(
           isCleanupBlocked
-            ? "Cleanup cannot be applied until the reported hook state is repaired.\n"
-            : "Run `ccr hooks uninstall --apply` to remove both advisory hooks.\n",
+            ? `${formatTone("Cleanup cannot be applied until the reported hook state is repaired.", "error", io.isColorEnabled === true)}\n`
+            : `${formatTone("Run `ccr hooks uninstall --apply` to remove both advisory hooks.", "success", io.isColorEnabled === true)}\n`,
         );
         return;
       }
       const result = await removeAllContextHooks(root);
       io.write(
-        `CCR hooks removed: pre-commit ${result.preCommit.status}, post-commit ${result.postCommit.status}.\n`,
+        `${formatTone("CCR hooks removed", "success", io.isColorEnabled === true)}: pre-commit ${formatStatus(result.preCommit.status, io.isColorEnabled === true)}, post-commit ${formatStatus(result.postCommit.status, io.isColorEnabled === true)}.\n`,
       );
     });
   hooks.command("after-commit").action(async () => {
@@ -75,15 +78,19 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     if (!(await readHookSettings(root))?.enabled) return;
     const result = await runAfterCommitCheck(root);
     if (result.journalCreated && result.journalPath) {
-      io.write(`CCR: started local journal entry ${result.journalPath}.\n`);
+      io.write(
+        `${formatTone("CCR: started local journal entry", "success", io.isColorEnabled === true)} ${result.journalPath}.\n`,
+      );
     }
     if (result.shouldWarn) {
       io.write(
-        "CCR: last commit changed repository files without updating shared context (.ccr/).\n",
+        `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: last commit changed repository files without updating shared context (.ccr/).\n`,
       );
     }
     if (result.prompt) {
-      io.write("Paste this into Claude Code to update context and journal:\n");
+      io.write(
+        `${formatTone("Paste this into Claude Code to update context and journal:", "info", io.isColorEnabled === true)}\n`,
+      );
       io.write(`  ${result.prompt}\n`);
     }
   });
@@ -97,7 +104,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
         "CCR warning: context might need updating.",
         "Run `/ccr-context update` in Claude Code, or continue if context is unaffected.",
       ].join("\n");
-      io.write(`${warning}\n`);
+      io.write(`${formatTone(warning, "warning", io.isColorEnabled === true)}\n`);
     }
   });
 }
