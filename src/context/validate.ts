@@ -1,7 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseContextConfig } from "./config";
-import { assertSafeManagedPath, readTextIfExists } from "./files";
+import { assertSafeManagedPath, readBoundedTextIfExists, readTextIfExists } from "./files";
 import { CONTEXT_FILES } from "./templates";
 
 /**
@@ -22,13 +22,22 @@ const SECRET_PATTERNS = [
 ];
 
 const REQUIRED_HEADINGS: Readonly<Record<string, string>> = {
-  ".ccr/index.md": "# CCR Context",
   ".ccr/project.md": "# Project",
   ".ccr/stakeholders.md": "# Stakeholders",
 };
 
-const MAX_INDEX_CHARACTERS = 6000;
-const MAX_CONTEXT_FILE_CHARACTERS = 10_000;
+/**
+ * Shared Markdown is human-editable and untrusted. Keep validation on this bounded inspection path;
+ * an oversized document must remain invalid rather than reintroducing a full-file read here.
+ */
+const MAX_CONTEXT_VALIDATION_CHARACTERS = 10_000;
+
+function contextInspectionLimitIssue(relativePath: string): string {
+  if (relativePath === ".ccr/stakeholders.md") {
+    return `${relativePath} exceeds its ${MAX_CONTEXT_VALIDATION_CHARACTERS}-character limit.`;
+  }
+  return `${relativePath} exceeds the ${MAX_CONTEXT_VALIDATION_CHARACTERS}-character validation inspection limit; shorten it before validation.`;
+}
 
 function referencedPaths(content: string): string[] {
   const references = new Set<string>();
@@ -39,11 +48,12 @@ function referencedPaths(content: string): string[] {
       !value ||
       (!value.includes("/") && !value.includes("\\")) ||
       /\s|[<>{}|*]/.test(value) ||
-      value.startsWith("http")
+      value.startsWith("http") ||
+      value.startsWith("/")
     ) {
       continue;
     }
-    const withoutSymbol = value.split("#")[0]?.replace(/:\d+$/, "");
+    const withoutSymbol = value.split("#")[0]?.replace(/:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$/u, "");
     if (withoutSymbol) {
       references.add(withoutSymbol.startsWith("@/") ? withoutSymbol.slice(2) : withoutSymbol);
     }
@@ -67,8 +77,19 @@ function isUnsafeReference(reference: string): boolean {
 }
 
 function absoluteClaim(content: string): string | undefined {
-  const proseOnly = content.replace(/```[\s\S]*?```/gu, "").replace(/`[^`\r\n]*`/gu, "");
-  return proseOnly.match(/\b(?:all|never|guaranteed)\b/iu)?.[0];
+  const prose = content.replace(/```[\s\S]*?```/gu, "");
+  for (const line of prose.split(/\r?\n/u)) {
+    const evidenceCitation = [...line.matchAll(/`([^`\r\n]+)`/gu)].some((match) => {
+      const value = match[1] ?? "";
+      return (
+        !/\s/u.test(value) &&
+        (value.includes("/") || /\.[a-z0-9]+(?::\d+(?:[-,]\d+)*)?$/iu.test(value))
+      );
+    });
+    const match = line.replace(/`[^`\r\n]*`/gu, "").match(/\b(?:all|never|guaranteed)\b/iu)?.[0];
+    if (match && !evidenceCitation) return match;
+  }
+  return undefined;
 }
 
 /** Validates committed CCR context without invoking an LLM or reading repository source. */
@@ -88,15 +109,19 @@ export async function validateContext(root: string): Promise<ValidationResult> {
   }
 
   for (const relativePath of Object.keys(CONTEXT_FILES).filter((file) => file.endsWith(".md"))) {
-    const content = await readTextIfExists(await assertSafeManagedPath(root, relativePath));
-    if (content === undefined) {
+    const boundedContent = await readBoundedTextIfExists(
+      await assertSafeManagedPath(root, relativePath),
+      MAX_CONTEXT_VALIDATION_CHARACTERS,
+    );
+    if (boundedContent === undefined) {
       issues.push(`${relativePath} is missing.`);
       continue;
     }
-    const limit =
-      relativePath === ".ccr/index.md" ? MAX_INDEX_CHARACTERS : MAX_CONTEXT_FILE_CHARACTERS;
-    if (content.length > limit)
-      issues.push(`${relativePath} exceeds its ${limit}-character limit.`);
+    if (boundedContent.isTruncated) {
+      issues.push(contextInspectionLimitIssue(relativePath));
+      continue;
+    }
+    const content = boundedContent.content;
     if (SECRET_PATTERNS.some((pattern) => pattern.test(content))) {
       issues.push(`${relativePath} contains secret-like content.`);
     }

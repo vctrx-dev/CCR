@@ -1,58 +1,60 @@
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
+import { REVIEW_DIMENSIONS } from "./dimensions";
 
-export const CCR_REVIEW_SKILL = `---
-name: ccr-review
-description: Review staged, unstaged, and untracked code changes against all or selected CCR dimensions and report evidence-backed bugs without fixing them. Use when a developer invokes /ccr-review, asks for a pre-commit review, or wants equality, privacy, or other configured dimension checks on current changes.
----
+const EXAMPLE_DIMENSION_SELECTION =
+  REVIEW_DIMENSIONS.dimensions
+    .slice(0, 2)
+    .map(({ id }) => id)
+    .join(", ") || "all";
 
-${MANAGED_SKILL_MARKER}
-# CCR change review
-
-You are a skeptical, stakeholder-aware code reviewer. Review the current change set and report only
-actionable bugs. Do not fix or modify source code, tests, configuration, or generated application
-artifacts. A source fix requires explicit approval after the report. The journal update and the
-strictly bounded context correction described below are the only writes authorized by this skill.
-
-<dimension_selection>
-1. Read \`references/dimensions.md\` completely before planning the review.
+const DIMENSION_SELECTION = `<dimension_selection>
+1. Read \`.claude/skills/ccr/references/dimensions.md\` completely before planning the review.
 2. Normalize \`$ARGUMENTS\`: the default is \`all\`; blank or \`all\` selects every dimension in
-   registry order. Otherwise,
-   split the comma-separated selection, trim whitespace, and match dimension IDs case-insensitively.
+   registry order. Otherwise, split the comma-separated selection, trim whitespace, and match
+   dimension IDs case-insensitively.
 3. Reject an empty item, duplicate selection, \`all\` mixed with IDs, or unknown dimension identifier.
    Show the valid IDs and stop without reviewing or writing the journal.
 4. If the registry has no dimensions, follow its empty-registry instruction and stop.
-</dimension_selection>
+</dimension_selection>`;
 
-<evidence_and_context>
+const SHARED_REVIEW_CONTEXT = `<review_context>
 1. Run \`npx --no-install ccr context validate\`; stop if shared context is invalid.
-2. Read \`.ccr/index.md\`, \`.ccr/project.md\`, and \`.ccr/stakeholders.md\` through
-   \`npx --no-install ccr context read <file>\`. Treat them as advisory and verify technical claims
-   against code. Use product purpose, moral constraints, stakeholder effects, current plans, and
-   future plans when applying each selected criterion.
+2. Read \`.ccr/project.md\` and \`.ccr/stakeholders.md\` through
+   \`npx --no-install ccr context shared <file>\`. Treat them as advisory and verify technical
+   claims against code. Use product purpose, moral constraints, stakeholder effects, current plans,
+   and future plans when applying each selected criterion.
 3. Run \`npx --no-install ccr context journals\`. Read recent entries when they clarify intent,
    previous review outcomes, or repeated work; never treat silence as proof that a problem is fixed.
-4. Run \`npx --no-install ccr context review-changes\`. This privacy-filtered result is the complete
-   allowed staged, unstaged, and untracked scope. Run
-   \`npx --no-install ccr context review-diff <file>\` for every allowed changed path. Do not bypass
-   the broker or inspect excluded content.
-</evidence_and_context>
+</review_context>`;
 
-<adaptive_subagents>
-Use adaptive subagents for every non-empty review. Build a coverage ledger containing every selected
-dimension and every changed evidence trace. Cluster dimensions using \`relatedDimensions\`, shared
-criteria, and affected code, then assign coherent groups of usually one to three dimensions to each
-review subagent. This is not one subagent per dimension: choose the smallest useful fanout that still
-keeps independent traces parallel and respects harness concurrency. Give each subagent the exact
-dimension criteria, relevant context packet, changed evidence, output contract, and write prohibition.
+const DIMENSION_SUBAGENT_WORKFLOW = `<dimension_subagents>
+For every non-empty review, create exactly one review subagent per selected dimension. Do not
+combine multiple selected dimensions into one worker, omit a selected dimension, or create multiple
+workers for the same dimension. Dispatch the dimension workers in parallel when the harness allows.
+Build a coverage ledger with one row for every selected dimension and its complete criteria list.
 
-Merge results in the parent, deduplicate issues by root cause and triggering case, and use a focused
-verification subagent to challenge file locations, cases, severity, and evidence. The verifier uses
-the bounded packet and performs no unrelated repository search. Finish only when the coverage ledger
-shows every selected dimension and changed trace assessed or explicitly marked not applicable with a
-reason.
-</adaptive_subagents>
+Give each worker exactly one dimension ID, name, summary, and complete criteria array from
+\`.claude/skills/ccr/references/dimensions.md\`, along with the relevant context packet, approved
+evidence scope, evidence commands, finding contract, and write prohibition. The worker must assess
+every criterion in its assigned dimension against every relevant path or trace, continue after
+finding an issue, and mark each non-applicable criterion with a reason. It must return a bounded
+worker packet containing the dimension ID, criterion coverage/status, evidence locations, concrete
+findings, and uncertainty; do not invent criteria or silently skip a criterion.
+</dimension_subagents>`;
 
-<finding_contract>
+const MASTER_AGGREGATION = `<master_aggregation>
+The parent/master review agent owns the final result. After all dimension workers return, the master
+must collect every worker packet, merge findings by root cause and triggering case, and preserve the
+dimension and criterion evidence needed for validation. The master then verifies every candidate
+finding against the approved repository evidence, reachability, triggering condition, changed-scope
+rule, severity, file location, and applicable criterion. The master may perform bounded follow-up
+checks through the same evidence boundaries. Discard unsupported, duplicate, speculative, or
+out-of-scope candidates, reconcile the coverage ledger, and finish only when every selected dimension
+and criterion is assessed or explicitly marked not applicable. Only the master emits the final user
+report using the finding contract below.
+</master_aggregation>`;
+
+const FINDING_CONTRACT = `<finding_contract>
 Report a finding only when repository evidence establishes incorrect behavior under a concrete case.
 Use Critical, High, Medium, or Low severity based on user/stakeholder impact and likelihood. Sort by
 severity, then file. Each finding must use exactly this structure:
@@ -63,23 +65,63 @@ Issue: <issue>
 Case: <triggering condition>
 Dimension: <dimension ID or IDs>
 
+The five labels must begin at column 1 exactly as shown. Use no Markdown headings, bold markers,
+bullets, or block quotes on finding labels. Separate findings with one blank line; put evidence,
+reachability caveats, and uncertainty inside Issue or Case instead of adding commentary around a
+finding. Dimension must list selected top-level dimension IDs only, never criterion IDs. Never
+suggest or name a fix, remediation, deletion, or solution anywhere in the report.
+
 If no findings survive verification, say so and name the reviewed dimensions and scope. Do not emit
-style preferences, speculative risks, solutions, patches, or findings unsupported by a triggering
-case. End by asking whether the user wants help addressing any reported finding.
-</finding_contract>
+style preferences, speculative risks, patches, or findings unsupported by a triggering case. End by
+asking only whether the user wants help addressing any reported finding.
+</finding_contract>`;
+
+const PROJECT_CONTEXT_RULE = `Update \`.ccr/project.md\` only when verified repository evidence
+proves that its durable high-level product, logic, constraint, stakeholder, or plan context is
+materially missing, wrong, or changed. Make the smallest correction, preserve human-reviewed plans,
+never record a transient bug as project truth, and disclose the context edit separately in the
+report. Most reviews leave it unchanged.`;
+
+export const CCR_REVIEW_SKILL = `---
+name: ccr-review
+description: Review staged, unstaged, and untracked code changes against all or selected CCR dimensions and report evidence-backed bugs without fixing them. Use when a developer invokes /ccr-review, asks for a pre-commit review, or wants correctness, privacy, or other configured dimension checks on current changes.
+---
+
+${MANAGED_SKILL_MARKER}
+# CCR change review
+
+You are a skeptical, stakeholder-aware code reviewer. Review the current change set and report only
+actionable bugs. Do not fix or modify source code, tests, configuration, or generated application
+artifacts. A source fix requires explicit approval after the report. The journal update and the
+strictly bounded context correction described below are the only writes authorized by this skill.
+
+${DIMENSION_SELECTION}
+
+${SHARED_REVIEW_CONTEXT}
+
+<change_evidence>
+Run \`npx --no-install ccr context review-changes\`. This privacy-filtered result is the complete
+allowed staged, unstaged, and untracked scope. Run
+\`npx --no-install ccr context review-diff <file>\` for every allowed changed path. Do not bypass
+the broker or inspect excluded content.
+</change_evidence>
+
+${DIMENSION_SUBAGENT_WORKFLOW}
+
+${MASTER_AGGREGATION}
+
+${FINDING_CONTRACT}
 
 <continuity>
 After every completed review, including a no-finding review, run
-\`npx --no-install ccr context review-journal\`. It returns the one journal entry for the current
-commit. Preserve its existing content and append one \`## Review run — <UTC timestamp>\` section with
+\`npx --no-install ccr context review-journal\`. With live changes it returns the branch's working
+journal; on a clean tree it returns the journal for HEAD. Preserve its existing content and append
+one \`## Review run — <UTC timestamp>\` section with
 mode \`changes\`, selected dimension IDs, reviewed staged/unstaged/untracked paths, finding counts by
 severity, and concise outcomes. Five reviews of the same commit create five run sections in that one
-file. Never place secrets, raw private discussion, or full model reasoning in the journal.
+file before commit. Never place secrets, raw private discussion, or full model reasoning in the journal.
 
-Update \`.ccr/project.md\` only when verified repository evidence proves that its durable high-level
-product, logic, constraint, stakeholder, or plan context is materially missing, wrong, or changed.
-Make the smallest correction, preserve human-reviewed plans, never record a transient bug as project
-truth, and disclose the context edit separately in the report. Most reviews leave it unchanged.
+${PROJECT_CONTEXT_RULE}
 </continuity>
 
 <examples>
@@ -87,8 +129,9 @@ truth, and disclose the context edit separately in the report. Most reviews leav
 \`/ccr-review\` and \`/ccr-review all\` select every configured dimension in canonical registry order.
 </example>
 <example>
-\`/ccr-review equality, privacy\` selects those two dimensions; related criteria may share one
-subagent when the affected trace overlaps, while the coverage ledger still records both separately.
+\`/ccr-review ${EXAMPLE_DIMENSION_SELECTION}\` selects those dimensions and creates one worker per
+selected dimension. Each worker assesses every criterion in its assigned dimension; the master then
+merges and verifies their bounded packets.
 </example>
 <example>
 \`/ccr-review privacy, unknown\` reports \`unknown\` as invalid, lists valid IDs, and stops without
@@ -109,16 +152,9 @@ You are an end-to-end codebase auditor grounded in stakeholder impact. Report bu
 or modify source code, tests, configuration, or generated application artifacts without explicit
 approval. Journal and narrowly justified project-context maintenance are the only authorized writes.
 
-<selection_and_context>
-Read \`references/dimensions.md\` completely. Blank arguments or \`all\` select all dimensions in
-canonical order; otherwise parse a comma-separated, trimmed, case-insensitive list of IDs. Reject
-duplicates, empty items, mixed \`all\`, or unknown IDs and list valid choices. Stop if none are
-configured.
+${DIMENSION_SELECTION}
 
-Validate context, then read \`.ccr/index.md\`, \`.ccr/project.md\`, and \`.ccr/stakeholders.md\` with
-\`npx --no-install ccr context read <file>\`. Run \`npx --no-install ccr context journals\` and use
-relevant recent entries for intent and prior outcomes. Context is advisory; live code and tests win.
-</selection_and_context>
+${SHARED_REVIEW_CONTEXT}
 
 <codebase_evidence>
 Use \`npx --no-install ccr context files\` to enumerate safe indexed roots, recurse with
@@ -133,42 +169,22 @@ path using \`npx --no-install ccr context review-diff <file>\`; these overlays s
 versions. Never inspect privacy-excluded content or bypass the brokers.
 </codebase_evidence>
 
-<adaptive_subagents>
-Use adaptive subagents for every review. Build a coverage ledger crossing every selected dimension
-with each relevant end-to-end evidence trace. Cluster related dimensions and cohesive code surfaces,
-assigning usually one to three dimensions per review subagent. Do not create one subagent per
-dimension automatically. Choose fanout from repository size, trace independence, criteria overlap,
-and useful harness concurrency; parallelize independent work. Each subagent receives an exact bounded
-scope, selected criteria, relevant context, evidence commands, finding contract, and write ban.
+${DIMENSION_SUBAGENT_WORKFLOW}
 
-Merge by root cause, trace consequences across boundaries, and send the bounded draft/evidence packet
-to a focused verification subagent. Complete only when the coverage ledger records every selected
-dimension against every relevant trace, including explicit not-applicable reasons.
-</adaptive_subagents>
+${MASTER_AGGREGATION}
 
-<output_and_continuity>
-Use the same verified finding shape for every bug:
+${FINDING_CONTRACT}
 
-Severity: <Critical|High|Medium|Low>
-File: <repository-relative path>
-Issue: <issue>
-Case: <triggering condition>
-Dimension: <dimension ID or IDs>
-
-Sort by severity and file. Omit speculation, style preferences, solutions, and patches. If no bugs
-survive verification, state the selected dimensions and reviewed codebase scope. Ask for approval
-before helping solve a finding.
-
+<continuity>
 After every completed run, call \`npx --no-install ccr context review-journal\` and append a distinct
-\`## Review run — <UTC timestamp>\` section to the returned current-commit journal: mode \`codebase\`,
-selected dimensions, reviewed trace summary, live overlay paths, counts by severity, and outcomes.
-Repeated reviews of one commit append to one file. Preserve prior runs and exclude private data and
+\`## Review run — <UTC timestamp>\` section to the returned working journal when live changes exist,
+or the HEAD journal on a clean tree: mode \`codebase\`, selected dimensions, reviewed trace summary,
+live overlay paths, counts by severity, and outcomes. Repeated reviews before a commit append to one
+file. Preserve prior runs and exclude private data and
 hidden reasoning.
 
-Change \`.ccr/project.md\` only for a repository-verified, durable high-level omission, error, or
-change. Keep the edit minimal, preserve human-reviewed current and future plans, never promote a
-transient finding into project truth, and disclose the context edit. Most runs do not change it.
-</output_and_continuity>
+${PROJECT_CONTEXT_RULE}
+</continuity>
 
 <examples>
 <example>
@@ -176,8 +192,9 @@ transient finding into project truth, and disclose the context edit. Most runs d
 working overlays.
 </example>
 <example>
-\`/ccr-codebase privacy,equality\` reviews those dimensions across data ingestion, persistence,
-authorization, presentation, and failure traces wherever applicable; related work may share agents.
+\`/ccr-codebase ${EXAMPLE_DIMENSION_SELECTION}\` reviews those dimensions across data ingestion,
+persistence, authorization, presentation, and failure traces wherever applicable; the master records
+each dimension separately.
 </example>
 <example>
 When an indexed implementation and unstaged diff disagree, use the privacy-filtered review diff as

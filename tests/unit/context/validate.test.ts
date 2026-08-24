@@ -1,13 +1,21 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { applySetup } from "../../../src/context/setup";
 import { validateContext } from "../../../src/context/validate";
 
 const roots: string[] = [];
+const readFileMock = vi.hoisted(() => vi.fn());
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  readFileMock.mockImplementation(actual.readFile);
+  return { ...actual, readFile: readFileMock };
+});
 
 afterEach(async () => {
+  readFileMock.mockClear();
   const { rm } = await import("node:fs/promises");
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -65,7 +73,7 @@ describe("validateContext", () => {
 
     const result = await validateContext(root);
 
-    expect(result.issues).toContain(".ccr/index.md references a missing route: project.md");
+    expect(result.issues).toContain(".ccr/project.md is missing.");
     expect(result.issues).toContain(
       ".ccr/stakeholders.md contains an unsafe path reference: C:\\private\\records.txt",
     );
@@ -104,5 +112,46 @@ describe("validateContext", () => {
     const result = await validateContext(root);
 
     expect(result.issues.join("\n")).not.toContain("contains an absolute claim");
+  });
+
+  it("should validate line-ranged citations and ignore web route literals", async () => {
+    const root = await makeSetup();
+    await writeFile(path.join(root, "backend.ts"), "export const models = [];\n", "utf8");
+    await writeFile(
+      path.join(root, ".ccr/project.md"),
+      [
+        "# Project",
+        "",
+        "All models are declared in `backend.ts:1-20` and served below `/api/` and `/login`.",
+        "The build checks `backend.ts:1-2,8-10`.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await validateContext(root);
+
+    expect(result).toEqual({ isValid: true, issues: [] });
+  });
+
+  it("should reject oversized shared context without a full-file read", async () => {
+    const root = await makeSetup();
+    const projectPath = path.join(root, ".ccr/project.md");
+    const stakeholdersPath = path.join(root, ".ccr/stakeholders.md");
+    await writeFile(projectPath, `# Project\n\n${"a".repeat(10_001)}`, "utf8");
+    await writeFile(stakeholdersPath, `# Stakeholders\n\n${"b".repeat(10_001)}`, "utf8");
+
+    readFileMock.mockClear();
+
+    expect(await validateContext(root)).toEqual({
+      isValid: false,
+      issues: [
+        ".ccr/project.md exceeds the 10000-character validation inspection limit; shorten it before validation.",
+        ".ccr/stakeholders.md exceeds its 10000-character limit.",
+      ],
+    });
+
+    expect(readFileMock).not.toHaveBeenCalledWith(projectPath, "utf8");
+    expect(readFileMock).not.toHaveBeenCalledWith(stakeholdersPath, "utf8");
   });
 });

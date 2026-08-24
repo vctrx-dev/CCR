@@ -30,6 +30,8 @@ function configActionLabel(action: SetupAction): string {
       return "updated";
     case "preserve":
       return "preserved";
+    case "remove":
+      return "removed";
     case "unchanged":
       return "already current";
     default: {

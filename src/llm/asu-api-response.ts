@@ -2,12 +2,32 @@ import type { ReviewProviderResult } from "./types.js";
 
 type UnknownRecord = Record<string, unknown>;
 
+const ASU_AIML_RESPONSE_FORMAT_ERROR = "asu-aiml-response-format" as const;
+
+type AsuAimlResponseFormatError = Error & {
+  code: typeof ASU_AIML_RESPONSE_FORMAT_ERROR;
+};
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function createAsuAimlResponseFormatError(): AsuAimlResponseFormatError {
+  return Object.assign(new Error("Unexpected ASU AIML response format."), {
+    code: ASU_AIML_RESPONSE_FORMAT_ERROR,
+  });
+}
+
+/**
+ * Identifies a safe parser failure for an otherwise successful provider response.
+ * Request callers must not retry these errors or append untrusted response text to diagnostics.
+ */
+export function isAsuAimlResponseFormatError(error: Error): error is AsuAimlResponseFormatError {
+  return "code" in error && error.code === ASU_AIML_RESPONSE_FORMAT_ERROR;
 }
 
 /**
@@ -18,10 +38,15 @@ function toFiniteNumber(value: unknown): number | undefined {
  * @throws When the body is not JSON or has no supported response text field.
  */
 export function parseAsuAimlResponse(rawBody: string): ReviewProviderResult {
-  const parsed: unknown = JSON.parse(rawBody);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    throw createAsuAimlResponseFormatError();
+  }
 
   if (!isRecord(parsed)) {
-    throw new Error(`Unexpected ASU AIML response format: ${rawBody.slice(0, 500)}`);
+    throw createAsuAimlResponseFormatError();
   }
 
   const usageCandidate: UnknownRecord | undefined = isRecord(parsed.usage)
@@ -65,5 +90,5 @@ export function parseAsuAimlResponse(rawBody: string): ReviewProviderResult {
       return { output: parsed.response.message, ...resultPrefix };
   }
 
-  throw new Error(`Unexpected ASU AIML response format: ${rawBody.slice(0, 500)}`);
+  throw createAsuAimlResponseFormatError();
 }

@@ -1,6 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import {
+  type FileHandle,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
+
+const MAX_UTF8_BYTES_PER_UTF16_CODE_UNIT = 3;
+const UTF8_BOUNDARY_BYTES = 4;
+
+export interface BoundedText {
+  content: string;
+  isTruncated: boolean;
+}
 
 /**
  * Shared repository filesystem boundary. New managed-file features must use these helpers so path
@@ -19,6 +36,56 @@ export async function readTextIfExists(filePath: string): Promise<string | undef
   } catch (error: unknown) {
     if (isFileNotFound(error)) return undefined;
     throw error;
+  }
+}
+
+function boundedReadByteLimit(maxCharacters: number): number {
+  const maxSafeCharacters = Math.floor(
+    (Number.MAX_SAFE_INTEGER - UTF8_BOUNDARY_BYTES) / MAX_UTF8_BYTES_PER_UTF16_CODE_UNIT,
+  );
+  if (
+    !Number.isSafeInteger(maxCharacters) ||
+    maxCharacters < 1 ||
+    maxCharacters > maxSafeCharacters
+  ) {
+    throw new Error("Bounded text reads require a positive safe character limit.");
+  }
+  return maxCharacters * MAX_UTF8_BYTES_PER_UTF16_CODE_UNIT + UTF8_BOUNDARY_BYTES;
+}
+
+/**
+ * Reads a bounded UTF-8 prefix without first loading the entire file. Use this at content-export
+ * boundaries; callers own their user-facing truncation marker so each surface stays actionable.
+ */
+export async function readBoundedTextIfExists(
+  filePath: string,
+  maxCharacters: number,
+): Promise<BoundedText | undefined> {
+  const byteLimit = boundedReadByteLimit(maxCharacters);
+  let handle: FileHandle;
+  try {
+    handle = await open(filePath, "r");
+  } catch (error: unknown) {
+    if (isFileNotFound(error)) return undefined;
+    throw error;
+  }
+  try {
+    const before = await handle.stat();
+    const bytesToRead = Math.min(before.size, byteLimit);
+    if (bytesToRead === 0) {
+      const after = await handle.stat();
+      return { content: "", isTruncated: after.size > 0 };
+    }
+    const buffer = Buffer.alloc(bytesToRead);
+    const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
+    const after = await handle.stat();
+    const text = buffer.subarray(0, bytesRead).toString("utf8");
+    return {
+      content: text.slice(0, maxCharacters),
+      isTruncated: text.length > maxCharacters || after.size > bytesRead,
+    };
+  } finally {
+    await handle.close();
   }
 }
 

@@ -33,10 +33,9 @@ ccr config init --apply
 ccr setup --apply
 ```
 
-The global install only installs the CLI; run commands from each target repository. Neither install
-creates the shared `.ccr` files or Git hooks by itself. `ccr config init --apply` creates the
-human-readable `.ccr/config-manual.md` next to `.ccr/config.json`; `ccr setup --apply` installs the
-CCR skills and context skeleton.
+Installation adds the CLI and, for project-local use, a programmatic Node.js API. Run `config init`
+and `setup` in each repository to create the configuration, manual, skills, and context skeleton.
+Hooks are added during initialization.
 
 For a packed build from this repository:
 
@@ -47,39 +46,77 @@ npm install --save-dev /path/to/vctrx-ccr-VERSION.tgz
 
 Requires Node.js 22.12+ and Claude Code 2.1.0+.
 
+### Programmatic API
+
+Project-local consumers can import the supported ESM API from `@vctrx/ccr`. The focused subpaths are
+`@vctrx/ccr/context`, `@vctrx/ccr/review`, and `@vctrx/ccr/llm`; do not import internal source paths
+because they are not part of the compatibility contract. The root entry also supports CommonJS
+`require`; focused subpaths are ESM-only to avoid duplicating the full SDK.
+
+```ts
+import {
+  DEFAULT_CONTEXT_CONFIG,
+  createAsuAimlProviderConfig,
+  resolveContextConfig,
+} from "@vctrx/ccr";
+
+const config = resolveContextConfig(DEFAULT_CONTEXT_CONFIG, {
+  privacy: { excludedPaths: ["internal/**"] },
+});
+const provider = createAsuAimlProviderConfig({
+  apiKey: process.env.ASU_API_KEY ?? "",
+  model: "gpt-5.2",
+});
+```
+
+Importing the API does not alter a repository or contact a provider. Setup, writes, repository
+evidence reads, and provider requests happen only when their explicit functions are called.
+
+### Command help
+
+Show all commands and Claude Code skills:
+
+```bash
+npx --no-install ccr help
+```
+
+Show help for one command:
+
+```bash
+npx --no-install ccr help setup
+npx --no-install ccr context --help
+npx --no-install ccr config --help
+npx --no-install ccr hooks --help
+```
+
+For global installs, replace `npx --no-install ccr` with `ccr`. Slash operations run in Claude Code,
+not a terminal. Help reads dimension IDs from the current registry.
+
 ## Config-managed hooks
 
-Hooks are not installed during package installation or directly by setup. Setup installs the
-repository-aware `/ccr-hooks` skill. `hooks.enabled` defaults to `true`, so
-`/ccr-context initialize` invokes `/ccr-hooks sync`; the skill inspects the repository before it
-chooses an existing hook framework, configured `core.hooksPath`, current hook interpreter, or a
-minimal direct Git hook. Set `hooks.enabled` to `false` before initialization when the repository
-should not have CCR hook integration. Setup also keeps local context directories ignored and removes
-legacy CCR-managed hook blocks when hooks are disabled.
+Setup installs `/ccr-hooks`, but not the hooks themselves. With `hooks.enabled: true` (the default),
+`/ccr-context initialize` runs `/ccr-hooks sync`. The skill selects a compatible framework, hook
+path, interpreter, or minimal Git hook. Disable hooks before initialization if they are unwanted.
 
 - `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file.
-- `post-commit` — after every commit, starts a branch-local journal entry when none exists, warns
-  (without blocking) when the last commit changed repository files without updating shared context,
-  and prints a copy-paste instruction when context is stale or a journal entry needs completing.
-  A context-only commit records its paths in the journal without prompting again.
+- `post-commit` — starts the commit journal and prints an update instruction when needed.
 
-After a commit, paste the printed instruction into Claude Code. Claude reviews the last commit,
-completes the journal entry in `.ccr/journal/`, and changes `.ccr/project.md` only when the commit
-affects the repository's high-level context. Most commits do not change `.ccr/project.md`.
+Hooks are advisory: they do not invoke Claude, edit context, block commits, or fail commits. Paste a
+post-commit instruction into Claude Code to update the journal and, only when needed, `project.md`.
 
-Both hooks are advisory: they never invoke Claude automatically, block a commit, edit shared context
-by themselves, or fail the commit. The post-commit hook prints a copy-paste prompt when context or a
-journal needs attention. You can inspect them with `npx --no-install ccr hooks status`; the normal
-configuration path for removing them is `/ccr-hooks remove`, followed by
-`npx --no-install ccr config set hooks.enabled false --apply` so future initialization leaves them
-disabled. Native-hook provenance includes the original byte length/hash and managed separator byte
-count, allowing removal to verify exact restoration without storing hook contents.
-While `.ccr/private/hooks-state.json` exists, use `/ccr-hooks status` or `/ccr-hooks remove`.
-The CLI cannot safely interpret every repository-native framework or language hook, so its uninstall
-commands stop without changing files until the skill has removed and verified that managed state.
-Legacy CLI status distinguishes malformed CCR markers, unsafe configured paths, and unavailable Git
-metadata. Cleanup validates both legacy hooks before changing either one; setup and uninstall stop
-before their managed-file writes when those markers are malformed.
+Inspect hooks with `npx --no-install ccr hooks status`. Remove provenance-managed hooks with
+`/ccr-hooks remove`, then disable future sync with
+`npx --no-install ccr config set hooks.enabled false --apply`. Provenance stores hashes and byte
+counts, not contents, so removal can verify restoration. While provenance exists, the CLI defers
+framework-aware removal to `/ccr-hooks`.
+
+Hooks call `ccr hooks pre-commit` and `ccr hooks post-commit`. The old `check` and `after-commit`
+names remain hidden compatibility aliases.
+
+CCR validates provenance before trusting it. Missing state with existing markers is
+legacy/unprovenanced; invalid state blocks automatic changes. Preserve or move invalid state for
+investigation. After inspection, use `ccr hooks uninstall --apply` for marker-only cleanup, then
+`/ccr-hooks sync`. Cleanup preserves bytes outside CCR markers.
 
 ## 2. Configure
 
@@ -88,9 +125,7 @@ npx --no-install ccr config init
 npx --no-install ccr config init --apply
 ```
 
-The first command previews the config and changes nothing. `--apply` is the explicit write
-confirmation, so the second command creates or upgrades `.ccr/config.json` and
-`.ccr/config-manual.md`.
+The first command previews; `--apply` creates or upgrades the configuration and its manual.
 
 After it succeeds, edit `.ccr/config.json` directly or use the validated updater:
 
@@ -107,12 +142,9 @@ Review the settings and validate:
 npx --no-install ccr config validate
 ```
 
-Read `.ccr/config-manual.md` for the meaning, accepted values, and practical effect of every key.
-Its sections follow the same order as `.ccr/config.json`.
+See `.ccr/config-manual.md` for every setting and accepted value.
 
-`.ccr/config.json` is human-owned. CCR, Claude, and other AI coding agents must not change it unless
-you explicitly approve the exact setting and value. The file is strict JSON, so it intentionally has
-no `//` comments or helper fields. The default file is:
+`.ccr/config.json` is human-owned and changes require explicit approval. It is strict JSON. Defaults:
 
 ```json
 {
@@ -139,16 +171,9 @@ npx --no-install ccr setup
 npx --no-install ccr setup --apply
 ```
 
-`ccr config init --apply` creates `.ccr/config.json` and `.ccr/config-manual.md`.
-`ccr setup --apply` adds the Claude skills and these shared context files:
-
-- `.ccr/index.md`
-- `.ccr/project.md`
-- `.ccr/stakeholders.md`
-
-Existing context, `CLAUDE.md`, and `AGENTS.md` are preserved by default.
-Setup installs `/ccr-hooks`, `/ccr-review`, and `/ccr-codebase`; it does not guess a hook strategy
-without repository analysis.
+`config init` creates configuration files. `setup` adds Claude skills, `project.md`, and
+`stakeholders.md`. It preserves existing context and instruction files. An obsolete generated
+`index.md` is removed only when unedited. Hook strategy is selected later through repository analysis.
 
 ## 4. Initialize
 
@@ -158,31 +183,19 @@ Open Claude Code:
 /ccr-context initialize
 ```
 
-Run this after `ccr setup --apply`. The prompt populates the existing context skeleton; it does not
-replace the setup command that creates the `.ccr` folder and files. When hooks are enabled, it also
-invokes `/ccr-hooks sync` once.
+Run this after setup. It populates the context skeleton and syncs hooks when enabled.
 
-You may provide plans, specifications, or other information not stored in the repository. Claude
-maps independent evidence traces and runs them in an adaptive parallel agent wave, using more agents
-for multi-language or very large repositories, then performs a separate verification pass. The
-resulting `project.md` is one connected narrative that weaves real-world purpose, logic, technical
-constraints, and small but consequential details together instead of fixed categories. Focused
-later operations normally use no discovery subagent for one trace. The documented agent, read, and
-time budgets are starting guidance, not hard ceilings. Claude chooses the smallest sufficient plan
-and may expand it only to close a named material evidence gap, such as unsupported or contradictory
-claims, truncated evidence, or a newly discovered consequential trace. It stops when material
-claims are precisely evidenced or explicitly unknown and relevant exceptions are preserved. Every
-operation's verifier reviews the supplied draft and evidence packet without tools or another
-repository search. Drafts stay in memory; CCR operations do not leave scratch files in the repository
-root. Any harness-required temporary file is confined to ignored `.ccr/tmp/` and removed before
-completion.
+Claude uses repository evidence plus supplied plans or specifications. It scales discovery to the
+repository, verifies material claims, preserves uncertainty and exceptions, and stops when important
+evidence gaps close. Drafts stay in memory; temporary files use ignored `.ccr/tmp/` and are removed.
 
-Material claims use full repository-relative files and concrete symbols, tests, commands, or prose
-contracts. Workflow/config summaries enumerate the collection and preserve trigger or role
-exceptions instead of treating every member as uniform. Human-supplied additions remain intent;
-omitting an implementation claim is not treated as proof that no implementation evidence exists.
-
-Review the resulting `.ccr` changes.
+Claims cite paths and concrete symbols, tests, commands, or contracts. Plans remain intent unless
+implementation evidence confirms them. Review the resulting `.ccr` changes. Validation inspects
+every managed Markdown context file through a 10,000 UTF-16-character window; content beyond that
+window is rejected as unvalidated, so shorten the file before validating it again. Independently, a
+shared-context read returns at most 10,000 UTF-16 characters of source content and appends a
+truncation marker when more content exists. If that marker appears, inspect the full file locally
+before relying on it.
 
 ## 5. Review changes or the complete codebase
 
@@ -197,20 +210,22 @@ Review all configured dimensions by default:
 Review one or more dimensions by ID:
 
 ```text
-/ccr-review equality, privacy
+/ccr-review fairness-evaluation, pedagogy
 /ccr-codebase privacy
 ```
 
-`/ccr-review` reviews the privacy-approved staged, unstaged, and untracked change set.
-`/ccr-codebase` maps end-to-end traces across the complete safe Git index, then overlays those live
-changes. Both skills read `project.md` and `stakeholders.md` for product purpose, moral and logical
-constraints, stakeholder effects, and current or future plans. They may use recent branch-local
-journals to understand intent and prior outcomes, but live code, tests, and schemas remain
-authoritative.
+Current review dimensions: `fairness-evaluation`, `pedagogy`, `decision-fairness`, `inclusion`,
+`transparency`, `privacy`. Run
+`npx --no-install ccr help` to see the IDs bundled in the installed version.
 
-Both skills assign coherent groups of related dimensions and evidence traces to an adaptive number
-of subagents. They do not automatically create one subagent per dimension. A focused verification
-pass checks and deduplicates findings. Each reported bug includes:
+`/ccr-review` checks staged, unstaged, and approved untracked changes. `/ccr-codebase` checks the
+complete safe Git index plus live changes. Both use current `project.md`, `stakeholders.md`, and
+recent local journals; code, tests, and schemas remain authoritative. The shared-context reader
+accepts only `.ccr/project.md` and `.ccr/stakeholders.md`.
+
+Each selected dimension gets exactly one subagent. That worker assesses every criterion in its
+dimension and returns evidence-backed findings. The master agent collects, deduplicates, verifies,
+and validates the findings before reporting them. Each bug includes:
 
 ```text
 Severity: Critical | High | Medium | Low
@@ -220,14 +235,9 @@ Case: condition that triggers the bug
 Dimension: selected dimension ID or IDs
 ```
 
-Reviews report information only. They do not fix source code, tests, configuration, or generated
-application files without explicit approval after the report.
-
-After each completed review, CCR resolves one local journal entry for the current branch and commit.
-Each invocation appends a separate review-run section to that same entry, so five reviews before the
-next commit produce five run sections in one file. A review changes `.ccr/project.md` only when
-repository evidence proves a durable high-level omission, error, or change; most reviews leave the
-human-reviewed narrative untouched.
+Reviews never fix files without approval. Each run appends to the working journal, or the `HEAD`
+journal on a clean tree. Working entries gain branch and commit fields after commit. Journals do not
+duplicate Git's path inventory. `project.md` changes only for proven, durable high-level corrections.
 
 ### Maintain review dimensions
 
@@ -239,7 +249,6 @@ has this data-only shape:
   "id": "privacy",
   "name": "Privacy",
   "summary": "What this dimension reviews.",
-  "relatedDimensions": ["equality"],
   "criteria": [
     {
       "id": "data-collection",
@@ -250,50 +259,44 @@ has this data-only shape:
 }
 ```
 
-IDs use lowercase kebab-case and are the slash-command selectors. Related IDs must exist. Dimension
-and criterion IDs must be unique. Adding, deleting, reordering, or changing dimension content
-requires no setup, CLI, subagent, or lifecycle code change; edit the JSON and run the quality gates.
-Setup renders the same validated registry into each review skill's `references/dimensions.md`.
+IDs are lowercase kebab-case selectors. Dimension and criterion IDs must be unique within their
+respective scope. Change the taxonomy in this registry, then update matching README and user-manual
+references and run package smoke. `scripts/package-smoke.mjs` derives the shipped help
+and README assertion from the registry. Setup renders the validated installed registry once at
+`.claude/skills/ccr/references/dimensions.md`; both review skills and `/ccr` read that shared file.
 
-This development revision intentionally contains an empty array because the nine research-backed
-definitions have not been supplied. The skills stop clearly when the registry is empty rather than
-inventing dimensions or criteria.
+The included dimensions are an initial baseline. Replace them as the taxonomy matures. An empty
+registry stops reviews instead of inventing criteria.
 
 ## Context operations
 
 | Command | Purpose |
 |---|---|
-| `/ccr` | Show the CCR manual |
-| `/ccr-hooks sync` | Detect and apply repository-native hook integration |
-| `/ccr-hooks status` | Explain the current hook strategy |
-| `/ccr-hooks remove` | Remove only CCR-managed hook integration |
-| `/ccr-context initialize` | Create repository context |
+| `/ccr [question]` | Answer CCR usage questions |
+| `/ccr-hooks sync` | Install or update hooks |
+| `/ccr-hooks status` | Show hook status |
+| `/ccr-hooks remove` | Remove CCR hooks |
+| `/ccr-context initialize` | Create context |
 | `/ccr-context update` | Update context from staged changes |
-| `/ccr-context verify` | Check whether context is accurate and current |
-| `/ccr-context addition` | Add human-provided plans or knowledge |
-| `/ccr-context compact` | Remove repetition without losing key context |
-| `/ccr-review [all\|dimension,...]` | Review current changes and report bugs only |
-| `/ccr-codebase [all\|dimension,...]` | Review end-to-end codebase behavior and report bugs only |
+| `/ccr-context verify` | Verify context |
+| `/ccr-context addition` | Add plans or knowledge |
+| `/ccr-context compact` | Remove repetition |
+| `/ccr-review [all\|dimension,...]` | Review current changes |
+| `/ccr-codebase [all\|dimension,...]` | Review the complete codebase |
 
 Review `.ccr` changes after every operation.
 
 ## Optional commit warning
 
-Both Git hooks are advisory. The pre-commit hook warns when repository files are staged without a
-staged shared `.ccr/` file. After each commit, the post-commit hook starts a local journal entry and,
-when context is stale or a journal entry needs completing, prints a copy-paste prompt; pasting it
-into Claude Code updates the shared context and completes the journal, changing `.ccr/project.md`
-only when the commit affects the repository's high-level context. Neither hook blocks a commit.
-Check the managed blocks with `npx --no-install ccr hooks status`, or ask `/ccr-hooks status` for the
-repository-aware explanation. Remove them with `/ccr-hooks remove`, then disable future sync with
-`npx --no-install ccr config set hooks.enabled false --apply`.
+Pre-commit warns about possibly stale shared context. Post-commit starts the journal and prints an
+update instruction when needed. Neither blocks commits. Inspect with `ccr hooks status` or
+`/ccr-hooks status`; remove with `/ccr-hooks remove`, then disable `hooks.enabled`.
 
 ## Privacy
 
 Committed:
 
 - `.ccr/config.json`
-- `.ccr/index.md`
 - `.ccr/project.md`
 - `.ccr/stakeholders.md`
 
@@ -318,8 +321,8 @@ npx --no-install ccr hooks status
 
 ## Uninstall
 
-If `/ccr-hooks sync` created provenance-managed integration, run `/ccr-hooks remove` first. CCR
-will stop the CLI uninstall rather than claim that an unknown framework entry was removed.
+Run `/ccr-hooks remove` before uninstalling provenance-managed integration. The CLI will not claim
+to remove an unknown framework entry.
 
 Preview:
 

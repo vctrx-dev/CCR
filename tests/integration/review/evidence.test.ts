@@ -3,12 +3,19 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import { listSafeReviewChanges, readSafeReviewEvidence } from "../../../src/review/evidence";
 
 const run = promisify(execFile);
 const roots: string[] = [];
+const readFileMock = vi.hoisted(() => vi.fn());
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  readFileMock.mockImplementation(actual.readFile);
+  return { ...actual, readFile: readFileMock };
+});
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -58,4 +65,28 @@ it("should expose staged, unstaged, and untracked review evidence through privac
   expect(untrackedEvidence).toContain("## Untracked file");
   expect(untrackedEvidence).toContain("untracked = true");
   await expect(readSafeReviewEvidence(root, ".env.review")).rejects.toThrow(/approved review/i);
+}, 10_000);
+
+it("should use a bounded file read for approved untracked evidence", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-review-bounded-evidence-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    "utf8",
+  );
+  const target = path.join(root, "large-untracked.ts");
+  await writeFile(target, "export const bounded = true;\n", "utf8");
+
+  readFileMock.mockClear();
+  try {
+    await expect(readSafeReviewEvidence(root, "large-untracked.ts")).resolves.toContain(
+      "export const bounded = true;",
+    );
+    expect(readFileMock).not.toHaveBeenCalledWith(target, "utf8");
+  } finally {
+    readFileMock.mockClear();
+  }
 });

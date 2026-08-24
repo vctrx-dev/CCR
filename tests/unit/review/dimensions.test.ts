@@ -1,19 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
+  REVIEW_DIMENSIONS,
   parseReviewDimensionRegistry,
   renderReviewDimensionReference,
 } from "../../../src/review/dimensions";
 
 describe("review dimension registry", () => {
+  it("should ship the configured review dimensions in canonical order", () => {
+    expect(REVIEW_DIMENSIONS.dimensions.map(({ id }) => id)).toEqual([
+      "fairness-evaluation",
+      "pedagogy",
+      "decision-fairness",
+      "inclusion",
+      "transparency",
+      "privacy",
+    ]);
+  });
+
   it("should parse data-only dimensions and preserve their declared order", () => {
     const registry = parseReviewDimensionRegistry({
-      schemaVersion: 1,
       dimensions: [
         {
           id: "equality",
           name: "Equality",
           summary: "Review unequal outcomes and access.",
-          relatedDimensions: ["privacy"],
           criteria: [
             {
               id: "unequal-outcomes",
@@ -26,7 +36,6 @@ describe("review dimension registry", () => {
           id: "privacy",
           name: "Privacy",
           summary: "Review collection, use, exposure, and retention of data.",
-          relatedDimensions: ["equality"],
           criteria: [
             {
               id: "unnecessary-collection",
@@ -41,28 +50,48 @@ describe("review dimension registry", () => {
     expect(registry.dimensions.map(({ id }) => id)).toEqual(["equality", "privacy"]);
   });
 
-  it("should reject duplicate IDs and references to unknown dimensions", () => {
+  it("should reject duplicate IDs and removed registry fields", () => {
     const dimension = {
       id: "privacy",
       name: "Privacy",
       summary: "Review data handling.",
-      relatedDimensions: [],
       criteria: [{ id: "collection", name: "Collection", details: "Review collection." }],
     };
 
-    expect(() =>
-      parseReviewDimensionRegistry({ schemaVersion: 1, dimensions: [dimension, dimension] }),
-    ).toThrow(/duplicate dimension id/i);
+    expect(() => parseReviewDimensionRegistry({ dimensions: [dimension, dimension] })).toThrow(
+      /duplicate dimension id/i,
+    );
     expect(() =>
       parseReviewDimensionRegistry({
-        schemaVersion: 1,
         dimensions: [{ ...dimension, relatedDimensions: ["security"] }],
       }),
-    ).toThrow(/unknown related dimension/i);
+    ).toThrow(/unrecognized key/i);
+    expect(() =>
+      parseReviewDimensionRegistry({
+        dimensions: [
+          {
+            ...dimension,
+            criteria: [
+              { id: "collection", name: "Collection", details: "Review collection." },
+              { id: "collection", name: "Collection again", details: "Review collection again." },
+            ],
+          },
+          {
+            ...dimension,
+            id: "equality",
+            name: "Equality",
+            criteria: [{ id: "outcomes", name: "Outcomes", details: "Review unequal outcomes." }],
+          },
+        ],
+      }),
+    ).toThrow(/duplicate criterion id/i);
+    expect(() =>
+      parseReviewDimensionRegistry({ schemaVersion: 1, dimensions: [dimension] }),
+    ).toThrow(/unrecognized key/i);
   });
 
   it("should render a package-managed progressive-disclosure reference", () => {
-    const reference = renderReviewDimensionReference({ schemaVersion: 1, dimensions: [] });
+    const reference = renderReviewDimensionReference({ dimensions: [] });
 
     expect(reference).toMatch(/^---\nname: ccr-review-dimensions\n/);
     expect(reference).toContain("managed by CCR skill");

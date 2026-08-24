@@ -1,3 +1,9 @@
+import {
+  normalizeRepositoryPath,
+  sortUniqueRepositoryPaths,
+  truncateEvidence,
+} from "./evidence-format";
+import { assertSafeManagedPath, readBoundedTextIfExists } from "./files";
 import { readChangedPaths, readGitBlob, readIndexEntries, readStagedDiff } from "./git";
 import {
   filterExcludedPaths,
@@ -7,12 +13,16 @@ import {
 } from "./privacy";
 
 /**
- * Privacy-preserving evidence boundary for context features and future AI integrations. Reuse these
- * operations for repository content: they read approved Git-index data, never newer worktree content.
+ * Privacy-preserving evidence boundary for context features and future AI integrations. Repository
+ * evidence reads the approved Git index; the explicit shared-context operation reads only CCR's
+ * two current narrative documents so uncommitted human edits remain visible. Worktree content must
+ * use the bounded filesystem helper rather than adding a direct full-file read. New context
+ * evidence features should extend this broker, not recreate its approval and privacy checks.
  */
 
 const MAX_PATH_LIST_CHARACTERS = 6000;
 const MAX_EVIDENCE_CHARACTERS = 10_000;
+const SHARED_CONTEXT_PATHS = [".ccr/project.md", ".ccr/stakeholders.md"] as const;
 
 export interface SafePathList {
   paths: string[];
@@ -24,11 +34,6 @@ export interface SafePathList {
 export interface SafeRecentPaths {
   paths: string[];
   excludedCount: number;
-}
-
-function truncate(content: string, limit: number): string {
-  if (content.length <= limit) return content;
-  return `${content.slice(0, limit)}\n[CCR truncated at ${limit} characters]\n`;
 }
 
 async function safeRegularPaths(root: string): Promise<{
@@ -44,7 +49,7 @@ async function safeRegularPaths(root: string): Promise<{
     .filter((entry) => entry.mode.startsWith("100"))
     .map((entry) => entry.path);
   const filtered = filterExcludedPaths(regularPaths, config.privacy.excludedPaths);
-  const paths = filtered.included.sort((left, right) => left.localeCompare(right));
+  const paths = sortUniqueRepositoryPaths(filtered.included);
   const entriesByPath = new Map<string, ReturnType<typeof readIndexEntries>[number]>();
   for (const entry of entries) {
     if (!entriesByPath.has(entry.path)) entriesByPath.set(entry.path, entry);
@@ -65,8 +70,8 @@ export async function listSafeRepositoryPaths(
   after?: string,
 ): Promise<SafePathList> {
   const safe = await safeRegularPaths(root);
-  const normalizedPrefix = prefix?.replaceAll("\\", "/");
-  const normalizedAfter = after?.replaceAll("\\", "/");
+  const normalizedPrefix = prefix ? normalizeRepositoryPath(prefix) : undefined;
+  const normalizedAfter = after ? normalizeRepositoryPath(after) : undefined;
   for (const [label, candidate] of [
     ["Prefix", normalizedPrefix],
     ["Cursor", normalizedAfter],
@@ -109,9 +114,9 @@ export async function listSafeRecentPaths(root: string): Promise<SafeRecentPaths
   const safe = await safeRegularPaths(root);
   const recent = readChangedPaths(root, 5);
   const filtered = filterExcludedPaths(recent, safe.config.privacy.excludedPaths);
-  const paths = filtered.included
-    .filter((candidate) => safe.pathSet.has(candidate))
-    .sort((left, right) => left.localeCompare(right));
+  const paths = sortUniqueRepositoryPaths(
+    filtered.included.filter((candidate) => safe.pathSet.has(normalizeRepositoryPath(candidate))),
+  );
   return {
     paths,
     excludedCount: filtered.excluded.length,
@@ -121,21 +126,45 @@ export async function listSafeRecentPaths(root: string): Promise<SafeRecentPaths
 /** Reads one approved index blob, never a newer unstaged worktree version. */
 export async function readSafeRepositoryFile(root: string, candidate: string): Promise<string> {
   const safe = await safeRegularPaths(root);
-  const normalized = candidate.replaceAll("\\", "/");
+  const normalized = normalizeRepositoryPath(candidate);
   if (!safe.paths.includes(normalized)) {
     throw new Error("Path is not an approved regular repository file.");
   }
   const entry = safe.entriesByPath.get(normalized);
   if (!entry) throw new Error("Approved index entry disappeared.");
-  return truncate(readGitBlob(root, entry.oid), MAX_EVIDENCE_CHARACTERS);
+  return truncateEvidence(readGitBlob(root, entry.oid), {
+    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
+  });
+}
+
+/** Reads one current shared context document, including an uncommitted setup or human edit. */
+export async function readSharedContextFile(root: string, candidate: string): Promise<string> {
+  const normalized = normalizeRepositoryPath(candidate);
+  if (!SHARED_CONTEXT_PATHS.some((approved) => approved === normalized)) {
+    throw new Error("Path is not an approved shared context document.");
+  }
+  const content = await readBoundedTextIfExists(
+    await assertSafeManagedPath(root, normalized),
+    MAX_EVIDENCE_CHARACTERS,
+  );
+  if (content === undefined) throw new Error("Shared context document does not exist.");
+  return truncateEvidence(content.content, {
+    isTruncated: content.isTruncated,
+    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
+  });
 }
 
 /** Reads the staged diff for one approved path without opening its worktree file. */
 export async function readSafeRepositoryDiff(root: string, candidate: string): Promise<string> {
-  const normalized = candidate.replaceAll("\\", "/");
+  const normalized = normalizeRepositoryPath(candidate);
   const safePaths = await readSafeStagedPaths(root);
   if (!safePaths.included.includes(normalized)) {
     throw new Error("Path is not an approved staged file.");
   }
-  return truncate(readStagedDiff(root, normalized), MAX_EVIDENCE_CHARACTERS);
+  return truncateEvidence(readStagedDiff(root, normalized), {
+    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
+  });
 }

@@ -61,13 +61,30 @@ function parseGitPaths(output: string): string[] {
   return [...new Set(output.split("\0").filter(Boolean))];
 }
 
+function isLocalContext(relativePath: string): boolean {
+  return (
+    relativePath === ".ccr/config.local.json" ||
+    LOCAL_CONTEXT_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
+  );
+}
+
 /** Classifies a repo path as shared context when it lives under `.ccr/` and is not local-only state. */
 export function isSharedContext(relativePath: string): boolean {
   return (
     relativePath.startsWith(".ccr/") &&
-    relativePath !== ".ccr/config.local.json" &&
-    !LOCAL_CONTEXT_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
+    relativePath !== ".ccr/index.md" &&
+    !isLocalContext(relativePath)
   );
+}
+
+/** Returns whether tracked, staged, or untracked work remains without exposing path contents. */
+export function hasWorkingTreeChanges(root: string): boolean {
+  const paths = [
+    ...parseGitPaths(runGit(root, ["diff", "--cached", "--name-only", "-z"])),
+    ...readUnstagedPaths(root),
+    ...readUntrackedPaths(root),
+  ];
+  return paths.some((relativePath) => !isLocalContext(relativePath));
 }
 
 /**

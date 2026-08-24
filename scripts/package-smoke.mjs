@@ -5,9 +5,51 @@ import path from "node:path";
 
 const root = process.cwd();
 const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+const reviewRegistry = JSON.parse(
+  readFileSync(path.join(root, "src", "review", "dimensions.json"), "utf8"),
+);
+if (
+  typeof reviewRegistry !== "object" ||
+  reviewRegistry === null ||
+  !("dimensions" in reviewRegistry) ||
+  !Array.isArray(reviewRegistry.dimensions) ||
+  !reviewRegistry.dimensions.every(
+    (dimension) =>
+      typeof dimension === "object" &&
+      dimension !== null &&
+      "id" in dimension &&
+      typeof dimension.id === "string",
+  )
+) {
+  throw new Error("Review dimension registry has an invalid shape.");
+}
+const reviewDimensionIds = reviewRegistry.dimensions.map((dimension) => dimension.id);
+const configuredDimensions = reviewDimensionIds.length
+  ? `Current review dimensions: ${reviewDimensionIds.map((id) => `\`${id}\``).join(", ")}.`
+  : "No review dimensions are currently configured.";
 const binPath = path.join(root, packageJson.bin.ccr);
 const bin = readFileSync(binPath, "utf8");
 if (!bin.startsWith("#!/usr/bin/env node\n")) throw new Error("Packed CLI is missing its shebang.");
+const packageExports = packageJson.exports;
+if (!packageExports || typeof packageExports !== "object" || !("." in packageExports)) {
+  throw new Error("Package must define a root programmatic export.");
+}
+const publicExportFiles = Object.entries(packageExports)
+  .filter(([entry]) => entry !== "./package.json")
+  .flatMap(([entry, target]) => {
+    if (typeof target !== "object" || target === null) {
+      throw new Error("Programmatic package exports must declare import and type targets.");
+    }
+    const paths = [target.types, target.import];
+    if (!paths.every((candidate) => typeof candidate === "string")) {
+      throw new Error("Programmatic package exports must declare import and type targets.");
+    }
+    if (entry === "." && typeof target.require !== "string") {
+      throw new Error("The root package export must support CommonJS consumers.");
+    }
+    if (typeof target.require === "string") paths.push(target.require);
+    return paths.map((candidate) => candidate.slice(2));
+  });
 
 const help = execFileSync(process.execPath, [binPath, "--help"], {
   cwd: root,
@@ -44,7 +86,9 @@ function runInstalled(bin, arguments_, cwd) {
 }
 
 try {
-  const cache = path.join(root, ".npm");
+  // Keep npm's mutable cache inside this smoke run so concurrent Windows checks cannot lock a
+  // workspace-shared cache. The finally block removes it with the consumer fixtures.
+  const cache = path.join(temporaryRoot, "npm-cache");
   const pack = JSON.parse(
     runNpm(
       ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryRoot, "--cache", cache],
@@ -52,9 +96,24 @@ try {
     ),
   )[0];
   const files = pack.files.map((file) => file.path).sort();
-  const expected = ["LICENSE", "README.md", "dist/cli/index.cjs", "package.json"];
-  if (JSON.stringify(files) !== JSON.stringify(expected)) {
-    throw new Error(`Unexpected packed files: ${files.join(", ")}`);
+  const requiredFiles = ["LICENSE", "README.md", packageJson.bin.ccr, "package.json"]
+    .concat(publicExportFiles)
+    .map((file) => file.replace(/^\.\//u, ""));
+  const missingFiles = requiredFiles.filter((file) => !files.includes(file));
+  if (missingFiles.length > 0) {
+    throw new Error(`Packed package is missing declared files: ${missingFiles.join(", ")}`);
+  }
+  const unexpectedFiles = files.filter(
+    (file) => !["LICENSE", "README.md", "package.json"].includes(file) && !file.startsWith("dist/"),
+  );
+  if (unexpectedFiles.length > 0) {
+    throw new Error(
+      `Packed package contains files outside its declared surface: ${unexpectedFiles.join(", ")}`,
+    );
+  }
+  const shippedReadme = readFileSync(path.join(root, "README.md"), "utf8").replace(/\s+/gu, " ");
+  if (!shippedReadme.includes(configuredDimensions)) {
+    throw new Error("Shipped README does not match the configured review dimensions.");
   }
 
   const tarball = path.join(temporaryRoot, pack.filename);
@@ -86,8 +145,12 @@ try {
     process.platform === "win32" ? "ccr.cmd" : "ccr",
   );
   const installedHelp = runInstalled(installedBin, ["--help"], consumer);
-  if (!installedHelp.includes("Repository context management")) {
-    throw new Error("Installed CLI help did not run.");
+  if (
+    !installedHelp.includes("Context-aware, stakeholder-aware code review for Claude Code") ||
+    !installedHelp.includes("Claude Code skills (run inside Claude Code after setup):") ||
+    !installedHelp.includes(`Configured dimension IDs: ${reviewDimensionIds.join(", ") || "none"}`)
+  ) {
+    throw new Error("Installed CLI help is incomplete or stale.");
   }
   const installedVersion = runInstalled(installedBin, ["--version"], consumer).trim();
   if (installedVersion !== packageJson.version) {
@@ -95,6 +158,43 @@ try {
       `Installed CLI version ${installedVersion} does not match package ${packageJson.version}.`,
     );
   }
+  const esmSdkCheckPath = path.join(consumer, "verify-sdk.mjs");
+  writeFileSync(
+    esmSdkCheckPath,
+    `import { createAsuAimlProviderConfig } from "@vctrx/ccr";
+import { DEFAULT_CONTEXT_CONFIG, resolveContextConfig } from "@vctrx/ccr/context";
+import { parseReviewDimensionRegistry } from "@vctrx/ccr/review";
+
+const provider = createAsuAimlProviderConfig({ apiKey: "test-key", model: "gpt-5.2" });
+const config = resolveContextConfig(DEFAULT_CONTEXT_CONFIG, {
+  privacy: { excludedPaths: ["private/**"] },
+});
+const registry = parseReviewDimensionRegistry({
+  dimensions: [{
+    id: "quality",
+    name: "Quality",
+    summary: "Checks observable behavior.",
+    criteria: [{ id: "behavior", name: "Behavior", details: "Review behavior." }],
+  }],
+});
+
+if (provider.model !== "gpt-5.2" || config.privacy.excludedPaths[0] !== "private/**" || registry.dimensions[0]?.id !== "quality") {
+  throw new Error("Installed ESM SDK exports are incomplete.");
+}
+`,
+    "utf8",
+  );
+  execFileSync(process.execPath, [esmSdkCheckPath], { cwd: consumer, windowsHide: true });
+  const cjsSdkCheckPath = path.join(consumer, "verify-sdk.cjs");
+  writeFileSync(
+    cjsSdkCheckPath,
+    `const ccr = require("@vctrx/ccr");
+const config = ccr.createAsuAimlProviderConfig({ apiKey: "test-key", model: "gpt-5.2" });
+if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export is incomplete.");
+`,
+    "utf8",
+  );
+  execFileSync(process.execPath, [cjsSdkCheckPath], { cwd: consumer, windowsHide: true });
 
   execFileSync("git", ["init", "--quiet"], { cwd: consumer, windowsHide: true });
   const preview = runInstalled(installedBin, ["setup"], consumer);
@@ -150,20 +250,30 @@ try {
   ) {
     throw new Error("setup did not install the repository-aware hook skill.");
   }
+  const manualSkillPath = path.join(scripted, ".claude", "skills", "ccr", "SKILL.md");
+  const manualSkill = readFileSync(manualSkillPath, "utf8");
+  if (
+    !manualSkill.includes("# CCR support guide") ||
+    !manualSkill.includes("npx --no-install ccr help <command>") ||
+    !manualSkill.includes(".claude/skills/ccr/references/dimensions.md")
+  ) {
+    throw new Error("setup did not install the current CCR support skill.");
+  }
   const reviewSkillPath = path.join(scripted, ".claude", "skills", "ccr-review", "SKILL.md");
   const codebaseSkillPath = path.join(scripted, ".claude", "skills", "ccr-codebase", "SKILL.md");
   const dimensionsPath = path.join(
     scripted,
     ".claude",
     "skills",
-    "ccr-review",
+    "ccr",
     "references",
     "dimensions.md",
   );
+  const dimensions = readFileSync(dimensionsPath, "utf8");
   if (
     !readFileSync(reviewSkillPath, "utf8").includes("name: ccr-review") ||
     !readFileSync(codebaseSkillPath, "utf8").includes("name: ccr-codebase") ||
-    !readFileSync(dimensionsPath, "utf8").includes('"dimensions": []')
+    !reviewDimensionIds.every((id) => dimensions.includes(`"id": "${id}"`))
   ) {
     throw new Error("setup did not install the data-driven review skills and dimensions.");
   }

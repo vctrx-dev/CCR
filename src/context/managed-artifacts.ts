@@ -1,5 +1,6 @@
-import { CCR_SKILLS, CCR_SKILL_RESOURCES, MANAGED_SKILL_MARKER } from "./skills";
-import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
+import { CCR_SKILL_RESOURCES, RETIRED_CCR_SKILL_RESOURCES } from "./skill-resources";
+import { CCR_SKILLS, MANAGED_SKILL_MARKER } from "./skills";
+import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK, RETIRED_CONTEXT_FILES } from "./templates";
 
 /**
  * Reusable registry for every generated CCR artifact. Add new integrations here (and a skill
@@ -20,6 +21,12 @@ export interface ManagedArtifact {
   path: string;
   setupPolicy: SetupPolicy;
   uninstallPolicy: UninstallPolicy;
+}
+
+/** Identifies an obsolete generated file that setup may remove only when its content is unchanged. */
+export interface RetiredManagedArtifact {
+  content: string;
+  path: string;
 }
 
 export type BlockSetupCondition = "always" | "updateAgentsMd" | "updateClaudeMd";
@@ -49,14 +56,7 @@ const contextArtifacts: readonly ManagedArtifact[] = Object.entries(CONTEXT_FILE
  */
 export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
   ...contextArtifacts,
-  ...CCR_SKILLS.map(({ content, path }) => ({
-    content,
-    kind: "skill" as const,
-    path,
-    setupPolicy: "upgrade-if-marked" as const,
-    uninstallPolicy: "remove-if-marked" as const,
-  })),
-  ...CCR_SKILL_RESOURCES.map(({ content, path }) => ({
+  ...[...CCR_SKILLS, ...CCR_SKILL_RESOURCES].map(({ content, path }) => ({
     content,
     kind: "skill" as const,
     path,
@@ -64,6 +64,13 @@ export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
     uninstallPolicy: "remove-if-marked" as const,
   })),
 ];
+
+/** Upgrade inventory for obsolete generated files; human-edited variants are always preserved. */
+export const RETIRED_MANAGED_ARTIFACTS: readonly RetiredManagedArtifact[] = Object.entries(
+  RETIRED_CONTEXT_FILES,
+)
+  .map(([path, content]) => ({ content, path }))
+  .concat(RETIRED_CCR_SKILL_RESOURCES);
 
 /** Single lifecycle inventory for non-executable marked integrations. */
 export const MANAGED_BLOCK_ARTIFACTS: readonly ManagedBlockArtifact[] = [

@@ -66,6 +66,40 @@ constraint, and the preferred extension path—not a restatement of the implemen
 - Do not comment obvious one-off helpers or repeat TypeScript types in prose. Comments must make the
   next implementation safer or easier to extend.
 
+### Reusable Boundary Map (required for coding agents)
+
+Before creating a helper, parser, provider call, Git read, or managed-file workflow, identify the
+matching boundary below. Reuse it when it fits; when the new behavior is compatible but missing,
+extend that boundary with regression coverage. Do not duplicate a boundary merely to make a
+feature-local implementation convenient.
+
+| Need | Reuse first | Preferred extension path |
+|---|---|---|
+| Repository-relative reads, writes, deletes, symlink checks, or bounded file content | `src/context/files.ts` | Add a constrained helper there; callers must not bypass managed-path checks. |
+| Privacy filtering, approved staged paths, or repository evidence | `src/context/privacy.ts`, `src/context/broker.ts`, `src/review/evidence.ts` | Preserve each source's authorization semantics; share only post-approval formatting via `src/context/evidence-format.ts`. |
+| Generated CCR file or instruction-block lifecycle | `src/context/managed-artifacts.ts`, `src/context/managed-block.ts` | Add registry metadata and let setup/uninstall derive behavior; do not add path-specific lifecycle branches. |
+| CCR configuration parsing, migration, or safe updates | `src/context/config.ts` | Add schema, default, migration, and update behavior together; do not parse or mutate config ad hoc. |
+| Provider contracts, ASU requests, retries, or response-size handling | `src/llm/index.ts`, `src/llm/asu-api-transport.ts`, `src/llm/asu-api-response-body.ts` | Add an adapter behind `ReviewProvider`; reuse the transport and bounded-response boundaries instead of copying retry logic. |
+| Review taxonomy or review evidence presentation | `src/review/dimensions.ts`, `src/review/evidence.ts`, `src/context/evidence-format.ts` | Keep taxonomy data-driven and evidence privacy-filtered; do not add a second registry or formatter. |
+| Supported external API | `src/index.ts`, `src/context/index.ts`, `src/review/index.ts`, `src/llm/index.ts` | Export only stable, documented contracts and update package smoke coverage for each new public entry point. |
+
+### Reusable Boundary Map (required for coding agents)
+
+Before creating a helper, parser, provider call, Git read, or managed-file workflow, identify the
+matching boundary below. Reuse it when it fits; when the new behavior is compatible but missing,
+extend that boundary with regression coverage. Do not duplicate a boundary merely to make a
+feature-local implementation convenient.
+
+| Need | Reuse first | Preferred extension path |
+|---|---|---|
+| Repository-relative reads, writes, deletes, symlink checks, or bounded file content | `src/context/files.ts` | Add a constrained helper there; callers must not bypass managed-path checks. |
+| Privacy filtering, approved staged paths, or repository evidence | `src/context/privacy.ts`, `src/context/broker.ts`, `src/review/evidence.ts` | Preserve each source's authorization semantics; share only post-approval formatting via `src/context/evidence-format.ts`. |
+| Generated CCR file or instruction-block lifecycle | `src/context/managed-artifacts.ts`, `src/context/managed-block.ts` | Add registry metadata and let setup/uninstall derive behavior; do not add path-specific lifecycle branches. |
+| CCR configuration parsing, migration, or safe updates | `src/context/config.ts` | Add schema, default, migration, and update behavior together; do not parse or mutate config ad hoc. |
+| Provider contracts, ASU requests, retries, or response-size handling | `src/llm/index.ts`, `src/llm/asu-api-transport.ts`, `src/llm/asu-api-response-body.ts` | Add an adapter behind `ReviewProvider`; reuse the transport and bounded-response boundaries instead of copying retry logic. |
+| Review taxonomy or review evidence presentation | `src/review/dimensions.ts`, `src/review/evidence.ts`, `src/context/evidence-format.ts` | Keep taxonomy data-driven and evidence privacy-filtered; do not add a second registry or formatter. |
+| Supported external API | `src/index.ts`, `src/context/index.ts`, `src/review/index.ts`, `src/llm/index.ts` | Export only stable, documented contracts and update package smoke coverage for each new public entry point. |
+
 ## Testing & TDD
 
 Use TDD for behavior changes and bug fixes: write or identify a failing behavioral test, implement
@@ -87,6 +121,24 @@ behavior and conditions clearly; `it("should ...")` is preferred but not mandato
 protects against untested modules, not against every uncovered line.
 
 **Blast radius** — `scripts/audit.mjs --blast` maps changed files to affected tests: unit (1:1), integration (module-level), e2e (all).
+
+### Safety-critical change discipline
+
+- For behavior changes and bug fixes, write or identify the failing observable test before changing
+  production code. Keep the regression test when the fix lands; do not satisfy coverage with a test
+  that only mirrors implementation details.
+- Treat the source coverage thresholds as a regression floor. Do not lower them or exclude product
+  code to pass a change; add the narrow behavioral coverage that demonstrates the new contract.
+- Treat request bodies, provider responses, files, Git output, and environment-derived strings as
+  untrusted. Validate their shape, place a size/count/time bound before retaining or forwarding them,
+  and test the boundary and truncation behavior.
+- Errors, logs, CLI output, review context, and telemetry must be safe to disclose. Never echo
+  credentials, tokens, private content, or raw upstream response bodies; preserve only a bounded,
+  redacted diagnostic and prove that behavior with a test.
+- When a user-visible command, packaged help surface, configuration, or review taxonomy changes,
+  update `README.md` and `USER_MANUAL.md` in the same change. Keep `scripts/package-smoke.mjs`
+  deriving its consumer assertions from the shipped source of truth so the package, help, and docs
+  cannot silently diverge.
 
 ## Backend Structure
 
@@ -220,4 +272,4 @@ No `console.log()` in source (use the `log` module). No `debugger`. No commented
 
 ## Architecture
 
-Runtime: Node >=24, ESM. Modules under `src/`: `core/`, `log/`, `git/`, `github/`, `llm/`, `prompt/`, `patch/`, `cli/`, `action/`. Zod for validation, picomatch for globbing, ASU AIML API for LLM.
+Runtime: Node.js >=22.12 is the supported package floor; `.node-version` pins Node 24 as the development default. ESM. Modules under `src/`: `cli/` (terminal interface), `context/` (managed repository context and privacy boundaries), `llm/` (provider contracts and ASU AIML adapter), `review/` (taxonomy and review evidence), and `types/` (ambient declarations). Zod validates external input and picomatch applies privacy globs.

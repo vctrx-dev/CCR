@@ -9,6 +9,7 @@ import {
   listSafeRepositoryPaths,
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
+  readSharedContextFile,
 } from "../../../src/context/broker";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 
@@ -120,4 +121,19 @@ it("should paginate a large safe file inventory without gaps or duplicates", asy
   expect(first.paths.filter((candidate) => second.paths.includes(candidate))).toEqual([]);
   expect(second.omittedCount).toBe(0);
   expect(second.nextCursor).toBeUndefined();
+});
+
+it("should bound an oversized shared context document before returning it", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-shared-context-"));
+  roots.push(root);
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/project.md"),
+    `${"p".repeat(10_000)}SHOULD_NOT_BE_EXPOSED`,
+    "utf8",
+  );
+
+  await expect(readSharedContextFile(root, ".ccr/project.md")).resolves.toBe(
+    `${"p".repeat(10_000)}\n[CCR truncated at 10000 characters]\n`,
+  );
 });

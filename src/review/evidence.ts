@@ -1,5 +1,10 @@
-import { lstat, readFile } from "node:fs/promises";
-import { assertSafeManagedPath, isFileNotFound } from "../context/files";
+import { lstat } from "node:fs/promises";
+import {
+  normalizeRepositoryPath,
+  sortUniqueRepositoryPaths,
+  truncateEvidence,
+} from "../context/evidence-format";
+import { assertSafeManagedPath, isFileNotFound, readBoundedTextIfExists } from "../context/files";
 import {
   readIndexEntries,
   readStagedDiff,
@@ -16,6 +21,9 @@ import {
 /**
  * Privacy-preserving live-change boundary for review skills. It exposes only Git-selected staged,
  * unstaged, and untracked evidence after the shared exclusion policy and regular-file checks.
+ * Worktree evidence must use the bounded filesystem helper rather than a direct full-file read.
+ * New review evidence capabilities should extend this boundary, not bypass its filtering or create
+ * a separate live-change reader.
  */
 
 const MAX_REVIEW_EVIDENCE_CHARACTERS = 20_000;
@@ -25,17 +33,6 @@ export interface SafeReviewChanges {
   unstagedPaths: string[];
   untrackedPaths: string[];
   excludedPathCount: number;
-}
-
-function sortPaths(paths: string[]): string[] {
-  return [...new Set(paths.map((candidate) => candidate.replaceAll("\\", "/")))].sort((a, b) =>
-    a.localeCompare(b),
-  );
-}
-
-function truncate(content: string): string {
-  if (content.length <= MAX_REVIEW_EVIDENCE_CHARACTERS) return content;
-  return `${content.slice(0, MAX_REVIEW_EVIDENCE_CHARACTERS)}\n[CCR truncated review evidence at ${MAX_REVIEW_EVIDENCE_CHARACTERS} characters]\n`;
 }
 
 async function isRegularWorktreeFile(root: string, relativePath: string): Promise<boolean> {
@@ -91,19 +88,19 @@ export async function listSafeReviewChanges(root: string): Promise<SafeReviewCha
       ...untrackedFiltered.excluded,
       ...unsafeUnstagedPaths,
       ...unsafeUntrackedPaths,
-    ].map((candidate) => candidate.replaceAll("\\", "/")),
+    ].map(normalizeRepositoryPath),
   );
   return {
-    stagedPaths: sortPaths(staged.included),
-    unstagedPaths: sortPaths(unstagedPaths),
-    untrackedPaths: sortPaths(untrackedPaths),
+    stagedPaths: sortUniqueRepositoryPaths(staged.included),
+    unstagedPaths: sortUniqueRepositoryPaths(unstagedPaths),
+    untrackedPaths: sortUniqueRepositoryPaths(untrackedPaths),
     excludedPathCount: excludedPaths.size,
   };
 }
 
 /** Reads bounded current evidence for one path previously approved by `listSafeReviewChanges`. */
 export async function readSafeReviewEvidence(root: string, candidate: string): Promise<string> {
-  const normalized = candidate.replaceAll("\\", "/");
+  const normalized = normalizeRepositoryPath(candidate);
   const changes = await listSafeReviewChanges(root);
   const isStaged = changes.stagedPaths.includes(normalized);
   const isUnstaged = changes.unstagedPaths.includes(normalized);
@@ -112,13 +109,21 @@ export async function readSafeReviewEvidence(root: string, candidate: string): P
     throw new Error("Path is not approved review evidence.");
   }
   const sections: string[] = [];
+  let hasTruncatedEvidence = false;
   if (isStaged) sections.push(`## Staged diff\n\n${readStagedDiff(root, normalized)}`);
   if (isUnstaged) sections.push(`## Unstaged diff\n\n${readUnstagedDiff(root, normalized)}`);
   if (isUntracked) {
     const target = await assertSafeManagedPath(root, normalized);
     if (!(await lstat(target)).isFile())
       throw new Error("Approved review path is no longer regular.");
-    sections.push(`## Untracked file\n\n${await readFile(target, "utf8")}`);
+    const content = await readBoundedTextIfExists(target, MAX_REVIEW_EVIDENCE_CHARACTERS);
+    if (content === undefined) throw new Error("Approved review path no longer exists.");
+    hasTruncatedEvidence = content.isTruncated;
+    sections.push(`## Untracked file\n\n${content.content}`);
   }
-  return truncate(`${sections.join("\n\n")}\n`);
+  return truncateEvidence(`${sections.join("\n\n")}\n`, {
+    isTruncated: hasTruncatedEvidence,
+    marker: `[CCR truncated review evidence at ${MAX_REVIEW_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_REVIEW_EVIDENCE_CHARACTERS,
+  });
 }

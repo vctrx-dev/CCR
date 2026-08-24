@@ -1,11 +1,13 @@
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_CONTEXT_CONFIG, parseContextConfig, serializeContextConfig } from "./config";
 import type { ContextConfig } from "./config";
 import { CONFIG_MANUAL } from "./config-manual";
-import { readManagedTextIfExists, writeManagedText } from "./files";
+import { assertSafeManagedPath, readManagedTextIfExists, writeManagedText } from "./files";
 import {
   MANAGED_ARTIFACTS,
   MANAGED_BLOCK_ARTIFACTS,
+  RETIRED_MANAGED_ARTIFACTS,
   managedSkillOwnership,
 } from "./managed-artifacts";
 import type { ManagedArtifact } from "./managed-artifacts";
@@ -16,7 +18,7 @@ import { managedBlock, upsertManagedBlock } from "./managed-block";
  * registry, not in this workflow, so their lifecycle is handled consistently.
  */
 
-export type SetupAction = "create" | "modify" | "preserve" | "unchanged";
+export type SetupAction = "create" | "modify" | "preserve" | "remove" | "unchanged";
 
 export interface SetupChange {
   path: string;
@@ -71,6 +73,23 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
       return planArtifactChange(artifact, existing);
     }),
   );
+  const retiredEntries = (
+    await Promise.all(
+      RETIRED_MANAGED_ARTIFACTS.map(async (artifact): Promise<SetupChange | undefined> => {
+        const existing = await readManagedTextIfExists(root, artifact.path);
+        if (existing === undefined) return undefined;
+        const isRetiredPackageSkill =
+          artifact.path.startsWith(".claude/skills/") &&
+          managedSkillOwnership(existing) === "package";
+        return {
+          path: artifact.path,
+          action: existing === artifact.content || isRetiredPackageSkill ? "remove" : "preserve",
+          content: artifact.content,
+          expectedContent: existing,
+        };
+      }),
+    )
+  ).filter((change): change is SetupChange => change !== undefined);
   const changes = await Promise.all(
     blockArtifacts.map(async (artifact): Promise<SetupChange> => {
       const relativePath = artifact.path;
@@ -84,7 +103,7 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
       };
     }),
   );
-  return { root, config, changes: [...managedEntries, ...changes] };
+  return { root, config, changes: [...managedEntries, ...retiredEntries, ...changes] };
 }
 
 /** Applies the preview while preserving existing context and user-authored files. */
@@ -106,6 +125,11 @@ export async function applySetup(
   const changedPaths: string[] = [];
   for (const change of preview.changes) {
     if (change.action === "unchanged" || change.action === "preserve") continue;
+    if (change.action === "remove") {
+      await unlink(await assertSafeManagedPath(root, change.path));
+      changedPaths.push(change.path);
+      continue;
+    }
     await writeManagedText(root, change.path, change.content);
     changedPaths.push(change.path);
   }

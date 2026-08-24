@@ -17,7 +17,7 @@ export interface JournalEntry extends JournalResult {
   content: string;
 }
 
-/** Pre-resolved branch identity and commit, supplied by hot paths that already hold them. */
+/** Metadata for a commit that already exists, supplied by post-commit or clean-HEAD workflows. */
 export interface JournalDetails {
   branch: string;
   directory: string;
@@ -69,27 +69,25 @@ async function readJournalNames(root: string, relativeDirectory: string): Promis
 }
 
 /**
- * Creates a journal skeleton whose timestamp, branch, commit, and path come from deterministic
- * inputs. Pass `details` when the caller already resolved branch and commit to avoid Git round-trips.
+ * Creates a journal skeleton. Omit `details` for uncommitted work so the entry does not claim the
+ * current HEAD contains those changes; pass it only when the represented commit already exists.
  */
 export async function createJournalEntry(
   root: string,
   now: Date = new Date(),
-  changedPaths: string[] = [],
   details?: JournalDetails,
 ): Promise<JournalResult> {
   const isoTimestamp = now.toISOString().replace(/\.\d{3}Z$/, "Z");
   const timestamp = isoTimestamp.replaceAll(":", "-");
-  const { branch, directory } = details ?? branchDetails(root);
-  const commit = details?.commit ?? readGitValue(root, ["rev-parse", "HEAD"]);
+  const { directory } = details ?? branchDetails(root);
   const relativePath = await freeJournalPath(root, `.ccr/journal/${directory}`, timestamp);
-  const paths = changedPaths.length
-    ? changedPaths.map((relativePath) => `- ${relativePath}`).join("\n")
-    : "- None recorded.";
+  const committedMetadata = details
+    ? `- **Branch**: \`${details.branch}\`\n- **Commit**: \`${details.commit}\`\n`
+    : "";
   await writeManagedText(
     root,
     relativePath,
-    `# CCR Continuity\n\n- **Timestamp**: ${isoTimestamp}\n- **Branch**: \`${branch}\`\n- **Commit**: \`${commit}\`\n\n## Changed paths\n\n${paths}\n\n## Summary\n\nNeeds concise completion.\n\n## Findings and outcomes\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n`,
+    `# CCR Journal\n\n- **Timestamp**: ${isoTimestamp}\n${committedMetadata}\n## Summary\n\nNeeds concise completion.\n\n## Findings and outcomes\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n`,
   );
   return { path: relativePath };
 }
@@ -126,6 +124,49 @@ async function findJournalEntryForCommit(
   return undefined;
 }
 
+async function findWorkingJournalEntry(
+  root: string,
+  directory: string,
+): Promise<JournalEntry | undefined> {
+  const relativeDirectory = `.ccr/journal/${directory}`;
+  const names = (await readJournalNames(root, relativeDirectory)).sort().reverse();
+  for (const name of names) {
+    const relativePath = `${relativeDirectory}/${name}`;
+    const content = await readFile(await assertSafeManagedPath(root, relativePath), "utf8");
+    if (!content.includes("- **Commit**:")) return { path: relativePath, content };
+  }
+  return undefined;
+}
+
+/** Returns the branch's pending journal, creating one without branch or commit metadata if needed. */
+export async function ensureWorkingJournalEntry(
+  root: string,
+  now: Date = new Date(),
+): Promise<JournalResult> {
+  const { directory } = branchDetails(root);
+  const existing = await findWorkingJournalEntry(root, directory);
+  return existing ? { path: existing.path } : createJournalEntry(root, now);
+}
+
+/** Attaches real commit metadata to the newest pending journal after that commit exists. */
+export async function finalizeWorkingJournalEntry(
+  root: string,
+  details: JournalDetails,
+): Promise<JournalResult | undefined> {
+  const working = await findWorkingJournalEntry(root, details.directory);
+  if (!working) return undefined;
+  const lineEnding = working.content.includes("\r\n") ? "\r\n" : "\n";
+  const timestampStart = working.content.indexOf("- **Timestamp**:");
+  const timestampEnd = working.content.indexOf(`${lineEnding}${lineEnding}`, timestampStart);
+  if (timestampStart < 0 || timestampEnd < 0) {
+    throw new Error(`Journal timestamp metadata is malformed: ${working.path}`);
+  }
+  const committedMetadata = `${lineEnding}- **Branch**: \`${details.branch}\`${lineEnding}- **Commit**: \`${details.commit}\``;
+  const updated = `${working.content.slice(0, timestampEnd)}${committedMetadata}${working.content.slice(timestampEnd)}`;
+  await writeManagedText(root, working.path, updated);
+  return { path: working.path };
+}
+
 function currentCommit(root: string): string {
   try {
     return readGitValue(root, ["rev-parse", "HEAD"]);
@@ -143,7 +184,7 @@ export async function ensureJournalEntryForHead(
   const commit = currentCommit(root);
   const existing = await findJournalEntryForCommit(root, commit, directory);
   if (existing) return existing;
-  return createJournalEntry(root, now, [], { branch, directory, commit });
+  return createJournalEntry(root, now, { branch, directory, commit });
 }
 
 /** Reads only the configured number of newest entries for the exact current branch. */
@@ -159,7 +200,7 @@ export async function readRecentJournalEntries(root: string): Promise<JournalEnt
     names.map(async (name) => {
       const relativePath = `${relativeDirectory}/${name}`;
       const content = await readFile(await assertSafeManagedPath(root, relativePath), "utf8");
-      if (!content.includes(`- **Branch**: \`${branch}\``)) {
+      if (content.includes("- **Branch**:") && !content.includes(`- **Branch**: \`${branch}\``)) {
         throw new Error(`Journal branch metadata mismatch: ${relativePath}`);
       }
       return { path: relativePath, content };

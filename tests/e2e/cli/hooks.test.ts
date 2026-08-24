@@ -116,7 +116,7 @@ describe("hooks CLI", () => {
     expect(await readFile(skillPath, "utf8")).toBe(originalSkill);
   });
 
-  it("should defer status and removal when skill provenance exists", async () => {
+  it("should reject invalid provenance before status or removal claims ownership", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-provenance-"));
     roots.push(root);
     await run("git", ["init", "--quiet"], { cwd: root });
@@ -131,27 +131,46 @@ describe("hooks CLI", () => {
     clear();
     await createCli(io).parseAsync(["node", "ccr", "setup", "--json"]);
     const setupPreview = JSON.parse(output());
-    expect(setupPreview.hooks.preCommit.status).toBe("provenance-managed");
-    expect(setupPreview.hooks.postCommit.status).toBe("provenance-managed");
+    expect(setupPreview.hooks.preCommit.status).toBe("provenance-invalid");
+    expect(setupPreview.hooks.postCommit.status).toBe("provenance-invalid");
 
     clear();
     await createCli(io).parseAsync(["node", "ccr", "hooks", "status"]);
-    expect(output()).toContain("provenance-managed by `/ccr-hooks`");
+    expect(output()).toContain("invalid hook provenance");
+    expect(output()).toContain("Preserve or move");
 
     clear();
     await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--apply"]);
-    expect(output()).toContain("Run `/ccr-hooks remove`");
+    expect(output()).toContain("invalid hook provenance");
     expect(output()).not.toContain("hooks removed");
     expect(await readFile(hookPath, "utf8")).toBe(existing);
 
     clear();
     await createCli(io).parseAsync(["node", "ccr", "uninstall", "--apply"]);
-    expect(output()).toContain("Run `/ccr-hooks remove`");
+    expect(output()).toContain("invalid hook provenance");
     expect(output()).not.toContain("CCR integration removed");
     expect(await readFile(hookPath, "utf8")).toBe(existing);
     expect(await readFile(path.join(root, ".claude/skills/ccr-hooks/SKILL.md"), "utf8")).toContain(
       "name: ccr-hooks",
     );
+  });
+
+  it("should report existing markers without state as legacy and unprovenanced", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-unprovenanced-"));
+    roots.push(root);
+    await run("git", ["init", "--quiet"], { cwd: root });
+    const { io, output } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+    await writeFile(
+      path.join(root, ".git/hooks/pre-commit"),
+      "#!/bin/sh\n# ccr:start - advisory context check\nlegacy command\n# ccr:end\n",
+      "utf8",
+    );
+
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "status"]);
+
+    expect(output()).toContain("legacy/unprovenanced");
+    expect(output()).toContain("no original hook history is claimed");
   });
 
   it("should defer enabled hook installation to the repository-aware skill", async () => {
@@ -193,10 +212,10 @@ describe("hooks CLI", () => {
     await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
     await run("git", ["add", "--", "app.py"], { cwd: root });
     clear();
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "check"]);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "pre-commit"]);
     expect(output()).toBe("");
     await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "after-commit"]);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toBe("");
 
     await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--apply"]);
@@ -218,9 +237,32 @@ describe("hooks CLI", () => {
     await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
 
     const { io, output } = captureIo(root);
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "after-commit"]);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toContain("started local journal entry");
     expect(output()).toContain("Use the ccr-context skill");
     expect(output()).toContain("changing .ccr/project.md only if");
+  });
+
+  it("should retain hidden compatibility aliases for previously generated hooks", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-hook-aliases-"));
+    roots.push(root);
+    await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+    const setupIo = captureIo(root).io;
+    await createCli(setupIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(setupIo).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.enabled",
+      "false",
+      "--apply",
+    ]);
+
+    const { io, output } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "check"]);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "after-commit"]);
+
+    expect(output()).toBe("");
   });
 });

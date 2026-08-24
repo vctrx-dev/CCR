@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -44,7 +44,11 @@ it("should expose review evidence and reuse the current-commit journal through t
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal"]);
   const first = JSON.parse(output);
+  const journal = await readFile(path.join(root, first.path), "utf8");
+  expect(journal).not.toContain("**Branch**");
+  expect(journal).not.toContain("**Commit**");
+  expect(journal).not.toContain("## Changed paths");
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal"]);
   expect(JSON.parse(output)).toEqual(first);
-});
+}, 10_000);

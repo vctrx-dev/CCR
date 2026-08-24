@@ -96,7 +96,7 @@ it("should distinguish current, stale, malformed, and absent legacy blocks", asy
 
   await writeFile(
     hookPath,
-    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
+    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
     "utf8",
   );
   expect((await readContextHookStatus(root)).status).toBe("current");
@@ -116,7 +116,7 @@ it("should report unavailable Git hook metadata without throwing", async () => {
   expect((await readContextHookStatus(root)).status).toBe("unavailable");
 });
 
-it("should preserve unrelated hook bytes during legacy cleanup", async () => {
+it("should preserve every byte outside an unprovenanced legacy marker block", async () => {
   const root = await createRepository();
   const hookPath = path.join(root, ".git/hooks/pre-commit");
   const original = "#!/bin/sh\r\npnpm test\r\n";
@@ -127,7 +127,7 @@ it("should preserve unrelated hook bytes during legacy cleanup", async () => {
   );
 
   expect((await removeContextHook(root)).status).toBe("removed");
-  expect(await readFile(hookPath, "utf8")).toBe(original);
+  expect(await readFile(hookPath, "utf8")).toBe(`${original}\r\n`);
 });
 
 it.each(["\n", "\r\n"])(
@@ -173,7 +173,7 @@ it("should remove a post-commit legacy block independently of pre-commit", async
   const hookPath = path.join(root, ".git/hooks/post-commit");
   await writeFile(
     hookPath,
-    '#!/bin/sh\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n',
+    '#!/bin/sh\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n',
     "utf8",
   );
   expect((await readContextHookStatus(root, "post-commit")).status).toBe("current");
@@ -186,12 +186,12 @@ it("should remove both legacy advisory hooks", async () => {
   const root = await createRepository();
   await writeFile(
     path.join(root, ".git/hooks/pre-commit"),
-    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
+    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
     "utf8",
   );
   await writeFile(
     path.join(root, ".git/hooks/post-commit"),
-    '#!/bin/sh\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n',
+    '#!/bin/sh\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n',
     "utf8",
   );
 
@@ -204,7 +204,7 @@ it("should validate both legacy hooks before writing either one", async () => {
   const root = await createRepository();
   const preCommitPath = path.join(root, ".git/hooks/pre-commit");
   const preCommit =
-    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
+    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
   await writeFile(preCommitPath, preCommit, "utf8");
   await writeFile(
     path.join(root, ".git/hooks/post-commit"),
@@ -221,9 +221,9 @@ it("should reject drift after a two-hook removal preview before writing", async 
   const preCommitPath = path.join(root, ".git/hooks/pre-commit");
   const postCommitPath = path.join(root, ".git/hooks/post-commit");
   const preCommit =
-    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
+    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
   const postCommit =
-    '#!/bin/sh\n\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n';
+    '#!/bin/sh\n\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n';
   await writeFile(preCommitPath, preCommit, "utf8");
   await writeFile(postCommitPath, postCommit, "utf8");
   const preview = await previewContextHookRemoval(root);

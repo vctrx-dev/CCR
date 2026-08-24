@@ -1,5 +1,15 @@
-import { classifyContextChanges, readChangedPaths, readGitValue } from "./git";
-import { branchDetails, createJournalEntry, journalEntryExistsForCommit } from "./journal";
+import {
+  classifyContextChanges,
+  hasWorkingTreeChanges,
+  readChangedPaths,
+  readGitValue,
+} from "./git";
+import {
+  branchDetails,
+  createJournalEntry,
+  finalizeWorkingJournalEntry,
+  journalEntryExistsForCommit,
+} from "./journal";
 import type { JournalDetails } from "./journal";
 
 /**
@@ -37,9 +47,16 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
     const { branch, directory } = branchDetails(root);
     const details: JournalDetails = { branch, directory, commit };
     if (!(await journalEntryExistsForCommit(root, commit, directory))) {
-      const created = await createJournalEntry(root, new Date(), changed, details);
-      journalPath = created.path;
-      journalCreated = true;
+      const working = hasWorkingTreeChanges(root)
+        ? undefined
+        : await finalizeWorkingJournalEntry(root, details);
+      if (working) {
+        journalPath = working.path;
+      } else {
+        const created = await createJournalEntry(root, new Date(), details);
+        journalPath = created.path;
+        journalCreated = true;
+      }
     }
   } catch {
     // Journaling must never break the advisory hook; the context warning still applies.

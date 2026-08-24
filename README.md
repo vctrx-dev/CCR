@@ -11,8 +11,8 @@ The complete product combines:
 - branch-local continuity;
 - an advisory GitHub Action using the same review contracts.
 
-The staged roadmap reaches `v1.0.0` when the researched review-dimension set and advisory GitHub
-Action ship on top of the current context and review-skill foundations.
+The staged roadmap reaches `v1.0.0` by expanding and validating the review taxonomy, then shipping
+the advisory GitHub Action on top of the current context and review-skill foundations.
 
 ## One package, optional components
 
@@ -31,6 +31,10 @@ the developer chooses which components to enable:
 Setup previews changes unless `--apply` is supplied. Components can be removed independently with
 the matching uninstall command. The GitHub Action remains a later opt-in component.
 
+An uncommitted working journal is titled `CCR Journal` and contains no Branch, Commit, or changed-path
+metadata. The post-commit hook attaches Branch and Commit only after Git creates the commit, reusing
+the working entry instead of creating a duplicate.
+
 ## Install in a project or globally
 
 Choose a project-local install when CCR belongs to the repository and should be available through its
@@ -46,6 +50,11 @@ npx --no-install ccr config init --apply
 npx --no-install ccr setup --apply
 ```
 
+Run `npx --no-install ccr help` to see all terminal commands, Claude Code skills, review syntax, and
+currently configured dimension IDs. Use `npx --no-install ccr help <command>` or
+`npx --no-install ccr <group> --help` for command-specific arguments. A bare `ccr` command requires
+a global installation; project-local installs use the `npx --no-install` prefix.
+
 Hooks are controlled by the generated `.ccr/config.json`. Setup installs the repository-aware
 `/ccr-hooks` skill; `/ccr-context initialize` invokes it when `hooks.enabled` is true.
 
@@ -60,17 +69,45 @@ ccr config init --apply
 ccr setup --apply
 ```
 
-The global install provides the CLI only. It does not modify a repository until you run the commands
-from that repository. Neither installation creates the shared `.ccr` context files or Git hooks by
-itself.
+The global install provides the CLI. A project-local installation also exposes CCR's programmatic
+API for Node.js integrations. Neither installation creates the shared `.ccr` context files or Git
+hooks by itself.
+
+## Programmatic API
+
+CCR ships an ESM API for integrations that need the same validated configuration, managed-artifact
+lifecycle, privacy-filtered evidence, review taxonomy, or provider contracts as the CLI. Import only
+the documented package entry points—`@vctrx/ccr`, `@vctrx/ccr/context`, `@vctrx/ccr/review`, and
+`@vctrx/ccr/llm`—rather than internal source paths. The root entry also supports CommonJS `require`;
+focused subpaths are ESM-only so they retain shared chunks and avoid duplicating the full SDK.
+
+```ts
+import {
+  createAsuAimlProviderConfig,
+  DEFAULT_CONTEXT_CONFIG,
+  resolveContextConfig,
+} from "@vctrx/ccr";
+
+const config = resolveContextConfig(DEFAULT_CONTEXT_CONFIG, {
+  privacy: { excludedPaths: ["internal/**"] },
+});
+const provider = createAsuAimlProviderConfig({
+  apiKey: process.env.ASU_API_KEY ?? "",
+  model: "gpt-5.2",
+});
+```
+
+The API never installs CCR, modifies a repository, reads repository evidence, or sends a provider
+request merely because it is imported. Writes and evidence reads occur only through explicit API
+calls and retain the same managed-path and privacy safeguards as the CLI.
 
 CCR is not published yet. To test a packed build from this repository:
 
 ```bash
 pnpm verify
 npm pack
-npm install --save-dev /path/to/vctrx-ccr-0.4.0.tgz
-# or globally: npm install --global /path/to/vctrx-ccr-0.4.0.tgz
+npm install --save-dev /path/to/vctrx-ccr-VERSION.tgz
+# or globally: npm install --global /path/to/vctrx-ccr-VERSION.tgz
 ```
 
 Then use the same project-local or global commands above.
@@ -92,7 +129,7 @@ Then open Claude Code:
 
 | Command | Purpose |
 |---|---|
-| `/ccr` | Explain the installed package, safety boundaries, commands, and roadmap |
+| `/ccr [question]` | Answer doubts about installed commands, arguments, skills, dimensions, and safety boundaries |
 | `/ccr-hooks sync` | Choose and apply the repository's native hook integration |
 | `/ccr-hooks status` | Explain the active hook strategy and CCR checks |
 | `/ccr-hooks remove` | Remove only CCR-managed hook integration |
@@ -105,13 +142,17 @@ Then open Claude Code:
 | `/ccr-codebase [all\|dimension,...]` | Review the complete codebase and live changes without fixing them |
 
 Both review skills load their taxonomy from the validated data-only
-`src/review/dimensions.json` registry. Blank arguments default to all dimensions; comma-separated IDs
-select a subset. The registry is intentionally empty in this development revision because the nine
-research definitions were not supplied. A review stops and reports that condition instead of
-inventing criteria. Adding, deleting, reordering, or revising dimensions changes only that JSON file.
+`src/review/dimensions.json` registry. Current review dimensions: `fairness-evaluation`, `pedagogy`,
+`decision-fairness`, `inclusion`, `transparency`, `privacy`.
+Blank arguments default to all dimensions; comma-separated IDs select a subset. `npx --no-install ccr help`
+prints the IDs bundled in the installed version. An empty registry stops a review and reports that
+condition instead of inventing criteria. To add, delete, reorder, or revise dimensions, change the
+registry first; also update matching README and user-manual references, then run package smoke to
+verify the shipped help and documentation remain aligned.
 
-Reviews always use adaptive subagents. They cluster related dimensions and evidence traces instead
-of always creating one agent per dimension, then verify and deduplicate the merged findings. Output
+Reviews fan out exactly one subagent per selected dimension. Each worker receives the complete criteria
+for its dimension and reports criterion coverage plus evidence-backed findings. The master agent then
+collects, deduplicates, verifies, and reports only validated findings.
 contains severity, file, issue, triggering case, and dimension; source code is never changed without
 later approval. The privacy broker exposes staged, unstaged, and untracked evidence without exposing
 excluded paths.
@@ -133,7 +174,7 @@ is the explicit write confirmation. After it succeeds, `.ccr/config-manual.md` e
 in the same order as `.ccr/config.json`. Edit `.ccr/config.json` directly or use
 `ccr config set <key> <value> --apply`, validate it, and then run setup. `ccr config init --apply`
 creates `.ccr/config.json` and `.ccr/config-manual.md`. `ccr setup --apply` then creates
-`.ccr/index.md`, `.ccr/project.md`, and `.ccr/stakeholders.md` as shared context. The initial
+`.ccr/project.md` and `.ccr/stakeholders.md` as shared context. The initial
 `/ccr-context initialize` prompt fills the context from repository evidence; it is not the command
 that creates the `.ccr` folder structure. Setup preserves existing context and instructions, executes
 no repository-resolved Claude command, and never commits or pushes.
@@ -192,19 +233,19 @@ The complete default file is:
 }
 ```
 
-When upgrading from `0.1.x`, remove `.ccr/architecture.md`, `.ccr/decisions.md`, and
-`.ccr/risks.md`, plus their routes in `.ccr/index.md`. Setup does not delete existing context
-automatically because those files may contain developer-authored information; move any still-useful
-technical facts into `.ccr/project.md` first.
+When upgrading from an older CCR version, setup removes the obsolete `.ccr/index.md` only when it
+still exactly matches CCR's generated template. A human-edited index is preserved for manual review.
+For `0.1.x` context, move useful facts from `.ccr/architecture.md`, `.ccr/decisions.md`, and
+`.ccr/risks.md` into `.ccr/project.md` before deleting those old pages.
 
 Runtime requirement: Node.js 22.12 or later and Claude Code 2.1.0 or later.
 
 ## Current scope
 
-The package provides context management plus data-driven change and codebase review skills. The
-review workflow is installed and tested, but its research taxonomy is intentionally empty until the
-dimension definitions are added. Automated fixes, human-feedback flows, and the GitHub Action remain
-on the roadmap and are not claimed as available.
+The package provides context management plus data-driven change and codebase review skills. Its
+review taxonomy covers fairness evaluation, pedagogy, decision fairness, inclusion, transparency,
+and privacy. Automated fixes, human-feedback flows, and the GitHub Action remain on the roadmap.
+They are not claimed as available.
 
 ## Development
 

@@ -121,7 +121,7 @@ describe("classifyContextChanges", () => {
 describe("isSharedContext", () => {
   it("should classify shared .ccr files and exclude local state", () => {
     expect(isSharedContext(".ccr/project.md")).toBe(true);
-    expect(isSharedContext(".ccr/index.md")).toBe(true);
+    expect(isSharedContext(".ccr/index.md")).toBe(false);
     expect(isSharedContext(".ccr/stakeholders.md")).toBe(true);
     expect(isSharedContext(".ccr/journal/feature_x/2026-01-01T00-00-00Z.md")).toBe(false);
     expect(isSharedContext(".ccr/config.local.json")).toBe(false);

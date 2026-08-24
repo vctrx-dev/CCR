@@ -32,10 +32,10 @@ export interface HookResult {
 
 const HOOK_DEFINITIONS: Record<CcrHookName, ManagedBlock> = {
   "pre-commit": managedBlock(`# ccr:start - advisory context check
-npx --no-install ccr hooks check 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2
+npx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2
 # ccr:end`),
   "post-commit": managedBlock(`# ccr:start - post-commit context check
-npx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2
+npx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2
 # ccr:end`),
 };
 
@@ -159,7 +159,7 @@ async function planContextHookRemoval(
   }
   return {
     content: removeManagedBlock(existing, definition, resolved.path, {
-      terminalSeparator: "legacy-blank",
+      terminalSeparator: "preserve",
     }),
     original: existing,
     result: { path: resolved.path, status: "removed" },
@@ -229,11 +229,6 @@ export async function readContextHookStatus(
   } catch {
     return { path: hookPath, status: "unavailable" };
   }
-}
-
-/** Returns whether the repository-aware skill has unfinished provenance-managed hook state. */
-export function hasSkillManagedHookState(root: string): boolean {
-  return existsSync(path.join(root, ".ccr", "private", "hooks-state.json"));
 }
 
 /** Validates both legacy hooks and captures exact bytes before cleanup starts. */

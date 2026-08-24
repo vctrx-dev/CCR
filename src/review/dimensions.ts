@@ -2,26 +2,35 @@ import { z } from "zod";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
 import dimensionData from "./dimensions.json";
 
+/**
+ * Shared data-driven review taxonomy. Add or revise dimensions in `dimensions.json` and validate
+ * through this module; review features must not introduce a second hard-coded criteria registry.
+ */
+
 const dimensionIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 
-const reviewCriterionSchema = z.object({
-  id: dimensionIdSchema,
-  name: z.string().trim().min(1),
-  details: z.string().trim().min(1),
-});
+const reviewCriterionSchema = z
+  .object({
+    id: dimensionIdSchema,
+    name: z.string().trim().min(1),
+    details: z.string().trim().min(1),
+  })
+  .strict();
 
-const reviewDimensionSchema = z.object({
-  id: dimensionIdSchema,
-  name: z.string().trim().min(1),
-  summary: z.string().trim().min(1),
-  relatedDimensions: z.array(dimensionIdSchema),
-  criteria: z.array(reviewCriterionSchema).min(1),
-});
+const reviewDimensionSchema = z
+  .object({
+    id: dimensionIdSchema,
+    name: z.string().trim().min(1),
+    summary: z.string().trim().min(1),
+    criteria: z.array(reviewCriterionSchema).min(1),
+  })
+  .strict();
 
-const reviewDimensionRegistrySchema = z.object({
-  schemaVersion: z.literal(1),
-  dimensions: z.array(reviewDimensionSchema),
-});
+const reviewDimensionRegistrySchema = z
+  .object({
+    dimensions: z.array(reviewDimensionSchema),
+  })
+  .strict();
 
 export type ReviewDimensionRegistry = z.infer<typeof reviewDimensionRegistrySchema>;
 
@@ -42,16 +51,10 @@ export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionReg
   const registry = reviewDimensionRegistrySchema.parse(input);
   const duplicateDimension = duplicate(registry.dimensions.map(({ id }) => id));
   if (duplicateDimension) throw new Error(`Duplicate dimension ID: ${duplicateDimension}`);
-  const dimensionIds = new Set(registry.dimensions.map(({ id }) => id));
   for (const dimension of registry.dimensions) {
     const duplicateCriterion = duplicate(dimension.criteria.map(({ id }) => id));
     if (duplicateCriterion) {
       throw new Error(`Duplicate criterion ID in ${dimension.id}: ${duplicateCriterion}`);
-    }
-    for (const related of dimension.relatedDimensions) {
-      if (!dimensionIds.has(related)) {
-        throw new Error(`Unknown related dimension ${related} in ${dimension.id}`);
-      }
     }
   }
   return registry;
@@ -73,9 +76,9 @@ ${MANAGED_SKILL_MARKER}
 
 ${emptyNotice}
 
-The array order is the canonical order for selection, coverage ledgers, and reports. Treat each
-criterion's details as binding review guidance. Use \`relatedDimensions\` only to plan coherent
-subagent groups; it never removes a selected dimension from coverage.
+The array order is the canonical order for selection, coverage ledgers, and reports. Each dimension
+owns its fixed criteria; treat each criterion's details as binding review guidance. Apply criteria
+within their parent dimension and never remove a selected dimension from coverage.
 
 \`\`\`json
 ${JSON.stringify(registry, null, 2)}

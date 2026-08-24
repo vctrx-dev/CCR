@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  assertAsuAimlSecureBaseUrl,
   createAsuAimlProviderConfig,
   estimateCostUsd,
   readAsuAimlProviderConfig,
@@ -63,6 +64,45 @@ describe("createAsuAimlProviderConfig", () => {
     expect(() => createAsuAimlProviderConfig({ apiKey: "key", model: "" })).toThrow(
       "model must not be empty.",
     );
+  });
+
+  it("rejects HTTP base URLs so bearer credentials are never sent insecurely", () => {
+    expect(() =>
+      createAsuAimlProviderConfig({
+        apiKey: "key",
+        model: "gpt-5",
+        baseUrl: "http://localhost:8080/query",
+      }),
+    ).toThrow("Expected an HTTPS URL.");
+  });
+
+  it.each(["https://username@example.com/query", "https://username:password@example.com/query"])(
+    "rejects credential-bearing HTTPS base URL %s",
+    (baseUrl) => {
+      expect(() =>
+        createAsuAimlProviderConfig({
+          apiKey: "key",
+          model: "gpt-5",
+          baseUrl,
+        }),
+      ).toThrow("ASU AIML endpoint URL must not include credentials.");
+    },
+  );
+
+  it("returns a safe validation error for a malformed direct endpoint", () => {
+    const malformedEndpoint = "not a URL";
+    let receivedError: Error | undefined;
+
+    try {
+      assertAsuAimlSecureBaseUrl(malformedEndpoint);
+    } catch (error) {
+      if (error instanceof Error) {
+        receivedError = error;
+      }
+    }
+
+    expect(receivedError?.message).toBe("Invalid URL");
+    expect(receivedError?.message).not.toContain(malformedEndpoint);
   });
 
   it.each([

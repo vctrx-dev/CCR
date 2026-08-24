@@ -5,6 +5,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { runAfterCommitCheck } from "../../../src/context/after-commit";
+import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
+import { ensureWorkingJournalEntry, readRecentJournalEntries } from "../../../src/context/journal";
 
 const run = promisify(execFile);
 const roots: string[] = [];
@@ -46,7 +48,7 @@ describe("runAfterCommitCheck", () => {
     if (journalPath === undefined) throw new Error("Expected a journal path.");
     const content = await readFile(path.join(root, journalPath), "utf8");
     expect(content).toContain(`**Commit**: \`${result.commit}\``);
-    expect(content).toContain("- main.py");
+    expect(content).not.toContain("## Changed paths");
 
     const second = await runAfterCommitCheck(root);
     expect(second.journalCreated).toBe(false);
@@ -56,6 +58,11 @@ describe("runAfterCommitCheck", () => {
   it("should not warn when the same commit also updated shared context", async () => {
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"), { recursive: true });
+    await writeFile(
+      path.join(root, ".ccr/config.json"),
+      serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+      "utf8",
+    );
     await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
     await writeFile(path.join(root, "main.py"), "print('x')\n", "utf8");
     await run("git", ["add", "."], { cwd: root });
@@ -65,7 +72,53 @@ describe("runAfterCommitCheck", () => {
     expect(result.shouldWarn).toBe(false);
   });
 
-  it("should record shared context paths and not prompt for a context-only commit", async () => {
+  it("should finalize the working journal instead of creating a second entry", async () => {
+    const root = await makeRepository();
+    await mkdir(path.join(root, ".ccr"), { recursive: true });
+    await writeFile(
+      path.join(root, ".ccr/config.json"),
+      serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+      "utf8",
+    );
+    await run("git", ["add", ".ccr/config.json"], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "seed config"], { cwd: root });
+    const working = await ensureWorkingJournalEntry(root);
+    await commitPath(root, "main.py", "print('x')\n");
+
+    const result = await runAfterCommitCheck(root);
+
+    expect(result.journalCreated).toBe(false);
+    expect(result.journalPath).toBe(working.path);
+    const entries = await readRecentJournalEntries(root);
+    expect(entries.map((entry) => entry.path)).toEqual([working.path]);
+    expect(entries[0]?.content).toContain(`**Commit**: \`${result.commit}\``);
+  });
+
+  it("should not attach a partial commit to a journal that still covers working changes", async () => {
+    const root = await makeRepository();
+    await mkdir(path.join(root, ".ccr"), { recursive: true });
+    await writeFile(
+      path.join(root, ".ccr/config.json"),
+      serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+      "utf8",
+    );
+    await run("git", ["add", ".ccr/config.json"], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "seed config"], { cwd: root });
+    const working = await ensureWorkingJournalEntry(root);
+    await writeFile(path.join(root, "committed.py"), "print('committed')\n", "utf8");
+    await writeFile(path.join(root, "pending.py"), "print('pending')\n", "utf8");
+    await run("git", ["add", "committed.py"], { cwd: root });
+    await run("git", ["commit", "--quiet", "-m", "partial"], { cwd: root });
+
+    const result = await runAfterCommitCheck(root);
+
+    expect(result.journalCreated).toBe(true);
+    expect(result.journalPath).not.toBe(working.path);
+    const pendingContent = await readFile(path.join(root, working.path), "utf8");
+    expect(pendingContent).not.toContain("**Commit**");
+  });
+
+  it("should create committed metadata and not prompt for a context-only commit", async () => {
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"), { recursive: true });
     await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
@@ -78,8 +131,8 @@ describe("runAfterCommitCheck", () => {
     const journalPath = result.journalPath;
     if (journalPath === undefined) throw new Error("Expected a journal path.");
     const content = await readFile(path.join(root, journalPath), "utf8");
-    expect(content).toContain("- .ccr/project.md");
-    expect(content).not.toContain("None recorded.");
+    expect(content).toContain(`**Commit**: \`${result.commit}\``);
+    expect(content).not.toContain("## Changed paths");
   });
 
   it("should keep the context warning when journal creation fails", async () => {

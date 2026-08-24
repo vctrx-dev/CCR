@@ -1,6 +1,8 @@
 /**
- * Exact-line marked-text operations for integration files. Marker recognition and mutations are
- * byte-bounded: content outside the block and its explicitly selected separator is never normalized.
+ * Reusable exact-line marked-text operations for integration files. Marker recognition and
+ * mutations are byte-bounded: content outside the block and its explicitly selected separator is
+ * never normalized. Any new managed instruction span must use this module rather than string
+ * replacement so user-owned text stays intact.
  */
 export interface ManagedBlock {
   content: string;

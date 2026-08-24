@@ -8,11 +8,15 @@ export default defineConfig({
     passWithNoTests: true,
     coverage: {
       provider: "v8",
+      // Release coverage measures shipped source, not repository tooling exercised by separate checks.
+      include: ["src/**/*.ts"],
       thresholds: {
-        statements: 15,
-        branches: 10,
-        functions: 15,
-        lines: 15,
+        "src/**/*.ts": {
+          statements: 90,
+          branches: 80,
+          functions: 93,
+          lines: 90,
+        },
       },
     },
   },

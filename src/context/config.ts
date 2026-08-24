@@ -2,7 +2,9 @@ import { z } from "zod";
 
 /**
  * Human-owned CCR settings. Keep this public shape small; runtime safety defaults belong in the
- * resolved configuration below and must not become user-editable by accident.
+ * resolved configuration below and must not become user-editable by accident. New configuration
+ * behavior belongs here with its schema, defaults, migration, and update path; callers must not
+ * parse or mutate CCR configuration independently.
  */
 
 const contextSettingsSchema = z

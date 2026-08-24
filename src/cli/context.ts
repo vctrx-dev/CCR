@@ -1,26 +1,18 @@
 import type { Command } from "commander";
-import {
-  listSafeRecentPaths,
-  listSafeRepositoryPaths,
-  readSafeRepositoryDiff,
-  readSafeRepositoryFile,
-} from "../context/broker";
 import { findRepositoryRoot, isGitIgnored, readStagedContextState } from "../context/git";
+import { readHookState } from "../context/hook-state";
 import {
-  hasSkillManagedHookState,
   previewContextHookRemoval,
   readContextHookStatus,
   removeAllContextHooks,
   validateContextHookRemoval,
 } from "../context/hooks";
-import { createJournalEntry, readRecentJournalEntries } from "../context/journal";
-import { readSafeStagedPaths } from "../context/privacy";
 import { applySetup, previewSetup } from "../context/setup";
 import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { validateContext } from "../context/validate";
+import { registerContextInspectionCommands } from "./context-inspection";
 import type { CliIo } from "./index";
 import { formatAction, formatHeading, formatStatus, formatTone } from "./output";
-import { registerReviewContextCommands } from "./review-context";
 
 interface SetupOptions {
   apply?: boolean;
@@ -40,22 +32,25 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   const root = rootFor(io);
   const preview = await previewSetup(root);
   const isSkillLocal = isGitIgnored(root, ".claude/skills/ccr/SKILL.md");
-  const isSkillManaged = hasSkillManagedHookState(root);
-  const hookStatus = isSkillManaged
-    ? {
-        preCommit: {
-          path: ".ccr/private/hooks-state.json",
-          status: "provenance-managed" as const,
-        },
-        postCommit: {
-          path: ".ccr/private/hooks-state.json",
-          status: "provenance-managed" as const,
-        },
-      }
-    : {
-        preCommit: await readContextHookStatus(root, "pre-commit"),
-        postCommit: await readContextHookStatus(root, "post-commit"),
-      };
+  const hookState = await readHookState(root);
+  const isSkillManaged = hookState.status === "valid";
+  const isProvenanceInvalid = hookState.status === "invalid";
+  const hookStatus =
+    isSkillManaged || isProvenanceInvalid
+      ? {
+          preCommit: {
+            path: ".ccr/private/hooks-state.json",
+            status: isSkillManaged ? "provenance-managed" : "provenance-invalid",
+          },
+          postCommit: {
+            path: ".ccr/private/hooks-state.json",
+            status: isSkillManaged ? "provenance-managed" : "provenance-invalid",
+          },
+        }
+      : {
+          preCommit: await readContextHookStatus(root, "pre-commit"),
+          postCommit: await readContextHookStatus(root, "post-commit"),
+        };
   const compatibility = "Requires Claude Code 2.1.0 or later; setup executes no Claude command.";
   if (!options.apply || options.dryRun) {
     if (options.json) {
@@ -99,10 +94,14 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
         ? [
             `  ${formatStatus("provenance-managed", io.isColorEnabled === true)}; run \`/ccr-hooks status\` for strategy and drift`,
           ]
-        : [
-            `  pre-commit ${formatStatus(hookStatus.preCommit.status, io.isColorEnabled === true)}`,
-            `  post-commit ${formatStatus(hookStatus.postCommit.status, io.isColorEnabled === true)}`,
-          ]),
+        : isProvenanceInvalid
+          ? [
+              `  ${formatStatus("provenance-invalid", io.isColorEnabled === true)}; run \`/ccr-hooks status\` before changing hooks`,
+            ]
+          : [
+              `  pre-commit ${formatStatus(hookStatus.preCommit.status, io.isColorEnabled === true)}`,
+              `  post-commit ${formatStatus(hookStatus.postCommit.status, io.isColorEnabled === true)}`,
+            ]),
       formatTone(
         "Local-only ignore rules: config.local.json, journal/, private/, cache/, and tmp/.",
         "muted",
@@ -130,6 +129,11 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   }
   const hasHookStatus = (status: string) =>
     hookStatus.preCommit.status === status || hookStatus.postCommit.status === status;
+  if (!preview.config.hooks.enabled && isProvenanceInvalid) {
+    throw new Error(
+      "CCR has invalid hook provenance. No setup or hook cleanup was applied; run `/ccr-hooks status`.",
+    );
+  }
   if (!preview.config.hooks.enabled && !isSkillManaged && hasHookStatus("malformed")) {
     throw new Error(
       "CCR hooks are disabled, but a legacy hook has malformed CCR markers. Repair the markers or run `/ccr-hooks remove` before setup.",
@@ -147,8 +151,9 @@ async function showSetup(io: CliIo, options: SetupOptions): Promise<void> {
   const result = await applySetup(root, preview);
   let hookLine: string;
   if (preview.config.hooks.enabled) {
-    hookLine =
-      "CCR hooks are enabled in config. Setup left hook design to `/ccr-hooks sync`, which inspects this repository before writing.";
+    hookLine = isProvenanceInvalid
+      ? "CCR hooks are enabled, but hook provenance is invalid. Run `/ccr-hooks status`; setup changed no hooks."
+      : "CCR hooks are enabled in config. Setup left hook design to `/ccr-hooks sync`, which inspects this repository before writing.";
   } else if (isSkillManaged) {
     hookLine =
       "CCR hooks are provenance-managed. Run `/ccr-hooks remove` before CLI legacy cleanup.";
@@ -198,7 +203,8 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .option("--remove-context", "also delete known shared context files")
     .action(async (options: { apply?: boolean; removeContext?: boolean }) => {
       const root = rootFor(io);
-      if (hasSkillManagedHookState(root)) {
+      const hookState = await readHookState(root);
+      if (hookState.status === "valid") {
         writeLines(io, [
           formatTone(
             "CCR hooks are provenance-managed; uninstall stopped before changing files.",
@@ -206,6 +212,18 @@ export function registerContextCommands(program: Command, io: CliIo): void {
             io.isColorEnabled === true,
           ),
           "Run `/ccr-hooks remove` first, then rerun `ccr uninstall`.",
+        ]);
+        return;
+      }
+      if (hookState.status === "invalid") {
+        writeLines(io, [
+          formatTone(
+            "CCR has invalid hook provenance; uninstall stopped before changing files.",
+            "warning",
+            io.isColorEnabled === true,
+          ),
+          hookState.issue,
+          "Run `/ccr-hooks status` and repair provenance before uninstalling.",
         ]);
         return;
       }
@@ -276,45 +294,5 @@ export function registerContextCommands(program: Command, io: CliIo): void {
         : formatTone("No context warning.", "success", io.isColorEnabled === true),
     ]);
   });
-  context.command("changes").action(async () => {
-    const changes = await readSafeStagedPaths(rootFor(io));
-    io.write(
-      `${JSON.stringify({
-        allowedStagedPaths: changes.included,
-        excludedPathCount: changes.excluded.length,
-      })}\n`,
-    );
-  });
-  context
-    .command("files [prefix]")
-    .description("List safe index roots or files below a prefix")
-    .option("--after <path>", "continue a truncated listing after this cursor")
-    .action(async (prefix: string | undefined, options: { after?: string }) => {
-      io.write(
-        `${JSON.stringify(await listSafeRepositoryPaths(rootFor(io), prefix, options.after))}\n`,
-      );
-    });
-  context
-    .command("read <file>")
-    .description("Read one approved file from Git's index")
-    .action(async (file: string) => {
-      io.write(await readSafeRepositoryFile(rootFor(io), file));
-    });
-  context
-    .command("diff <file>")
-    .description("Read one approved staged diff")
-    .action(async (file: string) => {
-      io.write(await readSafeRepositoryDiff(rootFor(io), file));
-    });
-  context.command("recent").action(async () => {
-    io.write(`${JSON.stringify(await listSafeRecentPaths(rootFor(io)))}\n`);
-  });
-  context.command("journal").action(async () => {
-    const result = await createJournalEntry(rootFor(io));
-    writeLines(io, [`Created ${result.path}`]);
-  });
-  context.command("journals").action(async () => {
-    io.write(`${JSON.stringify(await readRecentJournalEntries(rootFor(io)))}\n`);
-  });
-  registerReviewContextCommands(context, io);
+  registerContextInspectionCommands(context, io);
 }

@@ -6,8 +6,11 @@ import { promisify } from "node:util";
 import { afterEach, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import {
+  branchDetails,
   createJournalEntry,
   ensureJournalEntryForHead,
+  ensureWorkingJournalEntry,
+  finalizeWorkingJournalEntry,
   journalEntryExistsForCommit,
   readRecentJournalEntries,
 } from "../../../src/context/journal";
@@ -19,7 +22,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-it("should derive journal path and metadata from Git and UTC time", async () => {
+it("should create a branch-local working journal without premature commit metadata", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-"));
   roots.push(root);
   await run("git", ["init", "--quiet", "-b", "feature/context"], { cwd: root });
@@ -42,15 +45,19 @@ it("should derive journal path and metadata from Git and UTC time", async () => 
     /^\.ccr\/journal\/feature_context-[0-9a-f]{8}\/2026-07-29T06-45-12Z\.md$/,
   );
   expect(content).toContain("2026-07-29T06:45:12Z");
-  expect(content).toContain("feature/context");
-  expect(content).toMatch(/\*\*Commit\*\*: `[0-9a-f]{40}`/);
+  expect(content).toContain("# CCR Journal");
+  expect(content).not.toContain("CCR Continuity");
+  expect(content).not.toContain("**Branch**");
+  expect(content).not.toContain("**Commit**");
+  expect(content).not.toContain("## Changed paths");
 
-  const newer = await createJournalEntry(root, new Date("2026-07-29T07:45:12Z"));
+  const newer = await ensureWorkingJournalEntry(root, new Date("2026-07-29T07:45:12Z"));
+  expect(newer).toEqual(result);
   const recent = await readRecentJournalEntries(root);
-  expect(recent.map((entry) => entry.path)).toEqual([newer.path, result.path]);
+  expect(recent.map((entry) => entry.path)).toEqual([result.path]);
 });
 
-it("should report journal existence per commit and record changed paths", async () => {
+it("should record commit metadata only for a committed journal", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-exists-"));
   roots.push(root);
   await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
@@ -66,11 +73,16 @@ it("should report journal existence per commit and record changed paths", async 
   expect(await journalEntryExistsForCommit(root, commit)).toBe(false);
   expect(await journalEntryExistsForCommit(root, otherCommit)).toBe(false);
 
-  const result = await createJournalEntry(root, new Date("2026-07-29T09:00:00Z"), ["main.py"]);
+  const { branch, directory } = branchDetails(root);
+  const result = await createJournalEntry(root, new Date("2026-07-29T09:00:00Z"), {
+    branch,
+    directory,
+    commit,
+  });
   const content = await readFile(path.join(root, result.path), "utf8");
+  expect(content).toContain(`**Branch**: \`${branch}\``);
   expect(content).toContain(`**Commit**: \`${commit}\``);
-  expect(content).toContain("- main.py");
-  expect(content).not.toContain("None recorded.");
+  expect(content).not.toContain("## Changed paths");
 
   expect(await journalEntryExistsForCommit(root, commit)).toBe(true);
   expect(await journalEntryExistsForCommit(root, otherCommit)).toBe(false);
@@ -99,11 +111,35 @@ it("should not overwrite a journal entry created in the same second", async () =
   expect(second.path).not.toBe(first.path);
   for (const entry of [first, second]) {
     const content = await readFile(path.join(root, entry.path), "utf8");
-    expect(content).toMatch(/\*\*Commit\*\*: `[0-9a-f]{40}`/);
+    expect(content).not.toContain("**Commit**");
   }
 
   const recent = await readRecentJournalEntries(root);
   expect(new Set(recent.map((entry) => entry.path))).toEqual(new Set([first.path, second.path]));
+});
+
+it("should attach commit metadata to the existing working journal after commit", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-finalize-"));
+  roots.push(root);
+  await run("git", ["init", "--quiet", "-b", "development"], { cwd: root });
+  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  const working = await ensureWorkingJournalEntry(root, new Date("2026-07-29T11:00:00Z"));
+  await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
+  await run("git", ["add", "file.txt"], { cwd: root });
+  await run("git", ["commit", "--quiet", "-m", "test"], { cwd: root });
+  const commit = (await run("git", ["rev-parse", "HEAD"], { cwd: root })).stdout.trim();
+  const { branch, directory } = branchDetails(root);
+
+  const finalized = await finalizeWorkingJournalEntry(root, { branch, directory, commit });
+
+  expect(finalized).toEqual(working);
+  const content = await readFile(path.join(root, working.path), "utf8");
+  expect(content.indexOf("**Timestamp**")).toBeLessThan(content.indexOf("**Branch**"));
+  expect(content).toContain("**Branch**: `development`");
+  expect(content).toContain(`**Commit**: \`${commit}\``);
+  expect(content).not.toContain("## Changed paths");
 });
 
 it("should reuse one review journal entry for repeated reviews of the same commit", async () => {

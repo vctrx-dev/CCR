@@ -8,9 +8,7 @@ import { CONFIG_MANUAL } from "./config-manual";
 
 const managedHeader = "<!-- managed by CCR; edit facts, keep headings -->";
 
-export const CONTEXT_FILES: Readonly<Record<string, string>> = {
-  ".ccr/config.json": serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
-  ".ccr/config-manual.md": CONFIG_MANUAL,
+export const RETIRED_CONTEXT_FILES: Readonly<Record<string, string>> = {
   ".ccr/index.md": `${managedHeader}
 # CCR Context Index
 
@@ -21,6 +19,11 @@ Read only the pages relevant to the current task:
 
 Source, tests, and schemas outrank generated context.
 `,
+};
+
+export const CONTEXT_FILES: Readonly<Record<string, string>> = {
+  ".ccr/config.json": serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+  ".ccr/config-manual.md": CONFIG_MANUAL,
   ".ccr/project.md": `${managedHeader}
 # Project
 
@@ -76,7 +79,7 @@ command, test, or precise contract. Mark future plans as intent, not implemented
 export const CLAUDE_BLOCK = `<!-- ccr:start -->
 ## CCR context
 
-Read \`.ccr/index.md\` and only relevant links when repository context is useful.
+Read \`.ccr/project.md\` and \`.ccr/stakeholders.md\` when repository context is useful.
 Use \`/ccr-context initialize\` for first discovery and \`/ccr-context update\` after durable
 changes. CCR context is advisory; source, tests, and schemas have priority.
 <!-- ccr:end -->`;

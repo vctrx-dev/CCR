@@ -65,4 +65,74 @@ describe("configuration CLI", () => {
       readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
     ).rejects.toThrow();
   });
+
+  it("should preview, display, validate, and apply explicit configuration changes", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-config-cli-"));
+    roots.push(root);
+    await run("git", ["init", "--quiet"], { cwd: root });
+    let output = "";
+    const io = {
+      cwd: root,
+      write(message: string) {
+        output += message;
+      },
+    };
+
+    await createCli(io).parseAsync(["node", "ccr", "config", "init"]);
+    expect(output).toContain("CCR configuration preview · no files changed");
+    await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
+
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "validate"]);
+    expect(output).toContain("CCR configuration is valid.");
+
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "config"]);
+    expect(JSON.parse(output)).toMatchObject({
+      hooks: { checkBeforeCommit: true, enabled: true },
+    });
+
+    output = "";
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.checkBeforeCommit",
+      "false",
+    ]);
+    expect(output).toContain("CCR configuration change · preview");
+    expect(
+      JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).hooks,
+    ).toMatchObject({ checkBeforeCommit: true });
+
+    output = "";
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.checkBeforeCommit",
+      "false",
+      "--apply",
+    ]);
+    expect(output).toContain("This advisory pre-commit setting takes effect immediately");
+
+    output = "";
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.enabled",
+      "false",
+      "--apply",
+    ]);
+    expect(output).toContain("Run `/ccr-hooks remove` in Claude Code");
+    expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).hooks).toEqual({
+      enabled: false,
+      checkBeforeCommit: false,
+    });
+  });
 });

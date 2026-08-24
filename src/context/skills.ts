@@ -1,4 +1,3 @@
-import { REVIEW_DIMENSION_REFERENCE } from "../review/dimensions";
 import { CCR_CODEBASE_SKILL, CCR_REVIEW_SKILL } from "../review/skills";
 import { CCR_MANUAL_SKILL } from "./manual-skill";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
@@ -8,12 +7,6 @@ export { MANAGED_SKILL_MARKER } from "./skill-marker";
 /** Package-managed skill definition used by setup, upgrade, preview, and uninstall. */
 export interface SkillDefinition {
   id: string;
-  path: string;
-  content: string;
-}
-
-/** Package-managed progressive-disclosure resource installed below a skill directory. */
-export interface SkillResourceDefinition {
   path: string;
   content: string;
 }
@@ -44,8 +37,12 @@ those choices. Never change \`.ccr/config.json\`, commit, push, or replace unrel
   configured path outside the repository as unsupported, and stop if any edited path crosses a
   symlink. Report the path and make no changes.
 - The TypeScript CLI can inspect and remove only legacy native marker blocks; it cannot validate or
-  remove provenance-managed framework or language-native integration. While the state file exists,
-  \`/ccr-hooks\` is the lifecycle authority.
+  remove provenance-managed framework or language-native integration. While a valid state file
+  exists, \`/ccr-hooks\` is the lifecycle authority; invalid state grants no ownership authority.
+- Run \`npx --no-install ccr hooks status\` before sync writes. Invalid provenance means stop and
+  ask the human to preserve or move the state for investigation. Markers without provenance are
+  legacy/unprovenanced; stop with no changes. Do not infer or reconstruct history, original bytes,
+  separators, or ownership from current files or timestamps. Offer marker-only cleanup and fresh sync.
 </contracts>
 
 ## Inspect
@@ -60,13 +57,16 @@ config file alone does not mean the framework can install hooks.
 
 ## Record local provenance
 
-Before the first sync write \`.ccr/private/hooks-state.json\`. Record whether each artifact existed
-before first sync. For every native artifact record its
-repository-relative path, whether it existed, \`originalByteLength\`, \`originalSha256\`, and
-\`separatorByteCount\` (the exact 0, 1, or 2 separator bytes CCR adds before its start marker).
-Also record schema version, chosen strategy, and any framework source path or CCR entry ID. Never
-store hook contents, secrets, or paths outside the repository. On later syncs preserve original
-metadata and update strategy metadata only after success.
+Immediately before the first integration write, measure the exact unmodified artifacts and write
+\`.ccr/private/hooks-state.json\`. Use exactly schema version 1; strategy
+\`repository-framework\`, \`existing-native\`, or \`minimal-posix\`; a non-empty
+\`strategyDescription\`; nullable repository-relative \`frameworkSourcePath\` and \`ccrEntryId\`;
+and one to three \`artifacts\`. Each artifact has unique \`events\` drawn from \`pre-commit\` and
+\`post-commit\`, a repository-relative \`path\`, \`existed\`, \`originalByteLength\`, lowercase
+64-character \`originalSha256\`, and \`separatorByteCount\` of 0, 1, or 2. Cover each event exactly
+once. A framework strategy requires both nullable fields to be non-null; other strategies require
+both to be null. Run \`npx --no-install ccr hooks status\` and continue only when it validates the
+state. Never store contents, secrets, or external paths. Preserve original metadata on later syncs.
 
 ## Choose the repository-native strategy
 
@@ -79,8 +79,8 @@ metadata and update strategy metadata only after success.
 4. If none is safe, report the unsupported constraint and the smallest manual choice needed. Do not
    install a new framework or dependency merely for CCR.
 
-The pre-commit action is \`npx --no-install ccr hooks check\`. The post-commit action is
-\`npx --no-install ccr hooks after-commit\`. Redirect only the pre-commit check's routine unavailability;
+The pre-commit action is \`npx --no-install ccr hooks pre-commit\`. The post-commit action is
+\`npx --no-install ccr hooks post-commit\`. Redirect only the pre-commit check's routine unavailability;
 keep the post-commit copy-paste prompt visible.
 
 ## Operations
@@ -103,11 +103,6 @@ reading the exact files; Git exercises behavior during a real commit.
 
 <examples>
 <example>
-An empty native hook directory gets a small \`#!/bin/sh\` pre-commit block whose CCR command ends in
-\`|| echo "CCR: context check unavailable; commit continues." >&2\`, plus a post-commit block whose
-command ends in a non-blocking warning. No project dependency is added.
-</example>
-<example>
 A repository has \`.pre-commit-config.yaml\` and an installed \`pre-commit\` executable. Add marked
 local hooks with \`language: system\`, the correct \`stages\`, \`pass_filenames: false\`, then use the
 framework's install command for both event types. Preserve every existing repository hook entry.
@@ -118,13 +113,18 @@ language-native non-blocking child-process call after existing checks; do not pa
 into that file. If module style or execution order is ambiguous, stop without changing it.
 </example>
 <example>
-\`core.hooksPath\` resolves outside the repository. Report the boundary and do not edit the external
-directory or silently replace the setting.
+An external \`core.hooksPath\` is unsupported; report it and never edit or replace it.
 </example>
 <example>
-Pre-commit and post-commit each existed as 10-byte \`#!/bin/sh\\n\` stubs before sync. Record
+Pre-commit and post-commit each provably exist as 10-byte \`#!/bin/sh\\n\` stubs immediately before
+the first write. Record strategy \`existing-native\`, one artifact per event,
 \`originalByteLength: 10\`, their hashes, and \`separatorByteCount: 0\`; append the start marker
 without an extra blank line. On remove, both files must again be 10 bytes with their original hashes.
+</example>
+<example>
+Both hook files contain CCR markers but \`.ccr/private/hooks-state.json\` is absent. Report
+legacy/unprovenanced integration and make no changes. Do not derive a stub from the bytes outside
+the markers. Offer explicit marker-only CLI cleanup followed by a fresh sync.
 </example>
 </examples>
 `;
@@ -220,18 +220,19 @@ during initialize. A later operation changes hooks only when the human explicitl
 </work_budget>
 
 <journal_rules>
-- Run \`context journals\` before journal creation. Reuse the journal entry matching HEAD when one
-  exists, including an entry created by the post-commit hook.
-- Create a new journal with \`context journal\` only when no matching HEAD entry exists. Edit exactly
-  the returned path, keep one entry per commit, and never delete a pre-existing journal.
+- Run \`context journals\` before journal creation. For a post-commit request, reuse the committed journal
+  matching HEAD. For staged or other uncommitted work, run \`context journal\`; it reuses the
+  branch's working journal for staged or uncommitted changes and omits Branch and Commit until a
+  successful commit attaches them.
+- Edit exactly the returned path. Keep one working entry before commit and one finalized entry per
+  commit. Never add a changed-path inventory. Never delete a pre-existing journal.
 </journal_rules>
 
 <success_criteria>
-- During initialize, keep \`.ccr/project.md\` at or below 6,000 characters and stakeholders at or
-  below 2,500. After every operation, keep \`.ccr/project.md\` at or below 6,500 and
-  \`.ccr/stakeholders.md\` at or below 2,800, preserving growth reserve below hard validation limits.
+- During initialize, keep \`.ccr/stakeholders.md\` at or below 2,500 characters; after later
+  operations, keep it at or below 2,800 to preserve growth reserve below its hard validation limit.
 - Write a single, connected project narrative with at most four evidence-chosen headings, not fixed
-  category sections or a directory inventory. Keep \`.ccr/index.md\` a short router.
+  category sections or a directory inventory.
 - Show the exact shared-context diff, apply once, run \`context validate\`, and complete exactly one
   current-branch journal under 1,200 characters. Never stage the journal, commit, or push.
 - End with: "Please review the resulting \`.ccr\` context changes once before relying on them."
@@ -248,7 +249,7 @@ validate, and create or complete one journal.
 
 ## Update
 
-Reuse the journal matching HEAD, then run \`context changes\` and each relevant staged diff. With no staged files,
+Resolve the working or committed journal under the journal rules, then run \`context changes\` and each relevant staged diff. With no staged files,
 use \`context recent\` and read only relevant current index files. Use an adaptive parallel wave only
 when changes span independent traces. Most commits should complete the journal without changing
 project context. Verify changed claims, show the diff, validate, and complete one journal.
@@ -263,9 +264,9 @@ an actual context correction.
 ## Addition
 
 Ask for concise text or exact files and wait when none is supplied. Label future intent, verify
-code-related claims through the broker, and integrate the smallest relevant change. If context is
-above its operating target, compress nearby repetition before adding. Do not turn an omitted human
-claim into a repository-absence claim. Verify, show the diff, validate, and journal.
+code-related claims through the broker, and integrate the smallest relevant change. Compress nearby
+repetition when it improves clarity, without removing material context. Do not turn an omitted
+human claim into a repository-absence claim. Verify, show the diff, validate, and journal.
 
 ## Compact
 
@@ -315,17 +316,5 @@ export const CCR_SKILLS: readonly SkillDefinition[] = [
     id: "ccr-codebase",
     path: ".claude/skills/ccr-codebase/SKILL.md",
     content: CCR_CODEBASE_SKILL,
-  },
-];
-
-/** Shared dimension data rendered into each review skill for portable progressive disclosure. */
-export const CCR_SKILL_RESOURCES: readonly SkillResourceDefinition[] = [
-  {
-    path: ".claude/skills/ccr-review/references/dimensions.md",
-    content: REVIEW_DIMENSION_REFERENCE,
-  },
-  {
-    path: ".claude/skills/ccr-codebase/references/dimensions.md",
-    content: REVIEW_DIMENSION_REFERENCE,
   },
 ];

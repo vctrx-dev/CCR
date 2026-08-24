@@ -4,6 +4,7 @@ import { Command } from "commander";
 import packageJson from "../../package.json";
 import { registerConfigCommands } from "./config";
 import { registerContextCommands } from "./context";
+import { renderProductHelp } from "./help";
 import { registerHooksCommands } from "./hooks";
 import { formatCliError, formatTone } from "./output";
 
@@ -27,8 +28,9 @@ function defaultIo(): CliIo {
 export function createCli(io: CliIo = defaultIo()): Command {
   const program = new Command()
     .name("ccr")
-    .description("Repository context management for code review")
-    .version(packageJson.version);
+    .description("Context-aware, stakeholder-aware code review for Claude Code")
+    .version(packageJson.version)
+    .addHelpText("after", renderProductHelp());
   registerContextCommands(program, io);
   registerConfigCommands(program, io);
   registerHooksCommands(program, io);

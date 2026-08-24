@@ -31,4 +31,26 @@ describe("parseAsuAimlResponse", () => {
       "Unexpected ASU AIML response format",
     );
   });
+
+  it.each(["not json", JSON.stringify({ error: "provider-echoed-secret" })])(
+    "does not include malformed provider content in format errors",
+    (rawBody) => {
+      let error: unknown;
+
+      try {
+        parseAsuAimlResponse(rawBody);
+      } catch (reason) {
+        error = reason;
+      }
+
+      expect(error).toBeInstanceOf(Error);
+      if (!(error instanceof Error)) {
+        throw new Error("Expected an Error from the response parser.");
+      }
+
+      expect(error.message).toBe("Unexpected ASU AIML response format.");
+      expect(error.message).not.toContain(rawBody);
+      expect(error.message).not.toContain("provider-echoed-secret");
+    },
+  );
 });

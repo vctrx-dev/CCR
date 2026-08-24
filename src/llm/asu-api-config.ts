@@ -13,16 +13,43 @@ const ASU_DEFAULTS = {
 /** Default model provider identifier sent in query requests. */
 export const DEFAULT_ASU_MODEL_PROVIDER = ASU_DEFAULTS.modelProvider;
 
-const httpUrlSchema = z
+const httpsUrlSchema = z
   .string()
   .url()
-  .refine((value) => value.startsWith("https://") || value.startsWith("http://"), {
-    message: "Expected an HTTP or HTTPS URL.",
-  });
+  .refine((value) => /^https:\/\//i.test(value), {
+    message: "Expected an HTTPS URL.",
+  })
+  .refine(
+    (value) => {
+      try {
+        const endpoint = new URL(value);
+        return endpoint.username.length === 0 && endpoint.password.length === 0;
+      } catch {
+        return false;
+      }
+    },
+    {
+      message: "ASU AIML endpoint URL must not include credentials.",
+    },
+  );
+
+/**
+ * Validates an endpoint used with an ASU bearer credential.
+ *
+ * Keep direct request callers behind this boundary so they cannot bypass config construction.
+ * URL userinfo is forbidden because it can be exposed by transport failures and would duplicate a
+ * credential in an unsafe URL field.
+ */
+export function assertAsuAimlSecureBaseUrl(baseUrl: string): void {
+  const result = httpsUrlSchema.safeParse(baseUrl);
+  if (!result.success) {
+    throw new Error(result.error.issues[0]?.message ?? "Invalid ASU AIML endpoint URL.");
+  }
+}
 
 const providerConfigSchema = z.object({
   apiKey: z.string().trim().min(1, "apiKey must not be empty."),
-  baseUrl: httpUrlSchema,
+  baseUrl: httpsUrlSchema,
   modelProvider: z.string().trim().min(1),
   model: z.string().trim().min(1, "model must not be empty."),
   temperature: z.number().finite().min(0).max(2),
