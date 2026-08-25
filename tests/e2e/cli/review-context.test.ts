@@ -1,24 +1,18 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import { createCli } from "../../../src/cli/index";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 it("should expose review evidence and reuse the current-commit journal through the CLI", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-review-cli-"));
   roots.push(root);
-  await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
-  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
-  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
   let output = "";
   const io = {
     cwd: root,
@@ -28,8 +22,8 @@ it("should expose review evidence and reuse the current-commit journal through t
   };
   await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
   await writeFile(path.join(root, "source.ts"), "export const value = 1;\n", "utf8");
-  await run("git", ["add", "--", ".ccr", ".gitignore", "source.ts"], { cwd: root });
-  await run("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
+  await runCommand("git", ["add", "--", ".ccr", ".gitignore", "source.ts"], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
   await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
 
   output = "";
@@ -52,3 +46,34 @@ it("should expose review evidence and reuse the current-commit journal through t
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal"]);
   expect(JSON.parse(output)).toEqual(first);
 }, 10_000);
+
+it("should reuse one journal entry for a pull request through the CLI", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-pr-journal-cli-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  let output = "";
+  const io = {
+    cwd: root,
+    write(message: string) {
+      output += message;
+    },
+  };
+  await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+
+  await expect(
+    createCli(io).parseAsync(["node", "ccr", "context", "review-journal", "PR-0"]),
+  ).rejects.toThrow("Pull request must use PR-<positive number>");
+
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-journal", "PR-42"]);
+  const first = JSON.parse(output);
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-journal", "pr-42"]);
+  expect(JSON.parse(output)).toEqual(first);
+
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "journals", "PR-42"]);
+  expect(JSON.parse(output).map(({ path: entryPath }: { path: string }) => entryPath)).toEqual([
+    first.path,
+  ]);
+});

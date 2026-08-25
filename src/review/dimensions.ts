@@ -68,7 +68,7 @@ export function renderReviewDimensionReference(input: unknown): string {
     : "No review dimensions are configured. Stop the review and ask the maintainer to populate `src/review/dimensions.json`; do not invent dimensions or criteria.";
   return `---
 name: ccr-review-dimensions
-description: CCR's package-managed review taxonomy loaded by ccr-review and ccr-codebase.
+description: CCR's package-managed review taxonomy loaded by ccr-review.
 ---
 
 ${MANAGED_SKILL_MARKER}

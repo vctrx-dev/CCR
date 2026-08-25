@@ -1,9 +1,7 @@
-import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import {
   listSafeRecentPaths,
   listSafeRepositoryPaths,
@@ -12,20 +10,16 @@ import {
   readSharedContextFile,
 } from "../../../src/context/broker";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 it("should list privacy-filtered paths from recent commits", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-recent-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
-  await run("git", ["config", "user.email", "test@example.com"], { cwd: root });
-  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
   await mkdir(path.join(root, ".ccr"));
   await mkdir(path.join(root, "src"));
   await mkdir(path.join(root, "src2"));
@@ -36,8 +30,8 @@ it("should list privacy-filtered paths from recent commits", async () => {
   );
   await writeFile(path.join(root, "src/main.ts"), "export {};\n", "utf8");
   await writeFile(path.join(root, ".env.production"), "SECRET=x\n", "utf8");
-  await run("git", ["add", "--force", "--", "."], { cwd: root });
-  await run("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
+  await runCommand("git", ["add", "--force", "--", "."], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
 
   expect(await listSafeRecentPaths(root)).toEqual({
     paths: [".ccr/config.json", "src/main.ts"],
@@ -48,7 +42,7 @@ it("should list privacy-filtered paths from recent commits", async () => {
 it("should expose only approved index content and never unstaged or symlink content", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   await mkdir(path.join(root, ".ccr"));
   await mkdir(path.join(root, "src"));
   await mkdir(path.join(root, "src2"));
@@ -61,12 +55,14 @@ it("should expose only approved index content and never unstaged or symlink cont
   await writeFile(path.join(root, "src2/other.ts"), "export const other = true;\n", "utf8");
   await writeFile(path.join(root, ".NPMRC"), "token=private\n", "utf8");
   await writeFile(path.join(root, "link-target.txt"), "private-target\n", "utf8");
-  await run("git", ["add", "--", ".ccr/config.json", "src/main.ts", "src2/other.ts"], {
+  await runCommand("git", ["add", "--", ".ccr/config.json", "src/main.ts", "src2/other.ts"], {
     cwd: root,
   });
-  await run("git", ["add", "--force", "--", ".NPMRC"], { cwd: root });
-  const { stdout } = await run("git", ["hash-object", "-w", "link-target.txt"], { cwd: root });
-  await run(
+  await runCommand("git", ["add", "--force", "--", ".NPMRC"], { cwd: root });
+  const { stdout } = await runCommand("git", ["hash-object", "-w", "link-target.txt"], {
+    cwd: root,
+  });
+  await runCommand(
     "git",
     ["update-index", "--add", "--cacheinfo", `120000,${stdout.trim()},src/linked.txt`],
     { cwd: root },
@@ -93,7 +89,7 @@ it("should expose only approved index content and never unstaged or symlink cont
 it("should paginate a large safe file inventory without gaps or duplicates", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-pages-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   await mkdir(path.join(root, ".ccr"));
   await mkdir(path.join(root, "source"));
   await writeFile(
@@ -110,7 +106,7 @@ it("should paginate a large safe file inventory without gaps or duplicates", asy
       writeFile(path.join(root, relativePath), "export {};\n", "utf8"),
     ),
   );
-  await run("git", ["add", "--", ".ccr/config.json", "source"], { cwd: root });
+  await runCommand("git", ["add", "--", ".ccr/config.json", "source"], { cwd: root });
 
   const first = await listSafeRepositoryPaths(root, "source");
   expect(first.omittedCount).toBeGreaterThan(0);
@@ -135,5 +131,16 @@ it("should bound an oversized shared context document before returning it", asyn
 
   await expect(readSharedContextFile(root, ".ccr/project.md")).resolves.toBe(
     `${"p".repeat(10_000)}\n[CCR truncated at 10000 characters]\n`,
+  );
+});
+
+it("should expose the current decisions document through the shared-context boundary", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-decisions-"));
+  roots.push(root);
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(path.join(root, ".ccr/decisions.md"), "- Keep reviews advisory.\n", "utf8");
+
+  await expect(readSharedContextFile(root, ".ccr/decisions.md")).resolves.toBe(
+    "- Keep reviews advisory.\n",
   );
 });

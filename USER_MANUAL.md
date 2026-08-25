@@ -5,7 +5,7 @@ Update this file whenever a user-facing skill, command, setting, or setup flow c
 ## Quick flow
 
 ```text
-Install → Setup → Initialize → Review changes/codebase → Review findings → Approve any later fixes
+Install → Setup → Initialize → Preload context → Review → Journal/context sync → Amend with feedback
 ```
 
 ## 1. Install
@@ -102,7 +102,8 @@ path, interpreter, or minimal Git hook. Disable hooks before initialization if t
 - `post-commit` — starts the commit journal and prints an update instruction when needed.
 
 Hooks are advisory: they do not invoke Claude, edit context, block commits, or fail commits. Paste a
-post-commit instruction into Claude Code to update the journal and, only when needed, `project.md`.
+post-commit instruction into Claude Code to preload shared context and configured recent journals,
+complete the same commit journal, and update `project.md` only when durable high-level context changed.
 
 Inspect hooks with `npx --no-install ccr hooks status`. Remove provenance-managed hooks with
 `/ccr-hooks remove`, then disable future sync with
@@ -134,6 +135,7 @@ npx --no-install ccr config set domain your-domain --apply
 npx --no-install ccr config set hooks.enabled false --apply
 npx --no-install ccr config set hooks.checkBeforeCommit false --apply
 npx --no-install ccr config set instructions.updateClaudeMd true --apply
+npx --no-install ccr config set instructions.updateDecisionsMd true --apply
 ```
 
 Review the settings and validate:
@@ -159,7 +161,8 @@ See `.ccr/config-manual.md` for every setting and accepted value.
   },
   "instructions": {
     "updateClaudeMd": false,
-    "updateAgentsMd": false
+    "updateAgentsMd": false,
+    "updateDecisionsMd": false
   }
 }
 ```
@@ -171,9 +174,24 @@ npx --no-install ccr setup
 npx --no-install ccr setup --apply
 ```
 
-`config init` creates configuration files. `setup` adds Claude skills, `project.md`, and
-`stakeholders.md`. It preserves existing context and instruction files. An obsolete generated
-`index.md` is removed only when unedited. Hook strategy is selected later through repository analysis.
+`config init` creates configuration files. `setup` adds Claude skills, `project.md`, `stakeholders.md`,
+and an empty `decisions.md`. It preserves existing context and instruction files. An obsolete generated
+`index.md` is removed only when unedited. On upgrade, the former package-managed
+`.claude/skills/ccr-codebase/SKILL.md` is retired. Package-marked variants are removed because their
+header authorizes package replacement; user-owned or foreign-marked files are preserved.
+Hook strategy is selected later through repository analysis.
+
+### Update after a package upgrade
+
+```bash
+npx --no-install ccr update
+npx --no-install ccr update --apply
+```
+
+Run this after updating `@vctrx/ccr`. It previews by default and refreshes only package-managed
+skills, progressive-disclosure resources, and CCR-marked instruction blocks. It preserves
+`.ccr/config.json`, `project.md`, `stakeholders.md`, `decisions.md`, local journals, private state,
+and user-owned files. A foreign or malformed managed skill stops the update instead of replacing it.
 
 ## 4. Initialize
 
@@ -183,7 +201,9 @@ Open Claude Code:
 /ccr-context initialize
 ```
 
-Run this after setup. It populates the context skeleton and syncs hooks when enabled.
+Run this after setup. It populates `project.md` and `stakeholders.md`, leaves `decisions.md` empty,
+and syncs hooks when enabled. After initialization, CCR always reads `stakeholders.md` but never
+updates it automatically; stakeholder changes are human-owned.
 
 Claude uses repository evidence plus supplied plans or specifications. It scales discovery to the
 repository, verifies material claims, preserves uncertainty and exceptions, and stops when important
@@ -197,31 +217,48 @@ shared-context read returns at most 10,000 UTF-16 characters of source content a
 truncation marker when more content exists. If that marker appears, inspect the full file locally
 before relying on it.
 
-## 5. Review changes or the complete codebase
+## 5. Review changes, the complete codebase, or a pull request
 
 Review all configured dimensions by default:
 
 ```text
 /ccr-review
 /ccr-review all
-/ccr-codebase
+/ccr-review changes
+/ccr-review codebase
 ```
 
 Review one or more dimensions by ID:
 
 ```text
 /ccr-review fairness-evaluation, pedagogy
-/ccr-codebase privacy
+/ccr-review codebase privacy
+/ccr-review PR-123 fairness-evaluation, privacy
 ```
 
 Current review dimensions: `fairness-evaluation`, `pedagogy`, `decision-fairness`, `inclusion`,
 `transparency`, `privacy`. Run
 `npx --no-install ccr help` to see the IDs bundled in the installed version.
 
-`/ccr-review` checks staged, unstaged, and approved untracked changes. `/ccr-codebase` checks the
-complete safe Git index plus live changes. Both use current `project.md`, `stakeholders.md`, and
-recent local journals; code, tests, and schemas remain authoritative. The shared-context reader
-accepts only `.ccr/project.md` and `.ccr/stakeholders.md`.
+`/ccr-review` and `/ccr-review changes` check staged, unstaged, and approved untracked changes.
+`/ccr-review codebase` checks the complete safe Git index plus live changes. `/ccr-review PR-123`
+uses read-only GitHub CLI metadata, the pull-request patch, and relevant head content; it does not
+checkout or mutate branches. Before dispatching review workers, every scope reads current
+`project.md`, `stakeholders.md`, and `decisions.md`, then reads every bounded journal returned within
+the configured `context.recentJournalEntries` count. Changes and codebase scopes use the current
+branch history; PR scope uses that PR's isolated history. These files remain advisory context; code,
+tests, and schemas remain authoritative. The shared-context
+reader accepts only `.ccr/project.md`, `.ccr/stakeholders.md`, and `.ccr/decisions.md`.
+PR evidence is bounded to 64 KiB of metadata, 200 changed paths, a 512 KiB patch, 128 KiB per head
+file, and 2 MiB total. The internal `ccr context review-pr` and `review-pr-head` commands enforce
+those limits and configured privacy exclusions before evidence reaches review workers. If a PR
+contains an excluded path or exceeds a limit, review reports a blocker and stops before dispatch.
+
+The general form is `/ccr-review [changes|codebase|PR-<number>] [all|dimension,...]`. A missing scope
+defaults to `changes`, and a selector without a scope remains a changes review for compatibility.
+Invalid scopes, PR numbers, duplicate IDs, mixed `all` selections, and unknown dimension IDs stop
+before review or journal writes. PR review requires an authenticated `gh` CLI and never uses the
+current working tree as PR evidence.
 
 Each selected dimension gets exactly one subagent. That worker assesses every criterion in its
 dimension and returns evidence-backed findings. The master agent collects, deduplicates, verifies,
@@ -235,9 +272,20 @@ Case: condition that triggers the bug
 Dimension: selected dimension ID or IDs
 ```
 
-Reviews never fix files without approval. Each run appends to the working journal, or the `HEAD`
-journal on a clean tree. Working entries gain branch and commit fields after commit. Journals do not
-duplicate Git's path inventory. `project.md` changes only for proven, durable high-level corrections.
+Reviews never fix files without approval. A change review reuses the working journal, a clean-tree
+review reuses the `HEAD` journal, and every `PR-<number>` reuses one PR-specific journal. Working
+entries gain branch and commit fields after commit. Human feedback about the same code—such as
+marking findings as false positives—amends the same journal entry and review-run section instead of
+creating another. Each completed review replaces the journal's initial summary placeholder with a
+concise factual scope, evidence, and outcome record. Journals do not duplicate Git's path inventory. `project.md` changes only for a
+verified major feature, architecture, public workflow, product constraint, stakeholder impact, or
+plan change; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
+after initialization.
+`decisions.md` is human-owned. It starts empty; review can append at most one concise decision only
+when `instructions.updateDecisionsMd` is `true`, the human confirms the durable future-review rule
+or repository evidence directly states the decision, and `ccr context append-decision <decision>`
+accepts the bounded entry. A finding or recommendation alone is not a decision.
+The default is `false`, so reviews otherwise leave the file unchanged.
 
 ### Maintain review dimensions
 
@@ -263,7 +311,7 @@ IDs are lowercase kebab-case selectors. Dimension and criterion IDs must be uniq
 respective scope. Change the taxonomy in this registry, then update matching README and user-manual
 references and run package smoke. `scripts/package-smoke.mjs` derives the shipped help
 and README assertion from the registry. Setup renders the validated installed registry once at
-`.claude/skills/ccr/references/dimensions.md`; both review skills and `/ccr` read that shared file.
+`.claude/skills/ccr/references/dimensions.md`; `/ccr-review` and `/ccr` read that shared file.
 
 The included dimensions are an initial baseline. Replace them as the taxonomy matures. An empty
 registry stops reviews instead of inventing criteria.
@@ -276,13 +324,16 @@ registry stops reviews instead of inventing criteria.
 | `/ccr-hooks sync` | Install or update hooks |
 | `/ccr-hooks status` | Show hook status |
 | `/ccr-hooks remove` | Remove CCR hooks |
-| `/ccr-context initialize` | Create context |
-| `/ccr-context update` | Update context from staged changes |
+| `/ccr-context initialize` | Populate project and stakeholder context |
+| `/ccr-context update` | Complete the current journal and update durable context |
 | `/ccr-context verify` | Verify context |
 | `/ccr-context addition` | Add plans or knowledge |
-| `/ccr-context compact` | Remove repetition |
-| `/ccr-review [all\|dimension,...]` | Review current changes |
-| `/ccr-codebase [all\|dimension,...]` | Review the complete codebase |
+| `/ccr-context compact` | Compact project context only |
+| `/ccr-review [scope] [all\|dimension,...]` | Review changes, codebase, or a pull request |
+| `ccr context append-decision <decision>` | Append one config-authorized decision line |
+| `ccr context journals [PR-<number>]` | Read configured recent branch or PR journals |
+| `ccr context review-pr PR-<number>` | Read bounded privacy-filtered PR metadata and patch |
+| `ccr context review-pr-head PR-<number> <files...>` | Read up to eight approved PR head files |
 
 Review `.ccr` changes after every operation.
 
@@ -299,6 +350,7 @@ Committed:
 - `.ccr/config.json`
 - `.ccr/project.md`
 - `.ccr/stakeholders.md`
+- `.ccr/decisions.md`
 
 Local and ignored:
 

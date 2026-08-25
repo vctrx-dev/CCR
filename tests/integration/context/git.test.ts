@@ -1,9 +1,7 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   classifyContextChanges,
   isGitIgnored,
@@ -11,18 +9,14 @@ import {
   readChangedPaths,
   readStagedContextState,
 } from "../../../src/context/git";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 async function makeRepository(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-git-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   return root;
 }
 
@@ -30,7 +24,7 @@ describe("readStagedContextState", () => {
   it("should warn when repository files are staged without shared context", async () => {
     const root = await makeRepository();
     await writeFile(path.join(root, "main.py"), "print('hello')\n", "utf8");
-    await run("git", ["add", "main.py"], { cwd: root });
+    await runCommand("git", ["add", "main.py"], { cwd: root });
 
     expect(await readStagedContextState(root)).toEqual({
       stagedPaths: ["main.py"],
@@ -46,7 +40,7 @@ describe("readStagedContextState", () => {
     await mkdir(path.join(root, ".ccr"));
     await writeFile(path.join(root, "main.py"), "print('hello')\n", "utf8");
     await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
 
     expect((await readStagedContextState(root)).shouldWarn).toBe(false);
   });
@@ -61,25 +55,25 @@ describe("readStagedContextState", () => {
 describe("readChangedPaths", () => {
   it("should list the latest commit's changed paths", async () => {
     const root = await makeRepository();
-    await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
-    await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
     await writeFile(path.join(root, "a.txt"), "a\n", "utf8");
     await writeFile(path.join(root, "b.txt"), "b\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
     expect(readChangedPaths(root, 1)).toEqual(["a.txt", "b.txt"]);
   });
 
   it("should list paths across the requested number of commits", async () => {
     const root = await makeRepository();
-    await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
-    await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
     await writeFile(path.join(root, "a.txt"), "a\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
     await writeFile(path.join(root, "b.txt"), "b\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "second"], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "second"], { cwd: root });
     expect(readChangedPaths(root, 5).sort()).toEqual(["a.txt", "b.txt"]);
   });
 

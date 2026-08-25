@@ -1,23 +1,17 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createCli } from "../../../src/cli/index";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 describe("configuration CLI", () => {
   it("should let a developer create and edit configuration before installing the skill", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-config-cli-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     let output = "";
     const io = {
       cwd: root,
@@ -30,6 +24,7 @@ describe("configuration CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "config", "defaults"]);
     expect(output).toContain('"checkBeforeCommit": true');
     expect(output).toContain('"enabled": true');
+    expect(output).toContain('"updateDecisionsMd": false');
     expect(output).not.toContain('"schemaVersion"');
     expect(output).not.toContain('"discovery"');
     expect(output).not.toContain('"privacy"');
@@ -51,6 +46,7 @@ describe("configuration CLI", () => {
       "### `context.maxCompactionPercent`",
       "### `instructions.updateClaudeMd`",
       "### `instructions.updateAgentsMd`",
+      "### `instructions.updateDecisionsMd`",
     ];
     expect(manualKeys.map((key) => manualText.indexOf(key))).toEqual(
       [...manualKeys]
@@ -69,7 +65,7 @@ describe("configuration CLI", () => {
   it("should preview, display, validate, and apply explicit configuration changes", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-config-cli-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     let output = "";
     const io = {
       cwd: root,

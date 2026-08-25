@@ -1,15 +1,12 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import { RETIRED_MANAGED_ARTIFACTS } from "../../../src/context/managed-artifacts";
 import { applySetup, previewSetup } from "../../../src/context/setup";
+import { createTemporaryRootRegistry } from "../../helpers/test-environment";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 it("should consolidate package-managed legacy dimension copies into one shared reference", async () => {
   const { mkdir } = await import("node:fs/promises");

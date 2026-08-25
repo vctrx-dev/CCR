@@ -1,5 +1,5 @@
 import { CCR_SKILL_RESOURCES, RETIRED_CCR_SKILL_RESOURCES } from "./skill-resources";
-import { CCR_SKILLS, MANAGED_SKILL_MARKER } from "./skills";
+import { CCR_SKILLS, MANAGED_SKILL_MARKER, RETIRED_CCR_SKILL_PATHS } from "./skills";
 import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK, RETIRED_CONTEXT_FILES } from "./templates";
 
 /**
@@ -70,7 +70,8 @@ export const RETIRED_MANAGED_ARTIFACTS: readonly RetiredManagedArtifact[] = Obje
   RETIRED_CONTEXT_FILES,
 )
   .map(([path, content]) => ({ content, path }))
-  .concat(RETIRED_CCR_SKILL_RESOURCES);
+  .concat(RETIRED_CCR_SKILL_RESOURCES)
+  .concat(RETIRED_CCR_SKILL_PATHS.map((path) => ({ content: "", path })));
 
 /** Single lifecycle inventory for non-executable marked integrations. */
 export const MANAGED_BLOCK_ARTIFACTS: readonly ManagedBlockArtifact[] = [

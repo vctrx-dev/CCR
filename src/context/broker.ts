@@ -15,14 +15,18 @@ import {
 /**
  * Privacy-preserving evidence boundary for context features and future AI integrations. Repository
  * evidence reads the approved Git index; the explicit shared-context operation reads only CCR's
- * two current narrative documents so uncommitted human edits remain visible. Worktree content must
+ * three current context documents so uncommitted human edits remain visible. Worktree content must
  * use the bounded filesystem helper rather than adding a direct full-file read. New context
  * evidence features should extend this broker, not recreate its approval and privacy checks.
  */
 
 const MAX_PATH_LIST_CHARACTERS = 6000;
 const MAX_EVIDENCE_CHARACTERS = 10_000;
-const SHARED_CONTEXT_PATHS = [".ccr/project.md", ".ccr/stakeholders.md"] as const;
+const SHARED_CONTEXT_PATHS = [
+  ".ccr/project.md",
+  ".ccr/stakeholders.md",
+  ".ccr/decisions.md",
+] as const;
 
 export interface SafePathList {
   paths: string[];

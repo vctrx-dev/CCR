@@ -23,7 +23,6 @@ understand.
    - \`.claude/skills/ccr-context/SKILL.md\`
    - \`.claude/skills/ccr-hooks/SKILL.md\`
    - \`.claude/skills/ccr-review/SKILL.md\`
-   - \`.claude/skills/ccr-codebase/SKILL.md\`
 4. For review selectors or criteria, read
    \`.claude/skills/ccr/references/dimensions.md\`. Use its
    current registry order and IDs; do not rely on an example or a remembered dimension list.
@@ -69,8 +68,9 @@ command, change PATH, or install anything unless the user separately asks for th
 <example>
 User: \`/ccr Can I review only privacy?\`
 Action: Read current help and the review dimension reference. If \`privacy\` is a configured ID, show
-\`/ccr-review privacy\` for changes and \`/ccr-codebase privacy\` for the whole repository. Explain
-that both run inside Claude Code and report without fixing.
+\`/ccr-review privacy\` for changes and \`/ccr-review codebase privacy\` for the whole repository.
+Use \`/ccr-review PR-123 privacy\` for a pull request. Explain that reviews run inside Claude Code
+and report without fixing.
 </example>
 <example>
 User: \`/ccr What does --remove-context do?\`

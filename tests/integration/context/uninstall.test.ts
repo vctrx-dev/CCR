@@ -21,7 +21,7 @@ it("should preview safely and preserve context unless removal is explicit", asyn
     path.join(root, ".ccr/config.json"),
     serializeContextConfig({
       ...DEFAULT_CONTEXT_CONFIG,
-      instructions: { updateClaudeMd: true, updateAgentsMd: false },
+      instructions: { updateClaudeMd: true, updateAgentsMd: false, updateDecisionsMd: false },
     }),
     "utf8",
   );
@@ -33,7 +33,6 @@ it("should preview safely and preserve context unless removal is explicit", asyn
     ".claude/skills/ccr-context/SKILL.md",
     ".claude/skills/ccr-hooks/SKILL.md",
     ".claude/skills/ccr-review/SKILL.md",
-    ".claude/skills/ccr-codebase/SKILL.md",
     ".claude/skills/ccr/references/dimensions.md",
   ]);
   expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain("<!-- ccr:start -->");
@@ -119,7 +118,7 @@ it("should consume a validated uninstall plan and reject later user edits", asyn
     path.join(root, ".ccr/config.json"),
     serializeContextConfig({
       ...DEFAULT_CONTEXT_CONFIG,
-      instructions: { updateClaudeMd: true, updateAgentsMd: false },
+      instructions: { updateClaudeMd: true, updateAgentsMd: false, updateDecisionsMd: false },
     }),
     "utf8",
   );

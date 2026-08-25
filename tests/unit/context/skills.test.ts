@@ -9,6 +9,7 @@ function skill(id: string): string {
 
 describe("CCR skills", () => {
   it("should provide valid what-and-when metadata for every installed skill", () => {
+    expect(CCR_SKILLS.map(({ id }) => id)).not.toContain("ccr-codebase");
     for (const definition of CCR_SKILLS) {
       expect(definition.content).toMatch(new RegExp(`^---\\nname: ${definition.id}\\n`));
       expect(definition.content).toMatch(/description: .+Use when .+\n---/s);
@@ -20,8 +21,8 @@ describe("CCR skills", () => {
 
     expect(content).toContain("<success_criteria>");
     expect(content).not.toMatch(/project\.md.{0,100}(?:characters|character limit)/is);
-    expect(content).toMatch(/stakeholders\.md.{0,80}2,800/s);
-    expect(content).toMatch(/growth reserve/is);
+    expect(content).toMatch(/stakeholders\.md.{0,100}2,500/s);
+    expect(content).toMatch(/later operations.{0,80}leave it unchanged/is);
     expect(content).toMatch(/adaptive.{0,100}subagents/is);
     expect(content).toMatch(/parallel.{0,120}(?:independent|evidence traces)/is);
     expect(content).toMatch(/harness.{0,100}concurrency/is);
@@ -125,10 +126,17 @@ describe("CCR skills", () => {
     expect(content.match(/<example>/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
   });
 
-  it("should fan out one subagent per change dimension and verify merged findings", () => {
+  it("should route every review scope through one dimension fan-out", () => {
     const content = skill("ccr-review");
 
     expect(content).toContain(".claude/skills/ccr/references/dimensions.md");
+    expect(content).toContain("/ccr-review codebase");
+    expect(content).toContain("/ccr-review PR-123");
+    expect(content).toContain("context review-pr PR-<number>");
+    expect(content).toContain("context review-pr-head PR-<number>");
+    expect(content).not.toContain("gh pr view");
+    expect(content).not.toContain("gh pr diff");
+    expect(content).toMatch(/do not.{0,100}(?:checkout|mutate branches)/is);
     expect(content).toMatch(/default.{0,80}all/is);
     expect(content).toMatch(/comma.{0,80}(?:dimension|selection)/is);
     expect(content).toMatch(/unknown.{0,100}(?:dimension|identifier)/is);
@@ -142,9 +150,16 @@ describe("CCR skills", () => {
     expect(content).toContain("context review-diff");
     expect(content).toContain(".ccr/project.md");
     expect(content).toContain(".ccr/stakeholders.md");
+    expect(content).toContain(".ccr/decisions.md");
+    expect(content).toContain("updateDecisionsMd");
     expect(content).toContain("context shared");
     expect(content).toContain("context journals");
+    expect(content).toMatch(/read every returned journal entry/i);
+    expect(content).toMatch(/journals PR-<number>/i);
     expect(content).toContain("context review-journal");
+    expect(content).toMatch(/false positive.{0,180}same journal/is);
+    expect(content).toMatch(/amend.{0,120}same.{0,80}review run/is);
+    expect(content).toMatch(/never.{0,120}(?:edit|update).{0,80}stakeholders\.md/is);
     expect(content).toMatch(/Severity:\s*<severity>/s);
     expect(content).toMatch(/File:\s*<repository-relative path>/s);
     expect(content).toMatch(/Issue:\s*<issue>/s);
@@ -157,24 +172,12 @@ describe("CCR skills", () => {
     expect(content.match(/<example>/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
   });
 
-  it("should fan out one subagent per codebase dimension and verify merged findings", () => {
-    const content = skill("ccr-codebase");
+  it("should keep stakeholder maintenance initialization-only", () => {
+    const content = skill("ccr-context");
 
-    expect(content).toContain(".claude/skills/ccr/references/dimensions.md");
-    expect(content).toContain("context files");
-    expect(content).toContain("context read");
-    expect(content).toContain("context shared");
-    expect(content).toContain("nextCursor");
-    expect(content).toContain("context review-changes");
-    expect(content).toMatch(/end-to-end|E2E/i);
-    expect(content).toMatch(/coverage ledger/i);
-    expect(content).toMatch(/one.{0,80}subagent.{0,80}per selected dimension/is);
-    expect(content).toMatch(/assess\s+every criterion/is);
-    expect(content).toContain("criterion coverage/status");
-    expect(content).toMatch(/master.{0,160}(?:collect|aggregate|merge)/is);
-    expect(content).toMatch(/master then verifies/is);
-    expect(content).toContain("context review-journal");
-    expect(content).toMatch(/do not.{0,100}(?:fix|modify).{0,100}(?:source|code)/is);
-    expect(content.match(/<example>/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(content).toMatch(/stakeholders\.md.{0,160}initialize only/is);
+    expect(content).toMatch(/after initialize.{0,160}human-owned/is);
+    expect(content).toContain("instructions.updateDecisionsMd");
+    expect(content).toContain("context append-decision");
   });
 });

@@ -6,7 +6,7 @@ export interface SkillResourceDefinition {
   content: string;
 }
 
-/** One shared generated taxonomy consumed by the support and both review skills. */
+/** One shared generated taxonomy consumed by the support and review skill. */
 export const CCR_SKILL_RESOURCES: readonly SkillResourceDefinition[] = [
   {
     path: ".claude/skills/ccr/references/dimensions.md",

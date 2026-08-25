@@ -89,6 +89,7 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
         "  ccr config set hooks.enabled false --apply",
         "  ccr config set hooks.checkBeforeCommit false --apply",
         "  ccr config set instructions.updateClaudeMd true --apply",
+        "  ccr config set instructions.updateDecisionsMd true --apply",
       ]);
     });
   config

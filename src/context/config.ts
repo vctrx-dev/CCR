@@ -25,6 +25,7 @@ const instructionsSchema = z
   .object({
     updateClaudeMd: z.boolean(),
     updateAgentsMd: z.boolean(),
+    updateDecisionsMd: z.boolean().default(false),
   })
   .strict();
 
@@ -39,6 +40,7 @@ const publicConfigSchema = z
     instructions: instructionsSchema.default({
       updateClaudeMd: false,
       updateAgentsMd: false,
+      updateDecisionsMd: false,
     }),
   })
   .strict();
@@ -104,6 +106,7 @@ export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
   instructions: {
     updateClaudeMd: false,
     updateAgentsMd: false,
+    updateDecisionsMd: false,
   },
 };
 
@@ -268,9 +271,18 @@ export function updateContextConfig(
         },
       };
       break;
+    case "instructions.updateDecisionsMd":
+      updated = {
+        ...config,
+        instructions: {
+          ...config.instructions,
+          updateDecisionsMd: parseBooleanSetting(value),
+        },
+      };
+      break;
     default:
       throw new Error(
-        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, context.recentJournalEntries, context.maxCompactionPercent, and instruction-file opt-ins.",
+        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, context.recentJournalEntries, context.maxCompactionPercent, instructions.updateClaudeMd, instructions.updateAgentsMd, and instructions.updateDecisionsMd.",
       );
   }
   return resolvedConfigSchema.parse(updated);

@@ -56,7 +56,7 @@ const help = execFileSync(process.execPath, [binPath, "--help"], {
   encoding: "utf8",
   windowsHide: true,
 });
-for (const command of ["setup", "context", "config", "hooks", "uninstall"]) {
+for (const command of ["setup", "update", "context", "config", "hooks", "uninstall"]) {
   if (!help.includes(command)) throw new Error(`Packed CLI help is missing ${command}.`);
 }
 
@@ -235,11 +235,22 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   const configManualPath = path.join(scripted, ".ccr", "config-manual.md");
   if (
     !existsSync(configManualPath) ||
-    !readFileSync(configManualPath, "utf8").includes("# CCR configuration manual")
+    !readFileSync(configManualPath, "utf8").includes("# CCR configuration manual") ||
+    !readFileSync(configManualPath, "utf8").includes("instructions.updateDecisionsMd")
   ) {
     throw new Error("config init did not create the configuration manual.");
   }
   runInstalled(installedBin, ["setup", "--apply"], scripted);
+  const decisionsPath = path.join(scripted, ".ccr", "decisions.md");
+  const installedConfig = JSON.parse(
+    readFileSync(path.join(scripted, ".ccr", "config.json"), "utf8"),
+  );
+  if (!existsSync(decisionsPath) || readFileSync(decisionsPath, "utf8") !== "") {
+    throw new Error("setup did not create an empty decisions document.");
+  }
+  if (installedConfig.instructions?.updateDecisionsMd !== false) {
+    throw new Error("Generated configuration did not default decision updates to false.");
+  }
   if (existsSync(preCommitPath) || existsSync(postCommitPath)) {
     throw new Error("setup installed hooks without repository-aware skill analysis.");
   }
@@ -260,7 +271,6 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     throw new Error("setup did not install the current CCR support skill.");
   }
   const reviewSkillPath = path.join(scripted, ".claude", "skills", "ccr-review", "SKILL.md");
-  const codebaseSkillPath = path.join(scripted, ".claude", "skills", "ccr-codebase", "SKILL.md");
   const dimensionsPath = path.join(
     scripted,
     ".claude",
@@ -270,18 +280,37 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     "dimensions.md",
   );
   const dimensions = readFileSync(dimensionsPath, "utf8");
+  const reviewSkill = readFileSync(reviewSkillPath, "utf8");
   if (
-    !readFileSync(reviewSkillPath, "utf8").includes("name: ccr-review") ||
-    !readFileSync(codebaseSkillPath, "utf8").includes("name: ccr-codebase") ||
+    !reviewSkill.includes("name: ccr-review") ||
+    !reviewSkill.includes("Read every returned journal entry") ||
+    !reviewSkill.includes("context review-pr PR-<number>") ||
+    !reviewSkill.includes("context review-journal PR-<number>") ||
     !reviewDimensionIds.every((id) => dimensions.includes(`"id": "${id}"`))
   ) {
-    throw new Error("setup did not install the data-driven review skills and dimensions.");
+    throw new Error("setup did not install the data-driven review skill and dimensions.");
+  }
+  if (existsSync(path.join(scripted, ".claude", "skills", "ccr-codebase"))) {
+    throw new Error("setup installed the retired ccr-codebase skill.");
   }
   if (
     !existsSync(ignorePath) ||
     !readFileSync(ignorePath, "utf8").includes("# ccr:start - local context continuity")
   ) {
     throw new Error("setup did not add local-continuity ignore rules.");
+  }
+  const projectPath = path.join(scripted, ".ccr", "project.md");
+  const journalPath = path.join(scripted, ".ccr", "journal", "package-update.md");
+  writeFileSync(projectPath, "# Team-owned project context\n", "utf8");
+  mkdirSync(path.dirname(journalPath), { recursive: true });
+  writeFileSync(journalPath, "# Local continuity\n", "utf8");
+  const updateOutput = runInstalled(installedBin, ["update", "--apply"], scripted);
+  if (
+    !updateOutput.includes("CCR update is already current.") ||
+    readFileSync(projectPath, "utf8") !== "# Team-owned project context\n" ||
+    readFileSync(journalPath, "utf8") !== "# Local continuity\n"
+  ) {
+    throw new Error("package update did not preserve user-owned CCR context and local continuity.");
   }
 
   process.stdout.write(

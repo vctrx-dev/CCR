@@ -36,7 +36,7 @@ describe("CCR setup", () => {
     expect(preview.changes.map((change) => change.path)).toContain(
       ".claude/skills/ccr-review/SKILL.md",
     );
-    expect(preview.changes.map((change) => change.path)).toContain(
+    expect(preview.changes.map((change) => change.path)).not.toContain(
       ".claude/skills/ccr-codebase/SKILL.md",
     );
     expect(preview.changes.map((change) => change.path)).toContain(
@@ -50,7 +50,7 @@ describe("CCR setup", () => {
     );
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/risks.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/architecture.md");
-    expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/decisions.md");
+    expect(preview.changes.map((change) => change.path)).toContain(".ccr/decisions.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/index.md");
     expect(preview.changes.map((change) => change.path)).not.toContain("CLAUDE.md");
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
@@ -99,7 +99,7 @@ describe("CCR setup", () => {
       path.join(root, ".ccr/config.json"),
       serializeContextConfig({
         ...DEFAULT_CONTEXT_CONFIG,
-        instructions: { updateClaudeMd: true, updateAgentsMd: false },
+        instructions: { updateClaudeMd: true, updateAgentsMd: false, updateDecisionsMd: false },
       }),
       "utf8",
     );
@@ -135,7 +135,7 @@ describe("CCR setup", () => {
       path.join(root, ".ccr/config.json"),
       serializeContextConfig({
         ...DEFAULT_CONTEXT_CONFIG,
-        instructions: { updateClaudeMd: false, updateAgentsMd: true },
+        instructions: { updateClaudeMd: false, updateAgentsMd: true, updateDecisionsMd: false },
       }),
       "utf8",
     );
@@ -256,7 +256,8 @@ describe("CCR setup", () => {
     expect(skill).toContain("20% and 30%");
     expect(skill).toMatch(/Please review the resulting `\.ccr`\s+context changes/);
     expect(skill).not.toContain(".ccr/architecture.md");
-    expect(skill).not.toContain(".ccr/decisions.md");
+    expect(skill).toContain(".ccr/decisions.md");
+    expect(skill).toContain("human-owned and read-only to CCR");
 
     const project = await readFile(path.join(root, ".ccr/project.md"), "utf8");
     expect(project).toContain("living, evidence-backed narrative");

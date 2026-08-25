@@ -1,14 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ensureLocalIgnoreRules, localIgnoreContent } from "../../../src/context/ignore";
+import { createTemporaryRootRegistry } from "../../helpers/test-environment";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 describe("localIgnoreContent", () => {
   it("should append the local-continuity block to an existing .gitignore", () => {

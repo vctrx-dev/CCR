@@ -1,14 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { readHookState } from "../../../src/context/hook-state";
+import { createTemporaryRootRegistry } from "../../helpers/test-environment";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 async function createRoot(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-hook-state-"));

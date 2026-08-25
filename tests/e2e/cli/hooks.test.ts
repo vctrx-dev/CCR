@@ -1,17 +1,11 @@
-import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createCli } from "../../../src/cli/index";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 function captureIo(root: string): {
   io: { cwd: string; write: (m: string) => void };
@@ -39,8 +33,8 @@ describe("hooks CLI", () => {
     roots.push(parent);
     const root = path.join(parent, "repository");
     await mkdir(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
-    await run("git", ["config", "core.hooksPath", "../external-hooks"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["config", "core.hooksPath", "../external-hooks"], { cwd: root });
     const { io, output, clear } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     await createCli(io).parseAsync([
@@ -65,7 +59,7 @@ describe("hooks CLI", () => {
   it("should reject malformed legacy hooks before setup writes managed files", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-malformed-setup-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     const { io, output, clear } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     await createCli(io).parseAsync([
@@ -99,7 +93,7 @@ describe("hooks CLI", () => {
   it("should reject malformed legacy hooks before uninstall removes managed files", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-malformed-uninstall-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     const { io } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
@@ -119,7 +113,7 @@ describe("hooks CLI", () => {
   it("should reject invalid provenance before status or removal claims ownership", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-provenance-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     const { io, output, clear } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     await mkdir(path.join(root, ".ccr/private"), { recursive: true });
@@ -158,7 +152,7 @@ describe("hooks CLI", () => {
   it("should report existing markers without state as legacy and unprovenanced", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-unprovenanced-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     const { io, output } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     await writeFile(
@@ -176,7 +170,7 @@ describe("hooks CLI", () => {
   it("should defer enabled hook installation to the repository-aware skill", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-cli-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     const { io, output, clear } = captureIo(root);
 
     await createCli(io).parseAsync(["node", "ccr", "setup"]);
@@ -207,14 +201,14 @@ describe("hooks CLI", () => {
     await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
     await expect(readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).rejects.toThrow();
 
-    await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
-    await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
     await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
-    await run("git", ["add", "--", "app.py"], { cwd: root });
+    await runCommand("git", ["add", "--", "app.py"], { cwd: root });
     clear();
     await createCli(io).parseAsync(["node", "ccr", "hooks", "pre-commit"]);
     expect(output()).toBe("");
-    await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toBe("");
 
@@ -227,26 +221,26 @@ describe("hooks CLI", () => {
   it("should run the post-commit check and print a copy-paste prompt", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-after-cli-"));
     roots.push(root);
-    await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
-    await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
-    await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
     const setupIo = captureIo(root).io;
     await createCli(setupIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
 
     const { io, output } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toContain("started local journal entry");
     expect(output()).toContain("Use the ccr-context skill");
-    expect(output()).toContain("changing .ccr/project.md only if");
+    expect(output()).toContain("change .ccr/project.md only for durable high-level context");
   });
 
   it("should retain hidden compatibility aliases for previously generated hooks", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hook-aliases-"));
     roots.push(root);
-    await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+    await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
     const setupIo = captureIo(root).io;
     await createCli(setupIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     await createCli(setupIo).parseAsync([

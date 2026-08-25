@@ -1,18 +1,12 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import packageJson from "../../../package.json";
 import { createCli } from "../../../src/cli/index";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 describe("context CLI", () => {
   it("should report the package version from the release source of truth", () => {
@@ -22,7 +16,7 @@ describe("context CLI", () => {
   it("should preview, apply, and validate setup", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     let output = "";
     const io = {
       cwd: root,
@@ -53,7 +47,7 @@ describe("context CLI", () => {
     expect(output).toContain("CCR context is valid");
 
     await writeFile(path.join(root, "source.txt"), "changed\n", "utf8");
-    await run("git", ["add", "--", "source.txt"], { cwd: root });
+    await runCommand("git", ["add", "--", "source.txt"], { cwd: root });
     await createCli(io).parseAsync([
       "node",
       "ccr",
@@ -86,7 +80,7 @@ describe("context CLI", () => {
   it("should never write setup when dry-run is combined with apply", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-dry-run-"));
     roots.push(root);
-    await run("git", ["init", "--quiet"], { cwd: root });
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
     let output = "";
 
     await createCli({

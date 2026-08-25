@@ -1,26 +1,20 @@
-import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { runAfterCommitCheck } from "../../../src/context/after-commit";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import { ensureWorkingJournalEntry, readRecentJournalEntries } from "../../../src/context/journal";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 async function makeRepository(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-after-commit-"));
   roots.push(root);
-  await run("git", ["init", "--quiet", "-b", "main"], { cwd: root });
-  await run("git", ["config", "user.name", "CCR Test"], { cwd: root });
-  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
   return root;
 }
 
@@ -28,8 +22,8 @@ async function commitPath(root: string, relativePath: string, content: string): 
   const target = path.join(root, relativePath);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, content, "utf8");
-  await run("git", ["add", "--", relativePath], { cwd: root });
-  await run("git", ["commit", "--quiet", "-m", `commit ${relativePath}`], { cwd: root });
+  await runCommand("git", ["add", "--", relativePath], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", `commit ${relativePath}`], { cwd: root });
 }
 
 describe("runAfterCommitCheck", () => {
@@ -43,6 +37,8 @@ describe("runAfterCommitCheck", () => {
     expect(result.journalPath).toMatch(/^\.ccr\/journal\/main-[0-9a-f]{8}\/.*\.md$/);
     expect(result.shouldWarn).toBe(true);
     expect(result.prompt).toBeTruthy();
+    expect(result.prompt).toContain("decisions.md");
+    expect(result.prompt).toContain("stakeholders.md read-only");
 
     const journalPath = result.journalPath;
     if (journalPath === undefined) throw new Error("Expected a journal path.");
@@ -65,8 +61,8 @@ describe("runAfterCommitCheck", () => {
     );
     await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
     await writeFile(path.join(root, "main.py"), "print('x')\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "code and context"], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "code and context"], { cwd: root });
 
     const result = await runAfterCommitCheck(root);
     expect(result.shouldWarn).toBe(false);
@@ -80,8 +76,8 @@ describe("runAfterCommitCheck", () => {
       serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
       "utf8",
     );
-    await run("git", ["add", ".ccr/config.json"], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "seed config"], { cwd: root });
+    await runCommand("git", ["add", ".ccr/config.json"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "seed config"], { cwd: root });
     const working = await ensureWorkingJournalEntry(root);
     await commitPath(root, "main.py", "print('x')\n");
 
@@ -102,13 +98,13 @@ describe("runAfterCommitCheck", () => {
       serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
       "utf8",
     );
-    await run("git", ["add", ".ccr/config.json"], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "seed config"], { cwd: root });
+    await runCommand("git", ["add", ".ccr/config.json"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "seed config"], { cwd: root });
     const working = await ensureWorkingJournalEntry(root);
     await writeFile(path.join(root, "committed.py"), "print('committed')\n", "utf8");
     await writeFile(path.join(root, "pending.py"), "print('pending')\n", "utf8");
-    await run("git", ["add", "committed.py"], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "partial"], { cwd: root });
+    await runCommand("git", ["add", "committed.py"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "partial"], { cwd: root });
 
     const result = await runAfterCommitCheck(root);
 
@@ -116,14 +112,17 @@ describe("runAfterCommitCheck", () => {
     expect(result.journalPath).not.toBe(working.path);
     const pendingContent = await readFile(path.join(root, working.path), "utf8");
     expect(pendingContent).not.toContain("**Commit**");
+
+    const nextWorking = await ensureWorkingJournalEntry(root);
+    expect(nextWorking.path).not.toBe(working.path);
   });
 
   it("should create committed metadata and not prompt for a context-only commit", async () => {
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"), { recursive: true });
     await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
-    await run("git", ["add", "."], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "context only"], { cwd: root });
+    await runCommand("git", ["add", "."], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "context only"], { cwd: root });
 
     const result = await runAfterCommitCheck(root);
     expect(result.shouldWarn).toBe(false);
@@ -152,8 +151,8 @@ describe("runAfterCommitCheck", () => {
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"), { recursive: true });
     await writeFile(path.join(root, ".ccr/config.local.json"), "{}\n", "utf8");
-    await run("git", ["add", "--force", "--", ".ccr/config.local.json"], { cwd: root });
-    await run("git", ["commit", "--quiet", "-m", "local context only"], { cwd: root });
+    await runCommand("git", ["add", "--force", "--", ".ccr/config.local.json"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "local context only"], { cwd: root });
 
     const result = await runAfterCommitCheck(root);
 

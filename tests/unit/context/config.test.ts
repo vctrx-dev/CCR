@@ -17,7 +17,7 @@ describe("parseContextConfig", () => {
       domain: "unspecified",
       hooks: { enabled: true, checkBeforeCommit: true },
       context: { recentJournalEntries: 3, maxCompactionPercent: 25 },
-      instructions: { updateClaudeMd: false, updateAgentsMd: false },
+      instructions: { updateClaudeMd: false, updateAgentsMd: false, updateDecisionsMd: false },
     });
     expect(parsed.privacy.excludedPaths).toEqual([]);
   });
@@ -39,6 +39,17 @@ describe("parseContextConfig", () => {
         JSON.stringify({ ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG), domain: "civic-tech" }),
       ).domain,
     ).toBe("civic-tech");
+  });
+
+  it("should default the decisions update opt-in for existing configuration files", () => {
+    const parsed = parseContextConfig(
+      JSON.stringify({
+        ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG),
+        instructions: { updateClaudeMd: true, updateAgentsMd: false },
+      }),
+    );
+
+    expect(parsed.instructions).toMatchObject({ updateDecisionsMd: false });
   });
 
   it("should migrate supported settings from the previous schema", () => {
@@ -111,6 +122,10 @@ describe("updateContextConfig", () => {
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "instructions.updateClaudeMd", "true")
         .instructions.updateClaudeMd,
     ).toBe(true);
+    expect(
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "instructions.updateDecisionsMd", "true")
+        .instructions,
+    ).toMatchObject({ updateDecisionsMd: true });
     expect(
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.enabled", "false").hooks.enabled,
     ).toBe(false);

@@ -1,9 +1,7 @@
-import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import {
   previewContextHookRemoval,
   readContextHookStatus,
@@ -11,28 +9,24 @@ import {
   removeContextHook,
   validateContextHookRemoval,
 } from "../../../src/context/hooks";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
+const roots = createTemporaryRootRegistry();
 
 async function createRepository(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   return root;
 }
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
 
 it("should report an external configured hooks path as unsafe without throwing", async () => {
   const parent = await mkdtemp(path.join(tmpdir(), "ccr-hooks-boundary-"));
   roots.push(parent);
   const root = path.join(parent, "repository");
   await mkdir(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
-  await run("git", ["config", "core.hooksPath", "../external-hooks"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["config", "core.hooksPath", "../external-hooks"], { cwd: root });
 
   const result = await readContextHookStatus(root);
 
@@ -46,17 +40,17 @@ it("should inspect the Git common hook directory from a linked worktree", async 
   const main = path.join(parent, "main");
   const linked = path.join(parent, "linked");
   await mkdir(main);
-  await run("git", ["init", "--quiet", "-b", "main"], { cwd: main });
-  await run("git", ["config", "user.name", "CCR Test"], { cwd: main });
-  await run("git", ["config", "user.email", "ccr@example.test"], { cwd: main });
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: main });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: main });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: main });
   await writeFile(path.join(main, "tracked.txt"), "tracked\n", "utf8");
-  await run("git", ["add", "tracked.txt"], { cwd: main });
-  await run("git", ["commit", "--quiet", "-m", "initial"], { cwd: main });
+  await runCommand("git", ["add", "tracked.txt"], { cwd: main });
+  await runCommand("git", ["commit", "--quiet", "-m", "initial"], { cwd: main });
   const isolatedGitEnvironment = { ...process.env };
   isolatedGitEnvironment.GIT_INDEX_FILE = undefined;
   isolatedGitEnvironment.GIT_DIR = undefined;
   isolatedGitEnvironment.GIT_WORK_TREE = undefined;
-  await run("git", ["worktree", "add", "--quiet", "-b", "linked", linked], {
+  await runCommand("git", ["worktree", "add", "--quiet", "-b", "linked", linked], {
     cwd: main,
     env: isolatedGitEnvironment,
   });
@@ -74,9 +68,9 @@ it("should reject a configured hook directory that crosses a symlink", async () 
   const external = path.join(parent, "external-hooks");
   await mkdir(root);
   await mkdir(external);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   await symlink(external, path.join(root, ".managed-hooks"), "junction");
-  await run("git", ["config", "core.hooksPath", ".managed-hooks"], { cwd: root });
+  await runCommand("git", ["config", "core.hooksPath", ".managed-hooks"], { cwd: root });
 
   expect((await readContextHookStatus(root)).status).toBe("unsafe");
   await expect(removeContextHook(root)).rejects.toThrow(/outside the repository/i);

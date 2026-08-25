@@ -1,22 +1,16 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { expect, it } from "vitest";
 import { createCli } from "../../../src/cli/index";
+import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
-const run = promisify(execFile);
-const roots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+const roots = createTemporaryRootRegistry();
 
 it("should expose privacy-filtered staged paths through the inspection CLI", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-inspection-cli-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   let output = "";
   const io = {
     cwd: root,
@@ -27,9 +21,13 @@ it("should expose privacy-filtered staged paths through the inspection CLI", asy
   await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
   await writeFile(path.join(root, "source.ts"), "export {};\n", "utf8");
   await writeFile(path.join(root, ".env.review"), "SECRET=hidden\n", "utf8");
-  await run("git", ["add", "--force", "--", ".ccr/config.json", "source.ts", ".env.review"], {
-    cwd: root,
-  });
+  await runCommand(
+    "git",
+    ["add", "--force", "--", ".ccr/config.json", "source.ts", ".env.review"],
+    {
+      cwd: root,
+    },
+  );
 
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "changes"]);
@@ -42,7 +40,7 @@ it("should expose privacy-filtered staged paths through the inspection CLI", asy
 it("should read current shared context before it is committed and reject non-context files", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-shared-context-cli-"));
   roots.push(root);
-  await run("git", ["init", "--quiet"], { cwd: root });
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
   let output = "";
   const io = {
     cwd: root,
@@ -62,4 +60,51 @@ it("should read current shared context before it is committed and reject non-con
   await expect(
     createCli(io).parseAsync(["node", "ccr", "context", "shared", ".ccr/config.json"]),
   ).rejects.toThrow(/approved shared context/i);
+});
+
+it("should append a decision only after the human enables the config opt-in", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-decisions-cli-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet"], { cwd: root });
+  let output = "";
+  const io = {
+    cwd: root,
+    write(message: string) {
+      output += message;
+    },
+  };
+  await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+
+  await expect(
+    createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "context",
+      "append-decision",
+      "Keep reviews advisory.",
+    ]),
+  ).rejects.toThrow("instructions.updateDecisionsMd is false");
+
+  await createCli(io).parseAsync([
+    "node",
+    "ccr",
+    "config",
+    "set",
+    "instructions.updateDecisionsMd",
+    "true",
+    "--apply",
+  ]);
+  output = "";
+  await createCli(io).parseAsync([
+    "node",
+    "ccr",
+    "context",
+    "append-decision",
+    "Keep reviews advisory.",
+  ]);
+
+  expect(output).toBe("Decision recorded.\n");
+  expect(await readFile(path.join(root, ".ccr/decisions.md"), "utf8")).toBe(
+    "- Keep reviews advisory.\n",
+  );
 });

@@ -21,6 +21,7 @@ describe("managed artifact registry", () => {
       ".ccr/index.md",
       ".claude/skills/ccr-review/references/dimensions.md",
       ".claude/skills/ccr-codebase/references/dimensions.md",
+      ".claude/skills/ccr-codebase/SKILL.md",
     ]);
     expect(MANAGED_ARTIFACTS.some((artifact) => artifact.kind === "skill")).toBe(true);
     expect(

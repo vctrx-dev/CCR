@@ -7,8 +7,21 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.7.0 - 2026-08-25
+
 ### Changed
 
+- Added `ccr update [--apply]`, a preview-first package-upgrade path that refreshes only
+  package-managed CCR assets while preserving configuration, shared context, journals, private
+  state, and user-owned files.
+- Setup now creates an empty, human-owned `.ccr/decisions.md`. Reviews read it as advisory context
+  and may append one concise, human-confirmed decision only after the new
+  `instructions.updateDecisionsMd` opt-in is enabled; the default remains `false`.
+- Every review now preloads all three shared context documents and the configured recent journals.
+  Commits and PRs reuse one local journal entry, same-review human feedback amends that entry,
+  completed reviews replace its summary placeholder with factual scope/evidence/outcome context,
+  project context changes only for durable high-level updates, and stakeholder context becomes
+  human-owned after initialization.
 - Advisory hook handlers are now named `ccr hooks pre-commit` and `ccr hooks post-commit` to match
   their Git events; the former names remain hidden compatibility aliases for existing integrations.
 - Hook provenance now has one deterministic validated schema. Invalid state blocks ownership and
@@ -25,14 +38,19 @@ contain incompatible changes when they are clearly documented.
 - Journal entries are titled `CCR Journal` and no longer duplicate changed paths. Working entries
   omit Branch and Commit until the post-commit hook can attach a real commit identity.
 - Review dimensions are rendered once at `.claude/skills/ccr/references/dimensions.md`; `/ccr`,
-  `/ccr-review`, and `/ccr-codebase` share that generated taxonomy instead of installing copies.
+  and `/ccr-review` share that generated taxonomy instead of installing copies.
+- `/ccr-review` now handles changes by default, complete-codebase reviews, and read-only `PR-<number>`
+  reviews; setup retires the former `/ccr-codebase` skill.
+- PR reviews now enforce bounded metadata, changed-path, patch, head-file, and combined-evidence
+  limits plus configured privacy exclusions through deterministic CLI evidence boundaries before
+  dispatching dimension workers.
 
 ## 0.5.0 - 2026-08-12
 
 ### Added
 
-- Data-driven `/ccr-review` and `/ccr-codebase` Claude skills support all, multiple, or individual
-  review dimensions without coupling dimension changes to setup or orchestration code.
+- Data-driven `/ccr-review` supports all, multiple, or individual review dimensions without coupling
+  dimension changes to setup or orchestration code.
 - A validated review-dimension registry, initial correctness/privacy/stakeholder-safety guidance,
   and package-managed progressive-disclosure references.
 - Privacy-filtered staged, unstaged, and untracked review evidence commands.

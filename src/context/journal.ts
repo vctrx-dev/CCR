@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
+import { z } from "zod";
+import { truncateEvidence } from "./evidence-format";
 import {
   assertSafeManagedPath,
   isFileNotFound,
+  readBoundedTextIfExists,
   readManagedTextIfExists,
   writeManagedText,
 } from "./files";
@@ -25,6 +28,23 @@ export interface JournalDetails {
 }
 
 const JOURNAL_FILENAME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u;
+const MAX_JOURNAL_EVIDENCE_CHARACTERS = 4_000;
+const pullRequestNumberSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const pullRequestTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^PR-[1-9][0-9]*$/iu, "Pull request must use PR-<positive number>.")
+  .transform((value) => Number(value.slice(3)))
+  .pipe(pullRequestNumberSchema);
+
+/** Parses a case-insensitive pull-request token before it can select a journal directory. */
+export function parsePullRequestToken(candidate: unknown): number {
+  return pullRequestTokenSchema.parse(candidate);
+}
+
+function pullRequestDirectory(pullRequest: number): string {
+  return `pull-request-${pullRequestNumberSchema.parse(pullRequest)}`;
+}
 
 /** Resolves the current branch (falling back to "detached") and the journal directory derived from it. */
 export function branchDetails(root: string): { branch: string; directory: string } {
@@ -68,6 +88,66 @@ async function readJournalNames(root: string, relativeDirectory: string): Promis
   }
 }
 
+async function readJournalEvidence(root: string, relativePath: string): Promise<string> {
+  const bounded = await readBoundedTextIfExists(
+    await assertSafeManagedPath(root, relativePath),
+    MAX_JOURNAL_EVIDENCE_CHARACTERS,
+  );
+  if (bounded === undefined) throw new Error(`Journal entry disappeared: ${relativePath}`);
+  return truncateEvidence(bounded.content, {
+    isTruncated: bounded.isTruncated,
+    marker: `[CCR journal truncated at ${MAX_JOURNAL_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_JOURNAL_EVIDENCE_CHARACTERS,
+  });
+}
+
+async function readCompleteJournal(root: string, relativePath: string): Promise<string> {
+  const bounded = await readBoundedTextIfExists(
+    await assertSafeManagedPath(root, relativePath),
+    MAX_JOURNAL_EVIDENCE_CHARACTERS,
+  );
+  if (bounded === undefined) throw new Error(`Journal entry disappeared: ${relativePath}`);
+  if (bounded.isTruncated) {
+    throw new Error(
+      `Journal entry exceeds ${MAX_JOURNAL_EVIDENCE_CHARACTERS} characters: ${relativePath}`,
+    );
+  }
+  return bounded.content;
+}
+
+async function createJournalFile(
+  root: string,
+  now: Date,
+  directory: string,
+  identityMetadata = "",
+): Promise<JournalResult> {
+  const isoTimestamp = now.toISOString().replace(/\.\d{3}Z$/, "Z");
+  const timestamp = isoTimestamp.replaceAll(":", "-");
+  const relativePath = await freeJournalPath(root, `.ccr/journal/${directory}`, timestamp);
+  await writeManagedText(
+    root,
+    relativePath,
+    `# CCR Journal\n\n- **Timestamp**: ${isoTimestamp}\n${identityMetadata}\n## Summary\n\nNeeds concise completion.\n\n## Findings and outcomes\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n`,
+  );
+  return { path: relativePath };
+}
+
+function currentCommit(root: string): string {
+  try {
+    return readGitValue(root, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+  } catch {
+    return "unborn";
+  }
+}
+
+function parentCommit(root: string, commit: string): string {
+  try {
+    return readGitValue(root, ["rev-parse", "--verify", "--quiet", `${commit}^`]);
+  } catch {
+    return "unborn";
+  }
+}
+
 /**
  * Creates a journal skeleton. Omit `details` for uncommitted work so the entry does not claim the
  * current HEAD contains those changes; pass it only when the represented commit already exists.
@@ -77,19 +157,11 @@ export async function createJournalEntry(
   now: Date = new Date(),
   details?: JournalDetails,
 ): Promise<JournalResult> {
-  const isoTimestamp = now.toISOString().replace(/\.\d{3}Z$/, "Z");
-  const timestamp = isoTimestamp.replaceAll(":", "-");
   const { directory } = details ?? branchDetails(root);
-  const relativePath = await freeJournalPath(root, `.ccr/journal/${directory}`, timestamp);
   const committedMetadata = details
     ? `- **Branch**: \`${details.branch}\`\n- **Commit**: \`${details.commit}\`\n`
-    : "";
-  await writeManagedText(
-    root,
-    relativePath,
-    `# CCR Journal\n\n- **Timestamp**: ${isoTimestamp}\n${committedMetadata}\n## Summary\n\nNeeds concise completion.\n\n## Findings and outcomes\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n`,
-  );
-  return { path: relativePath };
+    : `- **Base commit**: \`${currentCommit(root)}\`\n`;
+  return createJournalFile(root, now, directory, committedMetadata);
 }
 
 /**
@@ -113,10 +185,7 @@ async function findJournalEntryForCommit(
   const relativeDirectory = `.ccr/journal/${directory}`;
   const names = (await readJournalNames(root, relativeDirectory)).sort().reverse();
   for (const name of names) {
-    const content = await readFile(
-      await assertSafeManagedPath(root, `${relativeDirectory}/${name}`),
-      "utf8",
-    );
+    const content = await readJournalEvidence(root, `${relativeDirectory}/${name}`);
     if (content.includes(`- **Commit**: \`${commit}\``)) {
       return { path: `${relativeDirectory}/${name}` };
     }
@@ -127,13 +196,17 @@ async function findJournalEntryForCommit(
 async function findWorkingJournalEntry(
   root: string,
   directory: string,
+  baseCommit: string,
 ): Promise<JournalEntry | undefined> {
   const relativeDirectory = `.ccr/journal/${directory}`;
   const names = (await readJournalNames(root, relativeDirectory)).sort().reverse();
   for (const name of names) {
     const relativePath = `${relativeDirectory}/${name}`;
-    const content = await readFile(await assertSafeManagedPath(root, relativePath), "utf8");
-    if (!content.includes("- **Commit**:")) return { path: relativePath, content };
+    const evidence = await readJournalEvidence(root, relativePath);
+    if (evidence.includes("- **Commit**:")) continue;
+    if (!evidence.includes(`- **Base commit**: \`${baseCommit}\``)) continue;
+    const content = await readCompleteJournal(root, relativePath);
+    return { path: relativePath, content };
   }
   return undefined;
 }
@@ -144,16 +217,20 @@ export async function ensureWorkingJournalEntry(
   now: Date = new Date(),
 ): Promise<JournalResult> {
   const { directory } = branchDetails(root);
-  const existing = await findWorkingJournalEntry(root, directory);
+  const existing = await findWorkingJournalEntry(root, directory, currentCommit(root));
   return existing ? { path: existing.path } : createJournalEntry(root, now);
 }
 
-/** Attaches real commit metadata to the newest pending journal after that commit exists. */
+/** Attaches real commit metadata only to the pending journal that began at the commit's parent. */
 export async function finalizeWorkingJournalEntry(
   root: string,
   details: JournalDetails,
 ): Promise<JournalResult | undefined> {
-  const working = await findWorkingJournalEntry(root, details.directory);
+  const working = await findWorkingJournalEntry(
+    root,
+    details.directory,
+    parentCommit(root, details.commit),
+  );
   if (!working) return undefined;
   const lineEnding = working.content.includes("\r\n") ? "\r\n" : "\n";
   const timestampStart = working.content.indexOf("- **Timestamp**:");
@@ -165,14 +242,6 @@ export async function finalizeWorkingJournalEntry(
   const updated = `${working.content.slice(0, timestampEnd)}${committedMetadata}${working.content.slice(timestampEnd)}`;
   await writeManagedText(root, working.path, updated);
   return { path: working.path };
-}
-
-function currentCommit(root: string): string {
-  try {
-    return readGitValue(root, ["rev-parse", "HEAD"]);
-  } catch {
-    return "unborn";
-  }
 }
 
 /** Returns the existing current-commit journal or creates its sole review continuity entry. */
@@ -187,10 +256,35 @@ export async function ensureJournalEntryForHead(
   return createJournalEntry(root, now, { branch, directory, commit });
 }
 
-/** Reads only the configured number of newest entries for the exact current branch. */
-export async function readRecentJournalEntries(root: string): Promise<JournalEntry[]> {
+/** Returns the sole local continuity entry for one PR, creating it when first reviewed. */
+export async function ensurePullRequestJournalEntry(
+  root: string,
+  pullRequest: number,
+  now: Date = new Date(),
+): Promise<JournalResult> {
+  const normalized = pullRequestNumberSchema.parse(pullRequest);
+  const directory = pullRequestDirectory(normalized);
+  const relativeDirectory = `.ccr/journal/${directory}`;
+  const marker = `- **Pull request**: \`PR-${normalized}\``;
+  for (const name of (await readJournalNames(root, relativeDirectory)).sort().reverse()) {
+    const relativePath = `${relativeDirectory}/${name}`;
+    if ((await readJournalEvidence(root, relativePath)).includes(marker)) {
+      return { path: relativePath };
+    }
+  }
+  return createJournalFile(root, now, directory, `${marker}\n`);
+}
+
+/** Reads the configured number of newest bounded entries for the current branch or one exact PR. */
+export async function readRecentJournalEntries(
+  root: string,
+  pullRequest?: number,
+): Promise<JournalEntry[]> {
   const config = await readResolvedContextConfig(root);
-  const { branch, directory } = branchDetails(root);
+  const branch = pullRequest === undefined ? branchDetails(root) : undefined;
+  const directory =
+    pullRequest === undefined ? branch?.directory : pullRequestDirectory(pullRequest);
+  if (directory === undefined) throw new Error("Journal directory could not be resolved.");
   const relativeDirectory = `.ccr/journal/${directory}`;
   const names = (await readJournalNames(root, relativeDirectory))
     .sort()
@@ -199,8 +293,12 @@ export async function readRecentJournalEntries(root: string): Promise<JournalEnt
   return Promise.all(
     names.map(async (name) => {
       const relativePath = `${relativeDirectory}/${name}`;
-      const content = await readFile(await assertSafeManagedPath(root, relativePath), "utf8");
-      if (content.includes("- **Branch**:") && !content.includes(`- **Branch**: \`${branch}\``)) {
+      const content = await readJournalEvidence(root, relativePath);
+      if (
+        branch &&
+        content.includes("- **Branch**:") &&
+        !content.includes(`- **Branch**: \`${branch.branch}\``)
+      ) {
         throw new Error(`Journal branch metadata mismatch: ${relativePath}`);
       }
       return { path: relativePath, content };

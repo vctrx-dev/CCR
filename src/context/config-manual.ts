@@ -52,8 +52,9 @@ Example: \`ccr config set hooks.checkBeforeCommit false --apply\`
 
 - Default: \`3\`
 - Values: an integer from 1 to 10.
-- Effect: controls how many recent local continuity journal entries the context skill may read
-  during \`/ccr-context update\`. A higher value gives more continuity; a lower value keeps the
+- Effect: controls how many recent local continuity journal entries every context operation and
+  review must read before planning. Branch reviews read that branch's entries; PR reviews read the
+  selected PR's isolated entries. A higher value gives more continuity; a lower value keeps the
   prompt smaller.
 
 Example: \`ccr config set context.recentJournalEntries 5 --apply\`
@@ -86,6 +87,17 @@ Example: \`ccr config set instructions.updateClaudeMd true --apply\`
   root \`AGENTS.md\`. Effect when \`false\`: setup leaves \`AGENTS.md\` alone.
 
 Example: \`ccr config set instructions.updateAgentsMd true --apply\`
+
+### \`instructions.updateDecisionsMd\`
+
+- Default: \`false\`.
+- Values: \`true\` or \`false\`.
+- Effect when \`true\`: CCR review or context update may record at most one human-confirmed, durable
+  decision through \`ccr context append-decision\`. A finding alone is not a decision. Effect when
+  \`false\`: that command rejects every write and CCR leaves \`.ccr/decisions.md\` untouched. CCR
+  never replaces or removes human entries.
+
+Example: \`ccr config set instructions.updateDecisionsMd true --apply\`
 
 ## Applying changes
 

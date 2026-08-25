@@ -1,4 +1,4 @@
-import { CCR_CODEBASE_SKILL, CCR_REVIEW_SKILL } from "../review/skills";
+import { CCR_REVIEW_SKILL, RETIRED_CCR_SKILL_PATHS } from "../review/skills";
 import { CCR_MANUAL_SKILL } from "./manual-skill";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
 
@@ -145,6 +145,24 @@ Run \`npx --no-install ccr config\` first and stop immediately on failure. Never
 \`.ccr/config.json\`; it is human-owned. When \`hooks.enabled\` is true, run \`/ccr-hooks sync\` once
 during initialize. A later operation changes hooks only when the human explicitly requests it.
 
+Before every operation, run \`npx --no-install ccr context validate\`; read \`.ccr/project.md\`,
+\`.ccr/stakeholders.md\`, and \`.ccr/decisions.md\` through \`context shared <file>\`; then run
+\`context journals\` and read every returned entry. The journal command applies the configured
+\`context.recentJournalEntries\` limit.
+
+<shared_context_ownership>
+- \`.ccr/project.md\`: populate during initialize. Later, update it only for verified durable
+  high-level changes such as a major feature, architecture, public workflow, product constraint,
+  stakeholder impact, or plan. Routine bug fixes, refactors, and transient findings stay in journals.
+- \`.ccr/stakeholders.md\`: CCR may populate it during initialize only. After initialize it is
+  human-owned and read-only to CCR; later operations may use it as context but never edit it.
+- \`.ccr/decisions.md\`: preserve human entries and never edit it directly. Outside initialize,
+  when \`instructions.updateDecisionsMd\` is \`true\`, append at most one concise, non-duplicate
+  decision through \`context append-decision <decision>\` only when repository evidence or explicit
+  human confirmation establishes an important durable rule for future work. A code change, bug fix,
+  finding, or recommendation alone is not a decision. When the setting is \`false\`, never write it.
+</shared_context_ownership>
+
 <evidence_rules>
 - Read repository evidence only with \`context files [prefix]\`, \`context read <file>\`,
   \`context changes\`, \`context diff <file>\`, and \`context recent\`. Direct reads are limited to
@@ -229,8 +247,8 @@ during initialize. A later operation changes hooks only when the human explicitl
 </journal_rules>
 
 <success_criteria>
-- During initialize, keep \`.ccr/stakeholders.md\` at or below 2,500 characters; after later
-  operations, keep it at or below 2,800 to preserve growth reserve below its hard validation limit.
+- During initialize, keep \`.ccr/stakeholders.md\` at or below 2,500 characters. Later operations
+  leave it unchanged.
 - Write a single, connected project narrative with at most four evidence-chosen headings, not fixed
   category sections or a directory inventory.
 - Show the exact shared-context diff, apply once, run \`context validate\`, and complete exactly one
@@ -244,37 +262,41 @@ Ask once: "Can you provide optional context that is not in this repository, such
 specifications, research, or product decisions?" Continue when the answer is none. Run
 \`context files\`; identify instructions, manifests, entry points, schemas, tests, and user-facing
 documentation. Give each discovery subagent an end-to-end workflow or constraint trace. Reconcile
-the parallel evidence wave into the shared files, run the verification subagent, correct once,
-validate, and create or complete one journal.
+the parallel evidence wave into \`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
+\`.ccr/decisions.md\` unchanged, run the verification subagent, correct once, validate, and create
+or complete one journal.
 
 ## Update
 
 Resolve the working or committed journal under the journal rules, then run \`context changes\` and each relevant staged diff. With no staged files,
 use \`context recent\` and read only relevant current index files. Use an adaptive parallel wave only
 when changes span independent traces. Most commits should complete the journal without changing
-project context. Verify changed claims, show the diff, validate, and complete one journal.
+project context. Apply the shared-context ownership rules, verify changed claims, show the diff,
+validate, and complete the existing journal for that uncommitted change or commit.
 
 ## Verify
 
 Validate first. Compare shared claims with \`context recent\`, staged changes, and bounded journals.
 Use an adaptive parallel wave only when repository breadth requires it, then the verification
-subagent. Correct once if needed; otherwise leave shared files untouched. Validate and journal only
-an actual context correction.
+subagent. Correct \`.ccr/project.md\` once if needed; otherwise leave shared files untouched. Never
+edit stakeholders or rewrite decisions. Validate and journal only an actual context correction.
 
 ## Addition
 
 Ask for concise text or exact files and wait when none is supplied. Label future intent, verify
 code-related claims through the broker, and integrate the smallest relevant change. Compress nearby
 repetition when it improves clarity, without removing material context. Do not turn an omitted
-human claim into a repository-absence claim. Verify, show the diff, validate, and journal.
+human claim into a repository-absence claim. Apply the shared-context ownership rules; human
+stakeholder edits must be made directly by the human. Verify, show the diff, validate, and journal.
 
 ## Compact
 
-Read \`context.maxCompactionPercent\`; it must remain between 20% and 30%. Count combined shared
-Markdown characters before and after. Remove no more than the configured percentage, preserve
-causal links, critical constraints, citations, and uncertainty, then verify, show counts and diff,
-validate, and journal. During compact, keep every constraint, default, and ownership modifier
-attached to the exact item it qualifies; never shorten a list into an ambiguous shared modifier.
+During compact, keep every constraint, default, and ownership modifier attached to the exact item it
+qualifies; never shorten a list into an ambiguous shared modifier. Read
+\`context.maxCompactionPercent\`; it must remain between 20% and 30%. Compact only the project
+narrative and measure its length before and after. Remove no more than the
+configured percentage, preserve causal links, critical constraints, citations, and uncertainty,
+then verify, show counts and diff, validate, and journal. Leave stakeholders and decisions unchanged.
 
 <examples>
 <example>
@@ -312,9 +334,6 @@ export const CCR_SKILLS: readonly SkillDefinition[] = [
   },
   { id: "ccr-hooks", path: ".claude/skills/ccr-hooks/SKILL.md", content: CCR_HOOKS_SKILL },
   { id: "ccr-review", path: ".claude/skills/ccr-review/SKILL.md", content: CCR_REVIEW_SKILL },
-  {
-    id: "ccr-codebase",
-    path: ".claude/skills/ccr-codebase/SKILL.md",
-    content: CCR_CODEBASE_SKILL,
-  },
 ];
+
+export { RETIRED_CCR_SKILL_PATHS };
