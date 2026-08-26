@@ -122,6 +122,27 @@ export function readUntrackedPaths(root: string): string[] {
   return parseGitPaths(runGit(root, ["ls-files", "--others", "--exclude-standard", "-z"]));
 }
 
+/** Fingerprints every visible dirty or untracked path without exposing its content to callers. */
+export function readWorkingTreeFingerprints(root: string): Map<string, string> {
+  const paths = [...new Set([...readUnstagedPaths(root), ...readUntrackedPaths(root)])];
+  if (paths.length > 5_000) {
+    throw new Error("Working tree has too many changed paths for automatic context updates.");
+  }
+  return new Map(
+    paths.map((relativePath) => {
+      try {
+        const fingerprint = runGit(root, ["hash-object", "--no-filters", "--", relativePath], 200);
+        if (!/^[0-9a-f]{40,64}\n?$/u.test(fingerprint)) {
+          throw new Error("Git returned an invalid worktree fingerprint.");
+        }
+        return [relativePath, fingerprint.trim()];
+      } catch {
+        return [relativePath, "missing"];
+      }
+    }),
+  );
+}
+
 /** Reads regular-file and symlink metadata from Git's index without opening worktree files. */
 export function readIndexEntries(root: string): IndexEntry[] {
   return parseGitEntries(runGit(root, ["ls-files", "--stage", "-z"]), 1);

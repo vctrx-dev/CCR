@@ -8,7 +8,7 @@ import {
   branchDetails,
   createJournalEntry,
   finalizeWorkingJournalEntry,
-  journalEntryExistsForCommit,
+  journalEntryForCommit,
 } from "./journal";
 import type { JournalDetails } from "./journal";
 
@@ -20,6 +20,7 @@ import type { JournalDetails } from "./journal";
 
 export interface AfterCommitResult {
   commit: string;
+  hasRepositoryChanges: boolean;
   journalCreated: boolean;
   journalPath?: string;
   prompt?: string;
@@ -36,7 +37,13 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
   try {
     commit = readGitValue(root, ["rev-parse", "HEAD"]);
   } catch {
-    return { commit: "", journalCreated: false, journalPath: undefined, shouldWarn: false };
+    return {
+      commit: "",
+      hasRepositoryChanges: false,
+      journalCreated: false,
+      journalPath: undefined,
+      shouldWarn: false,
+    };
   }
   const changed = readChangedPaths(root, 1);
   const { hasRepositoryChanges, shouldWarn } = classifyContextChanges(changed);
@@ -46,7 +53,10 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
   try {
     const { branch, directory } = branchDetails(root);
     const details: JournalDetails = { branch, directory, commit };
-    if (!(await journalEntryExistsForCommit(root, commit, directory))) {
+    const existing = await journalEntryForCommit(root, commit, directory);
+    if (existing) {
+      journalPath = existing.path;
+    } else {
       const working = hasWorkingTreeChanges(root)
         ? undefined
         : await finalizeWorkingJournalEntry(root, details);
@@ -64,6 +74,7 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
 
   return {
     commit,
+    hasRepositoryChanges,
     journalCreated,
     journalPath,
     shouldWarn,

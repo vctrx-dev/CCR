@@ -46,6 +46,20 @@ Example: \`ccr config set hooks.enabled false --apply\`
 
 Example: \`ccr config set hooks.checkBeforeCommit false --apply\`
 
+### \`hooks.autoUpdateContext\`
+
+- Default: \`false\`.
+- Values: \`true\` or \`false\`.
+- Effect when \`true\`: an enabled post-commit hook runs Claude Code headlessly when repository
+  changes need continuity work. It completes the existing commit journal and updates only justified
+  shared context. Successful commits are recorded locally so one commit is not processed twice.
+  Automation never stages, commits, amends, resets, or pushes; context edits remain visible for
+  human review and a later commit. Effect when \`false\`: hooks remain advisory.
+- Requirements: Claude Code must be installed and authenticated. Failure is non-blocking and prints
+  the manual \`/ccr-context update\` fallback.
+
+Example: \`ccr config set hooks.autoUpdateContext true --apply\`
+
 ## \`context\`
 
 ### \`context.recentJournalEntries\`

@@ -36,7 +36,11 @@ describe("context CLI", () => {
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     const config = JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"));
-    expect(config.hooks).toEqual({ enabled: true, checkBeforeCommit: true });
+    expect(config.hooks).toEqual({
+      enabled: true,
+      checkBeforeCommit: true,
+      autoUpdateContext: false,
+    });
     expect(config.schemaVersion).toBeUndefined();
     expect(config.discovery).toBeUndefined();
     expect(config.privacy).toBeUndefined();

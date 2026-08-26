@@ -88,6 +88,7 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
         "Examples:",
         "  ccr config set hooks.enabled false --apply",
         "  ccr config set hooks.checkBeforeCommit false --apply",
+        "  ccr config set hooks.autoUpdateContext true --apply",
         "  ccr config set instructions.updateClaudeMd true --apply",
         "  ccr config set instructions.updateDecisionsMd true --apply",
       ]);
@@ -118,6 +119,13 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
         `Updated ${key}.`,
         ...(key === "hooks.checkBeforeCommit"
           ? ["This advisory pre-commit setting takes effect immediately; no setup is needed."]
+          : []),
+        ...(key === "hooks.autoUpdateContext"
+          ? [
+              updated.hooks.autoUpdateContext
+                ? "Enabled headless post-commit context updates. Claude Code must be installed and authenticated."
+                : "Disabled headless post-commit context updates; hooks remain advisory.",
+            ]
           : []),
         ...(key === "hooks.enabled"
           ? [

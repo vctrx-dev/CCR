@@ -17,7 +17,7 @@ split cohesive code mechanically.
 
 | Element | Convention | Example |
 |---|---|---|
-| Files/dirs | `kebab-case` | `file-filter.ts`, `src/github/` |
+| Files/dirs | `kebab-case` | `managed-block.ts`, `src/context/` |
 | Functions/vars | `camelCase` | `getDiff()`, `changedFiles` |
 | Classes/interfaces/types | `PascalCase` | `ReviewConfig`, `ReviewEngine` |
 | Constants (primitives) | `UPPER_CASE` | `MAX_FILE_SIZE` |
@@ -109,6 +109,21 @@ configuration changes do not require a contrived failing test.
 Test observable behavior through stable boundaries. Do not require a one-to-one test for every
 helper or mirror implementation details in assertions. Add the narrowest test level that proves the
 change:
+
+### Prompt and taxonomy test exception
+
+- Do not add unit tests, snapshots, regex assertions, or exact-string assertions for prose in shipped
+  prompts or for the specific dimension/criterion content in `src/review/dimensions.json`.
+- Prompt-only sources (`src/context/skills.ts`, `src/context/manual-skill.ts`,
+  `src/context/templates.ts`, and `src/review/skills.ts`) and the data-only review taxonomy are exempt
+  from one-to-one test discovery and blast-radius test execution when they are the only changed source
+  files.
+- Validate prompt and taxonomy edits through JSON/schema loading, lint/audit, build, package smoke,
+  and focused manual or end-to-end model evaluation when the change warrants it.
+- Executable parsers, validators, evidence boundaries, setup/install behavior, and orchestration code
+  remain subject to behavioral tests. Tests may verify that a packaged artifact exists or parses, but
+  must not assert its prose or examples or hard-code specific dimension IDs, criterion IDs, ordering,
+  or wording.
 
 | Level | Dir | Scope |
 |---|---|---|

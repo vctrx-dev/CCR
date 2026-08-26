@@ -1,7 +1,15 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { automaticContextUpdate } = vi.hoisted(() => ({
+  automaticContextUpdate: vi.fn().mockResolvedValue({ status: "updated" }),
+}));
+
+vi.mock("../../../src/context/automatic-context-update", () => ({
+  runAutomaticContextUpdate: automaticContextUpdate,
+}));
 import { createCli } from "../../../src/cli/index";
 import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
@@ -28,6 +36,10 @@ function captureIo(root: string): {
 }
 
 describe("hooks CLI", () => {
+  beforeEach(() => {
+    automaticContextUpdate.mockClear();
+    automaticContextUpdate.mockResolvedValue({ status: "updated" });
+  });
   it("should not block disabled setup on an external hook path", async () => {
     const parent = await mkdtemp(path.join(tmpdir(), "ccr-hooks-external-setup-"));
     roots.push(parent);
@@ -144,9 +156,9 @@ describe("hooks CLI", () => {
     expect(output()).toContain("invalid hook provenance");
     expect(output()).not.toContain("CCR integration removed");
     expect(await readFile(hookPath, "utf8")).toBe(existing);
-    expect(await readFile(path.join(root, ".claude/skills/ccr-hooks/SKILL.md"), "utf8")).toContain(
-      "name: ccr-hooks",
-    );
+    await expect(
+      readFile(path.join(root, ".claude/skills/ccr-hooks/SKILL.md"), "utf8"),
+    ).resolves.toBeTruthy();
   });
 
   it("should report existing markers without state as legacy and unprovenanced", async () => {
@@ -235,6 +247,38 @@ describe("hooks CLI", () => {
     expect(output()).toContain("started local journal entry");
     expect(output()).toContain("Use the ccr-context skill");
     expect(output()).toContain("change .ccr/project.md only for durable high-level context");
+  });
+
+  it("should run one headless update instead of printing a prompt when opted in", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-after-cli-auto-"));
+    roots.push(root);
+    await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    const setupIo = captureIo(root).io;
+    await createCli(setupIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(setupIo).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set",
+      "hooks.autoUpdateContext",
+      "true",
+      "--apply",
+    ]);
+    await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
+    await runCommand("git", ["add", "--", "app.py"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+
+    const { io, output } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
+
+    expect(automaticContextUpdate).toHaveBeenCalledOnce();
+    const [calledRoot, calledCommit] = automaticContextUpdate.mock.calls[0] ?? [];
+    expect(path.normalize(calledRoot)).toBe(path.normalize(root));
+    expect(calledCommit).toMatch(/^[a-f0-9]{40}$/);
+    expect(output()).toContain("automatic context update completed");
+    expect(output()).not.toContain("Paste this into Claude Code");
   });
 
   it("should retain hidden compatibility aliases for previously generated hooks", async () => {

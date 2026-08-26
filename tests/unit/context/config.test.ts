@@ -15,7 +15,7 @@ describe("parseContextConfig", () => {
     expect(parsed).toEqual(DEFAULT_CONTEXT_CONFIG);
     expect(toPublicContextConfig(parsed)).toEqual({
       domain: "unspecified",
-      hooks: { enabled: true, checkBeforeCommit: true },
+      hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
       context: { recentJournalEntries: 3, maxCompactionPercent: 25 },
       instructions: { updateClaudeMd: false, updateAgentsMd: false, updateDecisionsMd: false },
     });
@@ -71,7 +71,11 @@ describe("parseContextConfig", () => {
       }),
     );
 
-    expect(parsed.hooks).toEqual({ enabled: true, checkBeforeCommit: true });
+    expect(parsed.hooks).toEqual({
+      enabled: true,
+      checkBeforeCommit: true,
+      autoUpdateContext: false,
+    });
     expect(parsed).not.toHaveProperty("discovery");
     expect(parsed.domain).toBe("education");
     expect(parsed.context.recentJournalEntries).toBe(3);
@@ -133,6 +137,10 @@ describe("updateContextConfig", () => {
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.checkBeforeCommit", "false").hooks
         .checkBeforeCommit,
     ).toBe(false);
+    expect(
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.autoUpdateContext", "true").hooks
+        .autoUpdateContext,
+    ).toBe(true);
     expect(
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.recentJournalEntries", "2").context
         .recentJournalEntries,

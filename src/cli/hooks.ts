@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { runAfterCommitCheck } from "../context/after-commit";
+import { runAutomaticContextUpdate } from "../context/automatic-context-update";
 import { findRepositoryRoot, readStagedContextState } from "../context/git";
 import { readHookState } from "../context/hook-state";
 import { readContextHookStatus, removeAllContextHooks } from "../context/hooks";
@@ -21,7 +22,8 @@ async function readHookSettings(root: string) {
 
 async function runPostCommitCommand(io: CliIo): Promise<void> {
   const root = rootFor(io);
-  if (!(await readHookSettings(root))?.enabled) return;
+  const settings = await readHookSettings(root);
+  if (!settings?.enabled) return;
   const result = await runAfterCommitCheck(root);
   if (result.journalCreated && result.journalPath) {
     io.write(
@@ -34,6 +36,28 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
     );
   }
   if (result.prompt) {
+    if (settings.autoUpdateContext && result.commit && result.hasRepositoryChanges) {
+      try {
+        const automatic = await runAutomaticContextUpdate(
+          root,
+          result.commit,
+          undefined,
+          result.journalPath,
+        );
+        io.write(
+          automatic.status === "updated"
+            ? `${formatTone("CCR: automatic context update completed", "success", io.isColorEnabled === true)}. Review and commit any resulting shared context changes.\n`
+            : automatic.status === "already-updated"
+              ? `${formatTone("CCR: automatic context update already completed for this commit", "info", io.isColorEnabled === true)}.\n`
+              : `${formatTone("CCR: automatic context update is already running", "info", io.isColorEnabled === true)}.\n`,
+        );
+      } catch {
+        io.write(
+          `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: automatic context update failed; run \`/ccr-context update\` manually.\n`,
+        );
+      }
+      return;
+    }
     io.write(
       `${formatTone("Paste this into Claude Code to update context and journal:", "info", io.isColorEnabled === true)}\n`,
     );

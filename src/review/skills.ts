@@ -49,6 +49,15 @@ combine multiple selected dimensions into one worker, omit a selected dimension,
 workers for the same dimension. Dispatch the dimension workers in parallel when the harness allows.
 Build a coverage ledger with one row for every selected dimension and its complete criteria list.
 
+Before declaring a criterion clear, form multiple concrete failure hypotheses from the target's
+actual boundaries and try to disprove each one. Prioritize cross-file and cross-layer behavior:
+state and resource lifecycle, check-then-act concurrency, authentication, authorization, and request
+integrity, untrusted input reaching sensitive sinks, resource growth and retry behavior, errors
+converted into valid-looking empty or success states, and producer/consumer and configuration drift.
+For every applicable state-changing flow, inspect success, validation failure, dependency failure,
+retry/repetition, concurrent execution, replacement, and cleanup when those states exist. Search by
+behavior and data flow rather than relying only on criterion keywords or changed-line vocabulary.
+
 Give each worker exactly one dimension ID, name, summary, and complete criteria array from
 \`.claude/skills/ccr/references/dimensions.md\`, along with the relevant context packet, approved
 evidence scope, evidence commands, finding contract, and write prohibition. The worker must assess
@@ -57,6 +66,38 @@ finding an issue, and mark each non-applicable criterion with a reason. It must 
 worker packet containing the dimension ID, criterion coverage/status, evidence locations, concrete
 findings, and uncertainty; do not invent criteria or silently skip a criterion.
 </dimension_subagents>`;
+
+const REVIEW_REASONING_EXAMPLES = `<review_examples>
+Use these examples as reasoning patterns, not as assumptions about the reviewed repository:
+
+<example>
+An update stores a replacement object under the old object's key and schedules deletion of that old
+key after commit. Trace provider overwrite semantics and callback order. If the callback deletes the
+replacement, report the data-loss root cause under system-integrity; also use pedagogy when the lost
+object is educational content, an assessment, feedback, learner work, or progress evidence.
+</example>
+<example>
+A uniqueness query runs before an insert. Interleave two matching requests and inspect the database
+constraint, exception handling, and external side effects. Report only if the losing request can
+produce an incorrect error, orphan a resource, duplicate an effect, or violate the stored state.
+</example>
+<example>
+An HTTP adapter turns every non-success response into null and a caller turns null into an empty
+collection. Trace the final user state. A real outage displayed as valid empty data can map to
+inclusion, transparency, and system-integrity when each selected criterion's contract is satisfied;
+the master emits one deduplicated finding with every supported dimension.
+</example>
+<example>
+An error log interpolates a learner-supplied filename or private storage path. Identify the data
+category and operational audience. Report under privacy only when that channel creates an unintended
+or unnecessary disclosure; describe the category without copying the sensitive value.
+</example>
+<example>
+A query appears unscoped in one function, but a guaranteed repository manager already binds every
+query to the authenticated tenant. Record the criterion as assessed with that safeguard and emit no
+finding unless a concrete call path bypasses it.
+</example>
+</review_examples>`;
 
 const MASTER_AGGREGATION = `<master_aggregation>
 The parent/master review agent owns the final result. After all dimension workers return, the master
@@ -200,12 +241,12 @@ ${PR_EVIDENCE_LIMITS}
 
 ${DIMENSION_SUBAGENT_WORKFLOW}
 
+${REVIEW_REASONING_EXAMPLES}
+
 ${MASTER_AGGREGATION}
 
-${FINDING_CONTRACT}
-
 <continuity>
-After every completed review, including a no-finding review, run
+Before writing the final user report for every completed review, including a no-finding review, run
 \`npx --no-install ccr context review-journal\` for changes or codebase scope, or
 \`npx --no-install ccr context review-journal PR-<number>\` for PR scope. Preserve the returned
 journal and append one
@@ -224,6 +265,11 @@ ${DECISIONS_UPDATE_RULE}
 
 ${REVIEW_FOLLOW_UP}
 </continuity>
+
+Do not emit the final review report until continuity is complete and the edited journal has been
+re-read successfully.
+
+${FINDING_CONTRACT}
 
 <examples>
 <example>

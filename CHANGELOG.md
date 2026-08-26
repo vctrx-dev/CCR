@@ -7,6 +7,28 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+### Changed
+
+- Added the default-off `hooks.autoUpdateContext` setting. When enabled, post-commit hooks run the
+  context skill through headless Claude Code and record successful commits locally to prevent
+  duplicate processing, without staging, committing, amending, resetting, or pushing. Completion is
+  validated against the exact journal and permitted context files, and interrupted-run locks recover.
+- Fixed advisory pre-commit integration so successful warning output remains visible while command
+  failures stay non-blocking, and made post-commit fallback text event-specific.
+- Review reporting now waits for continuity-journal completion. Working journals remain reusable
+  after their 4,000-character evidence preview is truncated, up to a separate 64,000-character
+  managed-file safety bound.
+- Expanded the review taxonomy with deeper domain criteria and a new `system-integrity` dimension
+  covering execution, state lifecycle, concurrency, authentication, unsafe inputs, resource
+  exhaustion, failure handling, and cross-layer contract defects. Review workers now test explicit
+  cross-file failure hypotheses and use concrete examples while the master deduplicates overlapping
+  domain and system findings.
+- Prompt prose and data-only taxonomy content no longer use wording, snapshot, or hard-coded registry
+  tests. The audit blast-radius rule skips prompt-only changes while executable parsing,
+  installation, CLI behavior, and package integrity remain covered.
+- Removed empty placeholder directories, unused test helpers, and fixture commands whose backing
+  scripts were never implemented. Contributor guidance now points to the active source structure.
+
 ## 0.7.0 - 2026-08-25
 
 ### Changed

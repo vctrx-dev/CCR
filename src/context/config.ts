@@ -18,6 +18,7 @@ const hooksSettingsSchema = z
   .object({
     enabled: z.boolean(),
     checkBeforeCommit: z.boolean(),
+    autoUpdateContext: z.boolean().default(false),
   })
   .strict();
 
@@ -32,7 +33,11 @@ const instructionsSchema = z
 const publicConfigSchema = z
   .object({
     domain: z.string().trim().min(1).max(80).default("unspecified"),
-    hooks: hooksSettingsSchema.default({ enabled: true, checkBeforeCommit: true }),
+    hooks: hooksSettingsSchema.default({
+      enabled: true,
+      checkBeforeCommit: true,
+      autoUpdateContext: false,
+    }),
     context: contextSettingsSchema.default({
       recentJournalEntries: 3,
       maxCompactionPercent: 25,
@@ -97,7 +102,7 @@ export type LocalContextConfig = z.infer<typeof localConfigSchema>;
 
 export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
   domain: "unspecified",
-  hooks: { enabled: true, checkBeforeCommit: true },
+  hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
   context: {
     recentJournalEntries: 3,
     maxCompactionPercent: 25,
@@ -142,6 +147,7 @@ function migrateLegacyConfig(config: z.infer<typeof legacyConfigSchema>): Contex
     hooks: {
       enabled: config.hooks ?? true,
       checkBeforeCommit: config.automation?.checkBeforeCommit ?? true,
+      autoUpdateContext: false,
     },
     context: {
       ...DEFAULT_CONTEXT_CONFIG.context,
@@ -235,6 +241,12 @@ export function updateContextConfig(
         hooks: { ...config.hooks, checkBeforeCommit: parseBooleanSetting(value) },
       };
       break;
+    case "hooks.autoUpdateContext":
+      updated = {
+        ...config,
+        hooks: { ...config.hooks, autoUpdateContext: parseBooleanSetting(value) },
+      };
+      break;
     case "context.recentJournalEntries":
       updated = {
         ...config,
@@ -282,7 +294,7 @@ export function updateContextConfig(
       break;
     default:
       throw new Error(
-        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, context.recentJournalEntries, context.maxCompactionPercent, instructions.updateClaudeMd, instructions.updateAgentsMd, and instructions.updateDecisionsMd.",
+        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, hooks.autoUpdateContext, context.recentJournalEntries, context.maxCompactionPercent, instructions.updateClaudeMd, instructions.updateAgentsMd, and instructions.updateDecisionsMd.",
       );
   }
   return resolvedConfigSchema.parse(updated);

@@ -29,6 +29,7 @@ export interface JournalDetails {
 
 const JOURNAL_FILENAME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(?:\.\d+)?\.md$/u;
 const MAX_JOURNAL_EVIDENCE_CHARACTERS = 4_000;
+const MAX_JOURNAL_FILE_CHARACTERS = 64_000;
 const pullRequestNumberSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const pullRequestTokenSchema = z
   .string()
@@ -104,12 +105,12 @@ async function readJournalEvidence(root: string, relativePath: string): Promise<
 async function readCompleteJournal(root: string, relativePath: string): Promise<string> {
   const bounded = await readBoundedTextIfExists(
     await assertSafeManagedPath(root, relativePath),
-    MAX_JOURNAL_EVIDENCE_CHARACTERS,
+    MAX_JOURNAL_FILE_CHARACTERS,
   );
   if (bounded === undefined) throw new Error(`Journal entry disappeared: ${relativePath}`);
   if (bounded.isTruncated) {
     throw new Error(
-      `Journal entry exceeds ${MAX_JOURNAL_EVIDENCE_CHARACTERS} characters: ${relativePath}`,
+      `Journal entry exceeds ${MAX_JOURNAL_FILE_CHARACTERS} characters: ${relativePath}`,
     );
   }
   return bounded.content;
@@ -174,10 +175,11 @@ export async function journalEntryExistsForCommit(
   directory?: string,
 ): Promise<boolean> {
   const resolvedDirectory = directory ?? branchDetails(root).directory;
-  return (await findJournalEntryForCommit(root, commit, resolvedDirectory)) !== undefined;
+  return (await journalEntryForCommit(root, commit, resolvedDirectory)) !== undefined;
 }
 
-async function findJournalEntryForCommit(
+/** Returns the sole journal path already associated with a commit without creating one. */
+export async function journalEntryForCommit(
   root: string,
   commit: string,
   directory: string,
@@ -251,7 +253,7 @@ export async function ensureJournalEntryForHead(
 ): Promise<JournalResult> {
   const { branch, directory } = branchDetails(root);
   const commit = currentCommit(root);
-  const existing = await findJournalEntryForCommit(root, commit, directory);
+  const existing = await journalEntryForCommit(root, commit, directory);
   if (existing) return existing;
   return createJournalEntry(root, now, { branch, directory, commit });
 }

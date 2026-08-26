@@ -167,6 +167,23 @@ it("should reuse one review journal entry for repeated reviews of the same commi
   ]);
 });
 
+it("should reuse a working journal after its bounded evidence preview is truncated", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-large-working-journal-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  const first = await ensureWorkingJournalEntry(root, new Date("2026-07-29T11:00:00Z"));
+  await writeFile(
+    path.join(root, first.path),
+    `${await readFile(path.join(root, first.path), "utf8")}${"x".repeat(10_000)}`,
+    "utf8",
+  );
+
+  const repeated = await ensureWorkingJournalEntry(root, new Date("2026-07-29T12:00:00Z"));
+
+  expect(repeated).toEqual(first);
+});
+
 it("should reuse one isolated journal entry for each pull request", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-pr-journal-"));
   roots.push(root);

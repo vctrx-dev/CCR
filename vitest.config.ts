@@ -5,6 +5,8 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Git-heavy temporary repositories contend badly under Windows process-level parallelism.
+    maxWorkers: process.platform === "win32" ? 1 : undefined,
     passWithNoTests: true,
     coverage: {
       provider: "v8",

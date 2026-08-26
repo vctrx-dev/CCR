@@ -1,10 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import type { Dirent } from "node:fs";
 import {
   type FileHandle,
   lstat,
   mkdir,
   open,
   readFile,
+  readdir,
   rename,
   unlink,
   writeFile,
@@ -27,6 +29,18 @@ export interface BoundedText {
 /** Returns whether a filesystem error represents an absent path. */
 export function isFileNotFound(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function ignoreError(): undefined {
+  return undefined;
+}
+
+async function unlinkIfExists(target: string): Promise<void> {
+  try {
+    await unlink(target);
+  } catch (error: unknown) {
+    if (!isFileNotFound(error)) throw error;
+  }
 }
 
 /** Reads optional UTF-8 text without hiding errors other than a missing file. */
@@ -119,7 +133,7 @@ export async function writeTextAtomic(target: string, content: string): Promise<
     await writeFile(temporary, content, "utf8");
     await rename(temporary, target);
   } catch (error: unknown) {
-    await unlink(temporary).catch(() => undefined);
+    await unlink(temporary).catch(ignoreError);
     throw error;
   }
 }
@@ -142,4 +156,111 @@ export async function readManagedTextIfExists(
   relativePath: string,
 ): Promise<string | undefined> {
   return readTextIfExists(await assertSafeManagedPath(root, relativePath));
+}
+
+/**
+ * Fingerprints a bounded managed directory so headless workflows can reject edits to ignored CCR
+ * files as well as Git-visible files. Symlinks and unexpectedly large trees fail closed.
+ */
+export async function fingerprintManagedTree(
+  root: string,
+  relativeDirectory: string,
+  maxFiles = 1_000,
+  maxCharactersPerFile = 64_000,
+): Promise<Map<string, string>> {
+  const fingerprints = new Map<string, string>();
+  const pending = [relativeDirectory];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    if (directory === undefined) break;
+    const absoluteDirectory = await assertSafeManagedPath(root, directory);
+    let entries: Dirent[];
+    try {
+      entries = await readdir(absoluteDirectory, { withFileTypes: true });
+    } catch (error: unknown) {
+      if (isFileNotFound(error)) continue;
+      throw error;
+    }
+    for (const entry of entries) {
+      const relativePath = path.join(directory, entry.name).replaceAll(path.sep, "/");
+      if (entry.isSymbolicLink())
+        throw new Error(`Managed path is a symbolic link: ${relativePath}`);
+      if (entry.isDirectory()) {
+        pending.push(relativePath);
+        continue;
+      }
+      if (!entry.isFile()) throw new Error(`Managed path is not a regular file: ${relativePath}`);
+      if (fingerprints.size >= maxFiles) throw new Error("Managed tree exceeds the file limit.");
+      const bounded = await readBoundedTextIfExists(
+        await assertSafeManagedPath(root, relativePath),
+        maxCharactersPerFile,
+      );
+      if (bounded === undefined || bounded.isTruncated) {
+        throw new Error(`Managed file exceeds the content limit: ${relativePath}`);
+      }
+      fingerprints.set(relativePath, createHash("sha256").update(bounded.content).digest("hex"));
+    }
+  }
+  return fingerprints;
+}
+
+/** Atomically acquires a repository-contained local lock; an absent result means another process owns it. */
+export async function tryAcquireManagedLock(
+  root: string,
+  relativePath: string,
+): Promise<(() => Promise<void>) | undefined> {
+  const target = await assertSafeManagedPath(root, relativePath);
+  await mkdir(path.dirname(target), { recursive: true });
+  await assertSafeManagedPath(root, relativePath);
+  const openExclusive = async (): Promise<FileHandle | undefined> => {
+    try {
+      return await open(target, "wx");
+    } catch (error: unknown) {
+      if (error instanceof Error && "code" in error && error.code === "EEXIST") return undefined;
+      throw error;
+    }
+  };
+  let handle = await openExclusive();
+  if (handle === undefined) {
+    const existing = await readBoundedTextIfExists(target, 200).catch(() => undefined);
+    let isStale = true;
+    if (existing && !existing.isTruncated) {
+      try {
+        const value: unknown = JSON.parse(existing.content);
+        if (typeof value === "object" && value !== null && "pid" in value && "createdAt" in value) {
+          const pid = value.pid;
+          const createdAt = value.createdAt;
+          if (typeof pid === "number" && Number.isInteger(pid) && typeof createdAt === "number") {
+            let isAlive = true;
+            try {
+              process.kill(pid, 0);
+            } catch (error: unknown) {
+              isAlive = error instanceof Error && "code" in error && error.code === "EPERM";
+            }
+            isStale = !isAlive || Date.now() - createdAt > 15 * 60_000;
+          }
+        }
+      } catch {
+        isStale = true;
+      }
+    }
+    if (!isStale) return undefined;
+    await unlinkIfExists(target);
+    handle = await openExclusive();
+    if (handle === undefined) return undefined;
+  }
+  try {
+    await handle.writeFile(
+      `${JSON.stringify({ pid: process.pid, createdAt: Date.now() })}\n`,
+      "utf8",
+    );
+    await handle.close();
+  } catch (error: unknown) {
+    await handle.close().catch(ignoreError);
+    await unlink(target).catch(ignoreError);
+    throw error;
+  }
+  return async () => {
+    await unlinkIfExists(target);
+  };
 }

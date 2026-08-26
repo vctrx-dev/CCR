@@ -147,7 +147,7 @@ Then open Claude Code:
 
 The review skill loads its taxonomy from the validated data-only
 `src/review/dimensions.json` registry. Current review dimensions: `fairness-evaluation`, `pedagogy`,
-`decision-fairness`, `inclusion`, `transparency`, `privacy`.
+`decision-fairness`, `inclusion`, `transparency`, `privacy`, `system-integrity`.
 Blank arguments default to a changes review across all dimensions. Use `/ccr-review changes` for
 clarity, `/ccr-review codebase` for the complete codebase, or `/ccr-review PR-123` for pull request
 123. Put `all` or comma-separated dimension IDs after the scope, such as
@@ -158,12 +158,20 @@ To add, delete, reorder, or revise dimensions, change the registry first; also u
 and user-manual references, then run package smoke to verify the shipped help and documentation
 remain aligned.
 
-Reviews fan out exactly one subagent per selected dimension. Each worker receives the complete criteria
-for its dimension and reports criterion coverage plus evidence-backed findings. The master agent then
-collects, deduplicates, verifies, and reports only validated findings.
-contains severity, file, issue, triggering case, and dimension; source code is never changed without
-later approval. The privacy broker exposes staged, unstaged, and untracked evidence without exposing
-excluded paths.
+Reviews fan out exactly one subagent per selected dimension. Each worker receives the complete
+criteria for its dimension, forms and tests concrete cross-layer failure hypotheses, and reports
+criterion coverage plus evidence-backed findings. The master agent then collects, deduplicates,
+verifies, and reports only validated findings. Each verified finding contains severity, file, issue,
+triggering case, and dimension; source code is never changed without later approval. The privacy
+broker exposes staged, unstaged, and untracked evidence without exposing excluded paths.
+
+The original educational and responsible-AI dimensions retain their focus while covering more
+implementation failure modes. `privacy` includes unauthorized access, disclosure through outputs and
+logs, and retention lifecycle defects in addition to consent. `system-integrity` is the correctness
+backstop for execution/build failures, state and resource corruption, concurrency and idempotency,
+authentication and request integrity, unsafe input boundaries, resource exhaustion, masked errors,
+and cross-layer contract or configuration drift. The master reports one root cause with every
+supported dimension instead of duplicating overlapping findings.
 Before any worker is dispatched, every review reads bounded `project.md`, `stakeholders.md`, and
 `decisions.md` plus every journal returned within `context.recentJournalEntries`. Changes and
 codebase scopes use the current branch journals; PR scope uses that PR's isolated journal history.
@@ -224,8 +232,14 @@ separator bytes so removal can verify exact restoration. While that provenance s
 when repository files are staged without a staged shared `.ccr/` file. The post-commit hook starts a
 local journal entry and prints a copy-paste prompt that preloads shared context and configured recent
 journals, completes that same commit entry, and updates only durable context in Claude Code. Hooks
-never invoke Claude automatically, commit, push, or edit shared context without the reviewed context
-operation. Branch-local journals remain ignored and are preserved safely during uninstall.
+remain advisory by default. With `hooks.autoUpdateContext: true`, post-commit instead runs that
+operation through headless Claude Code without permission questions. Successful commits are recorded
+under ignored `.ccr/private/` state to prevent duplicate runs. Automation never stages, commits,
+amends, resets, or pushes. CCR records completion only after the exact commit journal is complete,
+context validates, and no file outside that journal, `project.md`, or opted-in `decisions.md` changed.
+Interrupted-run locks are reclaimed safely; resulting shared context remains visible for review and
+a later commit.
+Branch-local journals remain ignored and are preserved safely during uninstall.
 
 `.ccr/config.json` is human-owned. CCR, Claude, and other AI coding agents must not change it
 without approval of the exact setting and value. The generated file is intentionally strict JSON, so
@@ -239,7 +253,8 @@ The complete default file is:
   "domain": "unspecified",
   "hooks": {
     "enabled": true,
-    "checkBeforeCommit": true
+    "checkBeforeCommit": true,
+    "autoUpdateContext": false
   },
   "context": {
     "recentJournalEntries": 3,
@@ -271,7 +286,7 @@ Runtime requirement: Node.js 22.12 or later and Claude Code 2.1.0 or later.
 
 The package provides context management plus one data-driven review skill with changes, codebase,
 and read-only pull-request scopes. Its review taxonomy covers fairness evaluation, pedagogy, decision
-fairness, inclusion, transparency, and privacy. Automated fixes and the
+fairness, inclusion, transparency, privacy, and cross-cutting system integrity. Automated fixes and the
 GitHub Action remain on the roadmap. They are not claimed as available.
 
 ## Development

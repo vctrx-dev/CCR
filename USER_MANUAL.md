@@ -101,9 +101,13 @@ path, interpreter, or minimal Git hook. Disable hooks before initialization if t
 - `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file.
 - `post-commit` — starts the commit journal and prints an update instruction when needed.
 
-Hooks are advisory: they do not invoke Claude, edit context, block commits, or fail commits. Paste a
-post-commit instruction into Claude Code to preload shared context and configured recent journals,
-complete the same commit journal, and update `project.md` only when durable high-level context changed.
+Hooks are advisory by default. With `hooks.autoUpdateContext: true`, post-commit runs the update
+through headless Claude Code without permission questions, completes the same journal, and changes
+shared context only when justified. Successful commits are recorded in ignored private state so they
+are not processed twice. Automation never stages, commits, amends, resets, or pushes; failures stay
+non-blocking. Completion requires the exact commit journal, valid context, and no edits outside the
+journal, `project.md`, or opted-in `decisions.md`; stale locks from interrupted runs are reclaimed.
+Resulting shared context remains visible for review and a later commit.
 
 Inspect hooks with `npx --no-install ccr hooks status`. Remove provenance-managed hooks with
 `/ccr-hooks remove`, then disable future sync with
@@ -134,6 +138,7 @@ After it succeeds, edit `.ccr/config.json` directly or use the validated updater
 npx --no-install ccr config set domain your-domain --apply
 npx --no-install ccr config set hooks.enabled false --apply
 npx --no-install ccr config set hooks.checkBeforeCommit false --apply
+npx --no-install ccr config set hooks.autoUpdateContext true --apply
 npx --no-install ccr config set instructions.updateClaudeMd true --apply
 npx --no-install ccr config set instructions.updateDecisionsMd true --apply
 ```
@@ -153,7 +158,8 @@ See `.ccr/config-manual.md` for every setting and accepted value.
   "domain": "unspecified",
   "hooks": {
     "enabled": true,
-    "checkBeforeCommit": true
+    "checkBeforeCommit": true,
+    "autoUpdateContext": false
   },
   "context": {
     "recentJournalEntries": 3,
@@ -237,8 +243,17 @@ Review one or more dimensions by ID:
 ```
 
 Current review dimensions: `fairness-evaluation`, `pedagogy`, `decision-fairness`, `inclusion`,
-`transparency`, `privacy`. Run
+`transparency`, `privacy`, `system-integrity`. Run
 `npx --no-install ccr help` to see the IDs bundled in the installed version.
+
+The six domain dimensions keep their educational and responsible-AI focus. They now include deeper
+checks for fairness-pipeline correctness, instructional-content integrity, decision-policy
+consistency, recoverable supported flows, accurate status/error communication, unauthorized data
+access, disclosure through outputs and logs, and retention lifecycle behavior. `system-integrity`
+covers general defects that should not be forced into a domain criterion: broken execution/build/test
+paths, state or external-resource corruption, concurrency and idempotency races, authentication and
+request-integrity failures, unsafe untrusted-input boundaries, resource exhaustion, masked errors,
+and producer/consumer or configuration drift.
 
 `/ccr-review` and `/ccr-review changes` check staged, unstaged, and approved untracked changes.
 `/ccr-review codebase` checks the complete safe Git index plus live changes. `/ccr-review PR-123`
@@ -260,9 +275,11 @@ Invalid scopes, PR numbers, duplicate IDs, mixed `all` selections, and unknown d
 before review or journal writes. PR review requires an authenticated `gh` CLI and never uses the
 current working tree as PR evidence.
 
-Each selected dimension gets exactly one subagent. That worker assesses every criterion in its
-dimension and returns evidence-backed findings. The master agent collects, deduplicates, verifies,
-and validates the findings before reporting them. Each bug includes:
+Each selected dimension gets exactly one subagent. That worker assesses every criterion, forms
+multiple concrete failure hypotheses, and traces relevant success, failure, retry, concurrency,
+replacement, and cleanup behavior before returning evidence-backed findings. The master agent
+collects, deduplicates, verifies, and validates the findings before reporting them. One root cause is
+reported once with every applicable selected dimension. Each bug includes:
 
 ```text
 Severity: Critical | High | Medium | Low
@@ -313,8 +330,9 @@ references and run package smoke. `scripts/package-smoke.mjs` derives the shippe
 and README assertion from the registry. Setup renders the validated installed registry once at
 `.claude/skills/ccr/references/dimensions.md`; `/ccr-review` and `/ccr` read that shared file.
 
-The included dimensions are an initial baseline. Replace them as the taxonomy matures. An empty
-registry stops reviews instead of inventing criteria.
+The included dimensions are a maintained baseline. Extend them when the taxonomy matures, but keep
+each criterion's domain purpose and put genuinely cross-cutting correctness defects under
+`system-integrity`. An empty registry stops reviews instead of inventing criteria.
 
 ## Context operations
 

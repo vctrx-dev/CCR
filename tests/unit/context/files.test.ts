@@ -1,8 +1,13 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
-import { readBoundedTextIfExists, writeManagedText } from "../../../src/context/files";
+import {
+  fingerprintManagedTree,
+  readBoundedTextIfExists,
+  tryAcquireManagedLock,
+  writeManagedText,
+} from "../../../src/context/files";
 import { createTemporaryRootRegistry } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
@@ -44,4 +49,28 @@ it("should preserve a multibyte UTF-16 prefix ending with an emoji", async () =>
     content: prefix,
     isTruncated: true,
   });
+});
+
+it("should bound managed-tree fingerprints and tolerate an absent tree", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-fingerprint-files-"));
+  roots.push(root);
+  await expect(fingerprintManagedTree(root, ".ccr")).resolves.toEqual(new Map());
+  await mkdir(path.join(root, ".ccr/nested"), { recursive: true });
+  await writeFile(path.join(root, ".ccr/nested/context.md"), "context\n");
+
+  expect(await fingerprintManagedTree(root, ".ccr")).toEqual(
+    new Map([[".ccr/nested/context.md", expect.stringMatching(/^[a-f0-9]{64}$/u)]]),
+  );
+  await expect(fingerprintManagedTree(root, ".ccr", 0)).rejects.toThrow("file limit");
+  await expect(fingerprintManagedTree(root, ".ccr", 1, 2)).rejects.toThrow("content limit");
+});
+
+it("should hold an exclusive managed lock and permit release more than once", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-lock-files-"));
+  roots.push(root);
+  const release = await tryAcquireManagedLock(root, ".ccr/private/test.lock");
+  expect(release).toBeTypeOf("function");
+  await expect(tryAcquireManagedLock(root, ".ccr/private/test.lock")).resolves.toBeUndefined();
+  await release?.();
+  await expect(release?.()).resolves.toBeUndefined();
 });

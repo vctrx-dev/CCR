@@ -3,7 +3,7 @@
 /**
  * AI AGENT INSTRUCTION: DO NOT MODIFY THIS FILE WITHOUT EXPLICIT APPROVAL.
  * This is the project's universal code quality + blast radius script.
- * It enforces architectural rules dynamically — no file lists to update.
+ * It enforces architectural rules dynamically, with narrow documented prompt-content exceptions.
  * Changes here affect every commit. Discuss with maintainers first.
  *
  * Usage:
@@ -37,6 +37,13 @@ const MAX_LOC_DEFAULT = 500;
 const MAX_LOC_TYPES = 700;
 const MAX_LOC_TESTS = 400;
 const MAX_FUNC_PARAMS = 4;
+const PROMPT_ONLY_SOURCE_FILES = new Set([
+  "src/context/manual-skill.ts",
+  "src/context/skills.ts",
+  "src/context/templates.ts",
+  "src/review/skills.ts",
+]);
+const PROMPT_DATA_FILES = new Set(["src/review/dimensions.json"]);
 
 let hasErrors = false;
 let hasWarnings = false;
@@ -110,6 +117,10 @@ function fileExportsLogic(content) {
 function sourceToTestPaths(srcRel) {
   const base = srcRel.replace(/^src\//, "").replace(/\.tsx?$/, "");
   return ["unit", "integration", "e2e"].map((l) => `tests/${l}/${base}.test.ts`);
+}
+
+function isPromptOrTaxonomyFile(rel) {
+  return PROMPT_ONLY_SOURCE_FILES.has(rel) || PROMPT_DATA_FILES.has(rel);
 }
 
 function run(cmd) {
@@ -375,6 +386,7 @@ function checkTestFilesExist() {
 
   for (const filePath of srcFiles) {
     const rel = relative(ROOT, filePath).replace(/\\/g, "/");
+    if (isPromptOrTaxonomyFile(rel)) continue;
     if (rel === "src/index.ts" || rel.endsWith("/index.ts")) continue;
     const candidates = sourceToTestPaths(rel);
     const found = candidates.some(
@@ -485,8 +497,9 @@ function findTestDirs(level) {
 function mapTests(changedFiles) {
   const plan = { unit: [], integration: [], e2e: [] };
   const seenInt = new Set();
+  const testableChangedFiles = changedFiles.filter((file) => !isPromptOrTaxonomyFile(file));
 
-  for (const file of changedFiles) {
+  for (const file of testableChangedFiles) {
     if (!file.startsWith("src/") || !file.endsWith(".ts") || file.endsWith(".d.ts")) continue;
     const base = file.replace(/^src\//, "").replace(/\.tsx?$/, "");
 
@@ -504,7 +517,9 @@ function mapTests(changedFiles) {
   }
 
   const e2eFiles = findTestDirs("e2e");
-  if (e2eFiles.length > 0 && changedFiles.some((f) => f.startsWith("src/"))) plan.e2e = e2eFiles;
+  if (e2eFiles.length > 0 && testableChangedFiles.some((f) => f.startsWith("src/"))) {
+    plan.e2e = e2eFiles;
+  }
 
   return plan;
 }

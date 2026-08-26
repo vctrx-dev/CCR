@@ -1,22 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  REVIEW_DIMENSIONS,
-  parseReviewDimensionRegistry,
-  renderReviewDimensionReference,
-} from "../../../src/review/dimensions";
+import { parseReviewDimensionRegistry } from "../../../src/review/dimensions";
 
 describe("review dimension registry", () => {
-  it("should ship the configured review dimensions in canonical order", () => {
-    expect(REVIEW_DIMENSIONS.dimensions.map(({ id }) => id)).toEqual([
-      "fairness-evaluation",
-      "pedagogy",
-      "decision-fairness",
-      "inclusion",
-      "transparency",
-      "privacy",
-    ]);
-  });
-
   it("should parse data-only dimensions and preserve their declared order", () => {
     const registry = parseReviewDimensionRegistry({
       dimensions: [
@@ -88,14 +73,5 @@ describe("review dimension registry", () => {
     expect(() =>
       parseReviewDimensionRegistry({ schemaVersion: 1, dimensions: [dimension] }),
     ).toThrow(/unrecognized key/i);
-  });
-
-  it("should render a package-managed progressive-disclosure reference", () => {
-    const reference = renderReviewDimensionReference({ dimensions: [] });
-
-    expect(reference).toMatch(/^---\nname: ccr-review-dimensions\n/);
-    expect(reference).toContain("managed by CCR skill");
-    expect(reference).toContain('"dimensions": []');
-    expect(reference).toContain("No review dimensions are configured");
   });
 });

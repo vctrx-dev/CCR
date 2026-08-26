@@ -32,7 +32,7 @@ export interface HookResult {
 
 const HOOK_DEFINITIONS: Record<CcrHookName, ManagedBlock> = {
   "pre-commit": managedBlock(`# ccr:start - advisory context check
-npx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2
+npx --no-install ccr hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2
 # ccr:end`),
   "post-commit": managedBlock(`# ccr:start - post-commit context check
 npx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2

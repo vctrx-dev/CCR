@@ -48,7 +48,9 @@ describe("runAfterCommitCheck", () => {
 
     const second = await runAfterCommitCheck(root);
     expect(second.journalCreated).toBe(false);
+    expect(second.journalPath).toBe(result.journalPath);
     expect(second.shouldWarn).toBe(true);
+    expect(second.hasRepositoryChanges).toBe(true);
   });
 
   it("should not warn when the same commit also updated shared context", async () => {
@@ -66,6 +68,7 @@ describe("runAfterCommitCheck", () => {
 
     const result = await runAfterCommitCheck(root);
     expect(result.shouldWarn).toBe(false);
+    expect(result.hasRepositoryChanges).toBe(true);
   });
 
   it("should finalize the working journal instead of creating a second entry", async () => {

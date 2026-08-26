@@ -79,9 +79,10 @@ state. Never store contents, secrets, or external paths. Preserve original metad
 4. If none is safe, report the unsupported constraint and the smallest manual choice needed. Do not
    install a new framework or dependency merely for CCR.
 
-The pre-commit action is \`npx --no-install ccr hooks pre-commit\`. The post-commit action is
-\`npx --no-install ccr hooks post-commit\`. Redirect only the pre-commit check's routine unavailability;
-keep the post-commit copy-paste prompt visible.
+The actions are \`npx --no-install ccr hooks pre-commit\` and
+\`npx --no-install ccr hooks post-commit\`. Keep successful output visible. Make each wrapper
+non-blocking; print \`CCR: context check unavailable; commit continues.\` on pre-commit failure and
+\`CCR: post-commit context check unavailable.\` on post-commit failure.
 
 ## Operations
 

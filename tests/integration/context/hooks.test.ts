@@ -90,7 +90,7 @@ it("should distinguish current, stale, malformed, and absent legacy blocks", asy
 
   await writeFile(
     hookPath,
-    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
+    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
     "utf8",
   );
   expect((await readContextHookStatus(root)).status).toBe("current");
@@ -180,7 +180,7 @@ it("should remove both legacy advisory hooks", async () => {
   const root = await createRepository();
   await writeFile(
     path.join(root, ".git/hooks/pre-commit"),
-    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
+    '#!/bin/sh\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n',
     "utf8",
   );
   await writeFile(
@@ -198,7 +198,7 @@ it("should validate both legacy hooks before writing either one", async () => {
   const root = await createRepository();
   const preCommitPath = path.join(root, ".git/hooks/pre-commit");
   const preCommit =
-    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
+    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
   await writeFile(preCommitPath, preCommit, "utf8");
   await writeFile(
     path.join(root, ".git/hooks/post-commit"),
@@ -215,7 +215,7 @@ it("should reject drift after a two-hook removal preview before writing", async 
   const preCommitPath = path.join(root, ".git/hooks/pre-commit");
   const postCommitPath = path.join(root, ".git/hooks/post-commit");
   const preCommit =
-    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit 2>/dev/null || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
+    '#!/bin/sh\n\n# ccr:start - advisory context check\nnpx --no-install ccr hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2\n# ccr:end\n';
   const postCommit =
     '#!/bin/sh\n\n# ccr:start - post-commit context check\nnpx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2\n# ccr:end\n';
   await writeFile(preCommitPath, preCommit, "utf8");

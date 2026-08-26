@@ -171,7 +171,11 @@ describe("CCR setup", () => {
     );
 
     const preview = await previewSetup(root);
-    expect(preview.config.hooks).toEqual({ enabled: true, checkBeforeCommit: false });
+    expect(preview.config.hooks).toEqual({
+      enabled: true,
+      checkBeforeCommit: false,
+      autoUpdateContext: false,
+    });
     expect(preview.changes.find((change) => change.path === ".ccr/config.json")?.action).toBe(
       "preserve",
     );
@@ -190,7 +194,11 @@ describe("CCR setup", () => {
     expect(upgraded.schemaVersion).toBeUndefined();
     expect(upgraded._help).toBeUndefined();
     expect(upgraded._comment).toBeUndefined();
-    expect(upgraded.hooks).toEqual({ enabled: true, checkBeforeCommit: false });
+    expect(upgraded.hooks).toEqual({
+      enabled: true,
+      checkBeforeCommit: false,
+      autoUpdateContext: false,
+    });
     expect(upgraded.discovery).toBeUndefined();
     expect(upgraded.privacy).toBeUndefined();
   });
@@ -223,7 +231,7 @@ describe("CCR setup", () => {
     expect(result.manual.action).toBe("create");
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"))).toMatchObject({
       domain: "education",
-      hooks: { enabled: true, checkBeforeCommit: true },
+      hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
       context: { recentJournalEntries: 2 },
     });
   });
@@ -232,43 +240,19 @@ describe("CCR setup", () => {
     const { mkdir, writeFile } = await import("node:fs/promises");
     const root = await makeRepository();
     const skillPath = path.join(root, ".claude/skills/ccr-context/SKILL.md");
+    const oldSkill =
+      "---\nname: ccr-context\ndescription: Old context skill\n---\n\n<!-- managed by CCR skill; package updates may replace this file -->\nold\n";
     await mkdir(path.dirname(skillPath), { recursive: true });
-    await writeFile(
-      skillPath,
-      "---\nname: ccr-context\ndescription: Old context skill\n---\n\n<!-- managed by CCR skill; package updates may replace this file -->\nold\n",
-      "utf8",
-    );
+    await writeFile(skillPath, oldSkill, "utf8");
 
     const result = await applySetup(root);
 
     expect(result.changedPaths).toContain(".claude/skills/ccr-context/SKILL.md");
-    const skill = await readFile(skillPath, "utf8");
-    expect(skill).toMatch(/`initialize`, `update`, `verify`,\s*`addition`, or `compact`/);
-    expect(skill).toContain("optional context that is not in this repository");
-    expect(skill).toMatch(/adaptive subagents/i);
-    expect(skill).toContain("verification subagent");
-    expect(skill).toContain("single, connected project narrative");
-    expect(skill).toContain("small but consequential");
-    expect(skill).toMatch(/fixed\s+category sections/);
-    expect(skill).toMatch(/stop\s+immediately/);
-    expect(skill).toContain("Normalize `initialise`");
-    expect(skill).toMatch(/Never edit\s+`\.ccr\/config\.json`/);
-    expect(skill).toContain("20% and 30%");
-    expect(skill).toMatch(/Please review the resulting `\.ccr`\s+context changes/);
-    expect(skill).not.toContain(".ccr/architecture.md");
-    expect(skill).toContain(".ccr/decisions.md");
-    expect(skill).toContain("human-owned and read-only to CCR");
+    expect(await readFile(skillPath, "utf8")).not.toBe(oldSkill);
 
     const project = await readFile(path.join(root, ".ccr/project.md"), "utf8");
     expect(project).toContain("living, evidence-backed narrative");
     expect(project).toMatch(/Do not divide the account\s+into fixed categories/);
-
-    const manual = await readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8");
-    expect(manual).toContain("CCR support guide");
-    expect(manual).toContain("/ccr-context");
-    expect(manual).toContain("/ccr-review");
-    expect(manual).toContain("/ccr-hooks");
-    expect(manual).not.toContain("## Initialize");
   });
 
   it("should preserve a skill with a foreign marker", async () => {

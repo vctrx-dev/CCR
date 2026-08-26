@@ -24,6 +24,7 @@ describe("configuration CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "config", "defaults"]);
     expect(output).toContain('"checkBeforeCommit": true');
     expect(output).toContain('"enabled": true');
+    expect(output).toContain('"autoUpdateContext": false');
     expect(output).toContain('"updateDecisionsMd": false');
     expect(output).not.toContain('"schemaVersion"');
     expect(output).not.toContain('"discovery"');
@@ -37,11 +38,16 @@ describe("configuration CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     const configText = await readFile(path.join(root, ".ccr/config.json"), "utf8");
     const manualText = await readFile(path.join(root, ".ccr/config-manual.md"), "utf8");
-    expect(JSON.parse(configText).hooks).toEqual({ enabled: true, checkBeforeCommit: true });
+    expect(JSON.parse(configText).hooks).toEqual({
+      enabled: true,
+      checkBeforeCommit: true,
+      autoUpdateContext: false,
+    });
     const manualKeys = [
       "## `domain`",
       "### `hooks.enabled`",
       "### `hooks.checkBeforeCommit`",
+      "### `hooks.autoUpdateContext`",
       "### `context.recentJournalEntries`",
       "### `context.maxCompactionPercent`",
       "### `instructions.updateClaudeMd`",
@@ -86,7 +92,7 @@ describe("configuration CLI", () => {
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "config"]);
     expect(JSON.parse(output)).toMatchObject({
-      hooks: { checkBeforeCommit: true, enabled: true },
+      hooks: { checkBeforeCommit: true, enabled: true, autoUpdateContext: false },
     });
 
     output = "";
@@ -129,6 +135,7 @@ describe("configuration CLI", () => {
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).hooks).toEqual({
       enabled: false,
       checkBeforeCommit: false,
+      autoUpdateContext: false,
     });
   });
 });
