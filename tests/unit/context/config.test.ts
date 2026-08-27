@@ -4,6 +4,7 @@ import {
   parseContextConfig,
   resolveContextConfig,
   serializeContextConfig,
+  setDomainIfUnspecified,
   toPublicContextConfig,
   updateContextConfig,
 } from "../../../src/context/config";
@@ -164,5 +165,19 @@ describe("updateContextConfig", () => {
     expect(() =>
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.maxCompactionPercent", "31"),
     ).toThrow();
+  });
+});
+
+describe("setDomainIfUnspecified", () => {
+  it("should set an inferred domain only for the untouched default", () => {
+    expect(setDomainIfUnspecified(DEFAULT_CONTEXT_CONFIG, "education-technology").domain).toBe(
+      "education-technology",
+    );
+  });
+
+  it("should preserve an explicit human domain", () => {
+    const configured = updateContextConfig(DEFAULT_CONTEXT_CONFIG, "domain", "civic-tech");
+
+    expect(setDomainIfUnspecified(configured, "education-technology")).toEqual(configured);
   });
 });

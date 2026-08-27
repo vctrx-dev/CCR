@@ -4,11 +4,15 @@ import {
   sortUniqueRepositoryPaths,
   truncateEvidence,
 } from "../context/evidence-format";
-import { assertSafeManagedPath, isFileNotFound, readBoundedTextIfExists } from "../context/files";
 import {
+  assertSafeManagedPath,
+  readBoundedUtf8TextIfExists,
+  readRegularFileGitMode,
+} from "../context/files";
+import {
+  readBoundedStagedDiff,
+  readBoundedUnstagedDiff,
   readIndexEntries,
-  readStagedDiff,
-  readUnstagedDiff,
   readUnstagedPaths,
   readUntrackedPaths,
 } from "../context/git";
@@ -27,21 +31,13 @@ import {
  */
 
 const MAX_REVIEW_EVIDENCE_CHARACTERS = 20_000;
+const MAX_REVIEW_CHANGE_PATHS = 5_000;
 
 export interface SafeReviewChanges {
   stagedPaths: string[];
   unstagedPaths: string[];
   untrackedPaths: string[];
   excludedPathCount: number;
-}
-
-async function isRegularWorktreeFile(root: string, relativePath: string): Promise<boolean> {
-  try {
-    return (await lstat(await assertSafeManagedPath(root, relativePath))).isFile();
-  } catch (error: unknown) {
-    if (isFileNotFound(error)) return false;
-    throw error;
-  }
 }
 
 /** Lists safe live change paths, retaining separate staged/unstaged states for partially staged files. */
@@ -69,10 +65,18 @@ export async function listSafeReviewChanges(root: string): Promise<SafeReviewCha
     readUntrackedPaths(root),
     config.privacy.excludedPaths,
   );
+  const overlayPaths = new Set(
+    [...staged.included, ...unstagedFiltered.included, ...untrackedFiltered.included].map(
+      normalizeRepositoryPath,
+    ),
+  );
+  if (overlayPaths.size > MAX_REVIEW_CHANGE_PATHS) {
+    throw new Error(`Review change set exceeds ${MAX_REVIEW_CHANGE_PATHS} paths.`);
+  }
   const untrackedChecks = await Promise.all(
     untrackedFiltered.included.map(async (candidate) => ({
       candidate,
-      isRegular: await isRegularWorktreeFile(root, candidate),
+      isRegular: (await readRegularFileGitMode(root, candidate)) !== undefined,
     })),
   );
   const untrackedPaths = untrackedChecks
@@ -110,16 +114,34 @@ export async function readSafeReviewEvidence(root: string, candidate: string): P
   }
   const sections: string[] = [];
   let hasTruncatedEvidence = false;
-  if (isStaged) sections.push(`## Staged diff\n\n${readStagedDiff(root, normalized)}`);
-  if (isUnstaged) sections.push(`## Unstaged diff\n\n${readUnstagedDiff(root, normalized)}`);
+  if (isStaged) {
+    const staged = await readBoundedStagedDiff(root, normalized, MAX_REVIEW_EVIDENCE_CHARACTERS);
+    hasTruncatedEvidence ||= staged.isTruncated;
+    sections.push(
+      `## Staged diff\n\n${staged.isBinary ? "[CCR binary staged diff omitted]" : staged.content}`,
+    );
+  }
+  if (isUnstaged) {
+    const unstaged = await readBoundedUnstagedDiff(
+      root,
+      normalized,
+      MAX_REVIEW_EVIDENCE_CHARACTERS,
+    );
+    hasTruncatedEvidence ||= unstaged.isTruncated;
+    sections.push(
+      `## Unstaged diff\n\n${unstaged.isBinary ? "[CCR binary unstaged diff omitted]" : unstaged.content}`,
+    );
+  }
   if (isUntracked) {
     const target = await assertSafeManagedPath(root, normalized);
     if (!(await lstat(target)).isFile())
       throw new Error("Approved review path is no longer regular.");
-    const content = await readBoundedTextIfExists(target, MAX_REVIEW_EVIDENCE_CHARACTERS);
+    const content = await readBoundedUtf8TextIfExists(target, MAX_REVIEW_EVIDENCE_CHARACTERS);
     if (content === undefined) throw new Error("Approved review path no longer exists.");
     hasTruncatedEvidence = content.isTruncated;
-    sections.push(`## Untracked file\n\n${content.content}`);
+    sections.push(
+      `## Untracked file\n\n${content.isBinary ? "[CCR binary review evidence omitted]" : content.content}`,
+    );
   }
   return truncateEvidence(`${sections.join("\n\n")}\n`, {
     isTruncated: hasTruncatedEvidence,

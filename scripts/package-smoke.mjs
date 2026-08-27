@@ -93,7 +93,8 @@ try {
     ),
   )[0];
   const files = pack.files.map((file) => file.path).sort();
-  const requiredFiles = ["LICENSE", "README.md", packageJson.bin.ccr, "package.json"]
+  const documentationFiles = ["README.md", "USER_MANUAL.md", "TEST.md"];
+  const requiredFiles = ["LICENSE", ...documentationFiles, packageJson.bin.ccr, "package.json"]
     .concat(publicExportFiles)
     .map((file) => file.replace(/^\.\//u, ""));
   const missingFiles = requiredFiles.filter((file) => !files.includes(file));
@@ -101,7 +102,9 @@ try {
     throw new Error(`Packed package is missing declared files: ${missingFiles.join(", ")}`);
   }
   const unexpectedFiles = files.filter(
-    (file) => !["LICENSE", "README.md", "package.json"].includes(file) && !file.startsWith("dist/"),
+    (file) =>
+      !["LICENSE", ...documentationFiles, "package.json"].includes(file) &&
+      !file.startsWith("dist/"),
   );
   if (unexpectedFiles.length > 0) {
     throw new Error(
@@ -143,6 +146,18 @@ try {
     !installedHelp.includes(`Configured dimension IDs: ${reviewDimensionIds.join(", ") || "none"}`)
   ) {
     throw new Error("Installed CLI help is incomplete or stale.");
+  }
+  const installedContextHelp = runInstalled(installedBin, ["context", "--help"], consumer);
+  for (const command of [
+    "commit-changes",
+    "commit-read",
+    "review-state",
+    "review-context-state",
+    "record-review-state",
+  ]) {
+    if (!installedContextHelp.includes(command)) {
+      throw new Error(`Installed context help is missing ${command}.`);
+    }
   }
   const installedVersion = runInstalled(installedBin, ["--version"], consumer).trim();
   if (installedVersion !== packageJson.version) {
@@ -228,6 +243,7 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   if (
     !existsSync(configManualPath) ||
     !readFileSync(configManualPath, "utf8").includes("# CCR configuration manual") ||
+    !readFileSync(configManualPath, "utf8").includes("hooks.autoUpdateContext") ||
     !readFileSync(configManualPath, "utf8").includes("instructions.updateDecisionsMd")
   ) {
     throw new Error("config init did not create the configuration manual.");
@@ -242,6 +258,9 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   }
   if (installedConfig.instructions?.updateDecisionsMd !== false) {
     throw new Error("Generated configuration did not default decision updates to false.");
+  }
+  if (installedConfig.hooks?.autoUpdateContext !== false) {
+    throw new Error("Generated configuration did not default automatic context updates to false.");
   }
   if (existsSync(preCommitPath) || existsSync(postCommitPath)) {
     throw new Error("setup installed hooks without repository-aware skill analysis.");

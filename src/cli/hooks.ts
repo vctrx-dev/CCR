@@ -1,27 +1,28 @@
 import type { Command } from "commander";
 import { runAfterCommitCheck } from "../context/after-commit";
 import { runAutomaticContextUpdate } from "../context/automatic-context-update";
-import { findRepositoryRoot, readStagedContextState } from "../context/git";
+import { readStagedContextState } from "../context/git";
 import { readHookState } from "../context/hook-state";
 import { readContextHookStatus, removeAllContextHooks } from "../context/hooks";
 import { readResolvedContextConfig } from "../context/privacy";
+import { readStagedReviewFreshness } from "../review/review-state";
 import type { CliIo } from "./index";
+import { findCliRepositoryRoot } from "./io";
 import { formatHeading, formatStatus, formatTone } from "./output";
-
-function rootFor(io: CliIo): string {
-  return findRepositoryRoot(io.cwd);
-}
 
 async function readHookSettings(root: string) {
   try {
     return (await readResolvedContextConfig(root)).hooks;
-  } catch {
-    return undefined;
+  } catch (error: unknown) {
+    throw new Error(
+      "CCR hook settings are unavailable; validate .ccr/config.json before running hooks.",
+      { cause: error },
+    );
   }
 }
 
 async function runPostCommitCommand(io: CliIo): Promise<void> {
-  const root = rootFor(io);
+  const root = findCliRepositoryRoot(io);
   const settings = await readHookSettings(root);
   if (!settings?.enabled) return;
   const result = await runAfterCommitCheck(root);
@@ -35,14 +36,20 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
       `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: last commit changed repository files without updating shared context (.ccr/).\n`,
     );
   }
+  if (result.reviewStatus === "stale") {
+    io.write(
+      `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: the commit differs from the state recorded by its latest CCR review; that review is now marked stale.\n`,
+    );
+  }
   if (result.prompt) {
-    if (settings.autoUpdateContext && result.commit && result.hasRepositoryChanges) {
+    const journalPath = result.journalPath;
+    if (settings.autoUpdateContext && result.commit && result.hasRepositoryChanges && journalPath) {
       try {
         const automatic = await runAutomaticContextUpdate(
           root,
           result.commit,
           undefined,
-          result.journalPath,
+          journalPath,
         );
         io.write(
           automatic.status === "updated"
@@ -66,10 +73,16 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
 }
 
 async function runPreCommitCommand(io: CliIo): Promise<void> {
-  const root = rootFor(io);
+  const root = findCliRepositoryRoot(io);
   const settings = await readHookSettings(root);
   if (!settings?.enabled || !settings.checkBeforeCommit) return;
   const state = readStagedContextState(root);
+  const review = await readStagedReviewFreshness(root);
+  if (review.status === "stale") {
+    io.write(
+      `${formatTone("CCR warning: staged review evidence or shared context differs from the latest recorded CCR review.", "warning", io.isColorEnabled === true)}\nRun \`/ccr-review changes\` again before human approval, or continue knowing the prior review is stale.\n`,
+    );
+  }
   if (state.shouldWarn) {
     const warning = [
       "CCR warning: context might need updating.",
@@ -83,7 +96,7 @@ async function runPreCommitCommand(io: CliIo): Promise<void> {
 export function registerHooksCommands(program: Command, io: CliIo): void {
   const hooks = program.command("hooks").description("Manage the advisory context Git hooks");
   hooks.command("status").action(async () => {
-    const root = rootFor(io);
+    const root = findCliRepositoryRoot(io);
     const hookState = await readHookState(root);
     if (hookState.status === "valid") {
       io.write(
@@ -121,7 +134,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
     .command("uninstall")
     .option("--apply", "remove CCR's marked hook blocks")
     .action(async (options: { apply?: boolean }) => {
-      const root = rootFor(io);
+      const root = findCliRepositoryRoot(io);
       const hookState = await readHookState(root);
       if (hookState.status === "valid") {
         io.write(

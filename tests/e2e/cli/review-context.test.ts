@@ -36,16 +36,52 @@ it("should expose review evidence and reuse the current-commit journal through t
   expect(output).toContain("value = 2");
 
   output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-state"]);
+  const reviewedState = JSON.parse(output);
+  expect(reviewedState.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+  expect(reviewedState.contextFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state"]);
+  const initialContextState = JSON.parse(output);
+  expect(initialContextState.contextFingerprint).toBe(reviewedState.contextFingerprint);
+  const projectPath = path.join(root, ".ccr/project.md");
+  const project = await readFile(projectPath, "utf8");
+  await writeFile(projectPath, `${project}\nVerified context change.\n`, "utf8");
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state"]);
+  expect(JSON.parse(output).contextFingerprint).not.toBe(initialContextState.contextFingerprint);
+  await writeFile(projectPath, project, "utf8");
+
+  output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal"]);
   const first = JSON.parse(output);
   const journal = await readFile(path.join(root, first.path), "utf8");
   expect(journal).not.toContain("**Branch**");
   expect(journal).not.toContain("**Commit**");
   expect(journal).not.toContain("## Changed paths");
+  await writeFile(
+    path.join(root, first.path),
+    `${journal.replace("Needs concise completion.", "Reviewed approved repository evidence.")}\n## Review run — 2026-08-27T01:00:00Z\n\n- **Scope**: changes\n- **Dimensions**: all\n- **Evidence**: approved live changes\n- **Finding counts**: critical=0, high=0, medium=0, low=0\n- **Outcomes**: no findings\n`,
+    "utf8",
+  );
+  output = "";
+  await createCli(io).parseAsync([
+    "node",
+    "ccr",
+    "context",
+    "record-review-state",
+    first.path,
+    reviewedState.fingerprint,
+    reviewedState.contextFingerprint,
+  ]);
+  expect(output).toContain("Review state recorded");
+  expect(await readFile(path.join(root, first.path), "utf8")).toContain(
+    "**Review status**: current",
+  );
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal"]);
   expect(JSON.parse(output)).toEqual(first);
-}, 10_000);
+}, 15_000);
 
 it("should reuse one journal entry for a pull request through the CLI", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-pr-journal-cli-"));
@@ -67,6 +103,14 @@ it("should reuse one journal entry for a pull request through the CLI", async ()
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal", "PR-42"]);
   const first = JSON.parse(output);
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state", "PR-42"]);
+  const initialContext = JSON.parse(output).contextFingerprint;
+  const target = path.join(root, first.path);
+  await writeFile(target, `${await readFile(target, "utf8")}Prior PR outcome.\n`, "utf8");
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state", "PR-42"]);
+  expect(JSON.parse(output).contextFingerprint).not.toBe(initialContext);
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal", "pr-42"]);
   expect(JSON.parse(output)).toEqual(first);

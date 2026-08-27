@@ -1,17 +1,19 @@
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createCli } from "../../../src/cli/index";
-import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
+import { MANAGED_LIFECYCLE_LOCK_PATH, tryAcquireManagedLock } from "../../../src/context/files";
+import {
+  createTemporaryGitRepository,
+  createTemporaryRootRegistry,
+  runCommand,
+} from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
 
 describe("configuration CLI", () => {
   it("should let a developer create and edit configuration before installing the skill", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "ccr-config-cli-"));
-    roots.push(root);
-    await runCommand("git", ["init", "--quiet"], { cwd: root });
+    const root = await createTemporaryGitRepository(roots, "ccr-config-cli-");
     let output = "";
     const io = {
       cwd: root,
@@ -69,9 +71,7 @@ describe("configuration CLI", () => {
   });
 
   it("should preview, display, validate, and apply explicit configuration changes", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "ccr-config-cli-"));
-    roots.push(root);
-    await runCommand("git", ["init", "--quiet"], { cwd: root });
+    const root = await createTemporaryGitRepository(roots, "ccr-config-cli-");
     let output = "";
     const io = {
       cwd: root,
@@ -88,6 +88,44 @@ describe("configuration CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     await createCli(io).parseAsync(["node", "ccr", "config", "validate"]);
     expect(output).toContain("CCR configuration is valid.");
+
+    output = "";
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set-domain-if-unspecified",
+      "education-technology",
+    ]);
+    expect(output).toContain("CCR initial domain · preview");
+    expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).domain).toBe(
+      "unspecified",
+    );
+
+    output = "";
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set-domain-if-unspecified",
+      "education-technology",
+      "--apply",
+    ]);
+    expect(output).toContain("Set initial repository domain to education-technology.");
+
+    output = "";
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "config",
+      "set-domain-if-unspecified",
+      "civic-tech",
+      "--apply",
+    ]);
+    expect(output).toContain("Domain is already set; no files changed.");
+    expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).domain).toBe(
+      "education-technology",
+    );
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "config"]);
@@ -137,5 +175,111 @@ describe("configuration CLI", () => {
       checkBeforeCommit: false,
       autoUpdateContext: false,
     });
+  });
+
+  it("should preserve the first conditional domain when initializers race", async () => {
+    const root = await createTemporaryGitRepository(roots, "ccr-config-domain-race-");
+    const outputs = ["", ""];
+    const ios = outputs.map((_, index) => ({
+      cwd: root,
+      write(message: string) {
+        outputs[index] += message;
+      },
+    }));
+    const firstIo = ios[0];
+    const secondIo = ios[1];
+    if (firstIo === undefined || secondIo === undefined) {
+      throw new Error("Expected two isolated CLI outputs.");
+    }
+    await createCli(firstIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    outputs[0] = "";
+    outputs[1] = "";
+
+    await Promise.all([
+      createCli(firstIo).parseAsync([
+        "node",
+        "ccr",
+        "config",
+        "set-domain-if-unspecified",
+        "education-technology",
+        "--apply",
+      ]),
+      createCli(secondIo).parseAsync([
+        "node",
+        "ccr",
+        "config",
+        "set-domain-if-unspecified",
+        "civic-tech",
+        "--apply",
+      ]),
+    ]);
+
+    expect(
+      outputs.filter((output) => output.includes("Set initial repository domain")),
+    ).toHaveLength(1);
+    expect(outputs.filter((output) => output.includes("Domain is already set"))).toHaveLength(1);
+    expect(["education-technology", "civic-tech"]).toContain(
+      JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).domain,
+    );
+  });
+
+  it("should preserve concurrent updates to different configuration keys", async () => {
+    const root = await createTemporaryGitRepository(roots, "ccr-config-update-race-");
+    const io = { cwd: root, write() {} };
+    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+
+    await Promise.all([
+      createCli(io).parseAsync([
+        "node",
+        "ccr",
+        "config",
+        "set",
+        "hooks.checkBeforeCommit",
+        "false",
+        "--apply",
+      ]),
+      createCli(io).parseAsync([
+        "node",
+        "ccr",
+        "config",
+        "set",
+        "instructions.updateAgentsMd",
+        "true",
+        "--apply",
+      ]),
+    ]);
+
+    expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"))).toMatchObject({
+      hooks: { checkBeforeCommit: false },
+      instructions: { updateAgentsMd: true },
+    });
+  });
+
+  it("should not change configuration during another managed lifecycle operation", async () => {
+    const root = await createTemporaryGitRepository(roots, "ccr-config-lifecycle-lock-");
+    const io = { cwd: root, write() {} };
+    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    const release = await tryAcquireManagedLock(root, MANAGED_LIFECYCLE_LOCK_PATH);
+    if (release === undefined) throw new Error("Expected the lifecycle lock.");
+
+    try {
+      await expect(
+        createCli(io).parseAsync([
+          "node",
+          "ccr",
+          "config",
+          "set",
+          "instructions.updateDecisionsMd",
+          "true",
+          "--apply",
+        ]),
+      ).rejects.toThrow(/managed lifecycle is busy/i);
+    } finally {
+      await release();
+    }
+    expect(
+      JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).instructions
+        .updateDecisionsMd,
+    ).toBe(false);
   });
 });

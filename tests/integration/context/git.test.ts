@@ -1,23 +1,25 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   classifyContextChanges,
   isGitIgnored,
   isSharedContext,
+  readBoundedStagedDiff,
+  readBoundedUnstagedDiff,
   readChangedPaths,
   readStagedContextState,
 } from "../../../src/context/git";
-import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
+import {
+  createTemporaryGitRepository,
+  createTemporaryRootRegistry,
+  runCommand,
+} from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
 
 async function makeRepository(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-git-"));
-  roots.push(root);
-  await runCommand("git", ["init", "--quiet"], { cwd: root });
-  return root;
+  return createTemporaryGitRepository(roots, "ccr-git-");
 }
 
 describe("readStagedContextState", () => {
@@ -80,6 +82,32 @@ describe("readChangedPaths", () => {
   it("should return an empty array for a repository without commits", async () => {
     const root = await makeRepository();
     expect(readChangedPaths(root, 1)).toEqual([]);
+  });
+});
+
+describe("bounded Git diffs", () => {
+  it("should classify Git-native staged and unstaged binary diff markers", async () => {
+    const root = await makeRepository();
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    const target = path.join(root, "binary.dat");
+    await writeFile(target, Buffer.from([0, 1, 2, 3]));
+    await runCommand("git", ["add", "binary.dat"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "seed"], { cwd: root });
+    await writeFile(target, Buffer.from([0, 4, 5, 6]));
+    await runCommand("git", ["add", "binary.dat"], { cwd: root });
+    await writeFile(target, Buffer.from([0, 7, 8, 9]));
+
+    await expect(readBoundedStagedDiff(root, "binary.dat", 20_000)).resolves.toEqual({
+      content: "",
+      isBinary: true,
+      isTruncated: false,
+    });
+    await expect(readBoundedUnstagedDiff(root, "binary.dat", 20_000)).resolves.toEqual({
+      content: "",
+      isBinary: true,
+      isTruncated: false,
+    });
   });
 });
 

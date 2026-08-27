@@ -143,8 +143,9 @@ You are a repository-context editor. Interpret \`$ARGUMENTS\` as \`initialize\`,
 otherwise show only those five choices. These are skill operations, not terminal subcommands.
 
 Run \`npx --no-install ccr config\` first and stop immediately on failure. Never edit
-\`.ccr/config.json\`; it is human-owned. When \`hooks.enabled\` is true, run \`/ccr-hooks sync\` once
-during initialize. A later operation changes hooks only when the human explicitly requests it.
+\`.ccr/config.json\`; it is human-owned. The only exception is the one-time initial-domain command
+defined below. When \`hooks.enabled\` is true, run \`/ccr-hooks sync\` once during initialize. A later
+operation changes hooks only when the human explicitly requests it.
 
 Before every operation, run \`npx --no-install ccr context validate\`; read \`.ccr/project.md\`,
 \`.ccr/stakeholders.md\`, and \`.ccr/decisions.md\` through \`context shared <file>\`; then run
@@ -244,7 +245,9 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
   branch's working journal for staged or uncommitted changes and omits Branch and Commit until a
   successful commit attaches them.
 - Edit exactly the returned path. Keep one working entry before commit and one finalized entry per
-  commit. Never add a changed-path inventory. Never delete a pre-existing journal.
+  commit. Preserve \`Started\` and set \`Updated\` to the current UTC time in
+  \`YYYY-MM-DDTHH:MM:SSZ\` form whenever completing or amending the journal. Keep the filename stable
+  when work spans multiple days. Never add a changed-path inventory or delete a pre-existing journal.
 </journal_rules>
 
 <success_criteria>
@@ -266,6 +269,31 @@ documentation. Give each discovery subagent an end-to-end workflow or constraint
 the parallel evidence wave into \`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
 \`.ccr/decisions.md\` unchanged, run the verification subagent, correct once, validate, and create
 or complete one journal.
+
+<initial_domain>
+After the initial evidence wave and before drafting shared context, inspect the first \`ccr config\`
+output. When its \`domain\` is exactly \`"unspecified"\`, derive the repository's primary product
+domain from verified implementation and user-facing evidence. Use a concise lower-case hyphenated
+label of 1 to 80 characters, such as \`education-technology\` or \`civic-tech\`. Describe the
+product problem, not a repository name, framework, model name, organization, person, identifier,
+or data value. If the evidence does not establish a more specific domain, use \`general-software\`.
+
+Run exactly \`npx --no-install ccr config set-domain-if-unspecified <derived-domain> --apply\` once,
+then run \`npx --no-install ccr config\` again and use its recorded value in the context. This is the
+only automatic configuration write. The command preserves any human-set domain and reports no
+change when another process already set it; retain that value without retrying. For every later
+operation, and when the initial value was not \`"unspecified"\`, never invoke this command or
+\`ccr config set domain\`. Do not run setup solely because this first-run domain was recorded.
+
+<examples>
+<example>Repository documentation and implemented flows consistently serve teachers, students, and
+learning materials. Record \`education-technology\`, not the application name or \`typescript\`.</example>
+<example>Verified public workflows let residents use a municipal service. Record \`civic-tech\`, not
+the city name, a ticket number, or a database name.</example>
+<example>The repository has only a generic library package and no product-purpose evidence. Record
+\`general-software\` rather than leaving the default or inventing a specialized domain.</example>
+</examples>
+</initial_domain>
 
 ## Update
 

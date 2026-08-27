@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { findRepositoryRoot, readStagedContextState } from "../context/git";
+import { readStagedContextState } from "../context/git";
 import { readHookState } from "../context/hook-state";
 import {
   previewContextHookRemoval,
@@ -10,16 +10,9 @@ import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { validateContext } from "../context/validate";
 import { registerContextInspectionCommands } from "./context-inspection";
 import type { CliIo } from "./index";
+import { findCliRepositoryRoot, writeCliLines } from "./io";
 import { formatAction, formatHeading, formatStatus, formatTone } from "./output";
 import { registerSetupCommands } from "./setup";
-
-function rootFor(io: CliIo): string {
-  return findRepositoryRoot(io.cwd);
-}
-
-function writeLines(io: CliIo, lines: string[]): void {
-  io.write(`${lines.join("\n")}\n`);
-}
 
 /** Registers context inspection and uninstall commands; setup and upgrade commands live separately. */
 export function registerContextCommands(program: Command, io: CliIo): void {
@@ -31,10 +24,10 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .option("--apply", "apply the previewed removal")
     .option("--remove-context", "also delete known shared context files")
     .action(async (options: { apply?: boolean; removeContext?: boolean }) => {
-      const root = rootFor(io);
+      const root = findCliRepositoryRoot(io);
       const hookState = await readHookState(root);
       if (hookState.status === "valid") {
-        writeLines(io, [
+        writeCliLines(io, [
           formatTone(
             "CCR hooks are provenance-managed; uninstall stopped before changing files.",
             "warning",
@@ -45,7 +38,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
         return;
       }
       if (hookState.status === "invalid") {
-        writeLines(io, [
+        writeCliLines(io, [
           formatTone(
             "CCR has invalid hook provenance; uninstall stopped before changing files.",
             "warning",
@@ -58,7 +51,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       }
       const preview = await previewUninstall(root, options.removeContext ?? false);
       if (!options.apply) {
-        writeLines(io, [
+        writeCliLines(io, [
           formatHeading("CCR uninstall preview · no files changed", io.isColorEnabled === true),
           formatHeading("Planned changes", io.isColorEnabled === true),
           ...preview.modifyPaths.map(
@@ -85,7 +78,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
       await validateContextHookRemoval(root, hookRemovalPreview);
       await applyUninstall(root, shouldRemoveContext, preview);
       await removeAllContextHooks(root, hookRemovalPreview);
-      writeLines(io, [
+      writeCliLines(io, [
         formatTone(
           `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
           "success",
@@ -99,8 +92,8 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .command("context")
     .description("Inspect CCR context and manage opt-in decisions");
   context.command("validate").action(async () => {
-    const result = await validateContext(rootFor(io));
-    writeLines(
+    const result = await validateContext(findCliRepositoryRoot(io));
+    writeCliLines(
       io,
       result.isValid
         ? [formatTone("✔ CCR context is valid.", "success", io.isColorEnabled === true)]
@@ -112,10 +105,10 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     if (!result.isValid) process.exitCode = 1;
   });
   context.command("status").action(async () => {
-    const root = rootFor(io);
+    const root = findCliRepositoryRoot(io);
     const validation = await validateContext(root);
     const staged = readStagedContextState(root);
-    writeLines(io, [
+    writeCliLines(io, [
       formatHeading("CCR context status", io.isColorEnabled === true),
       `Context: ${formatStatus(validation.isValid ? "valid" : "invalid", io.isColorEnabled === true)}`,
       `Staged repository files: ${formatStatus(staged.hasRepositoryChanges ? "yes" : "no", io.isColorEnabled === true)}`,

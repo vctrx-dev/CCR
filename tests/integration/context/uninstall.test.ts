@@ -65,6 +65,16 @@ it("should preserve local ignore rules while a private journal remains", async (
   );
 });
 
+it("should not treat empty internal lock scaffolding as developer state", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-locks-"));
+  roots.push(root);
+  await applySetup(root);
+
+  const preview = await previewUninstall(root, true);
+
+  expect(preview.modifyPaths).toContain(".gitignore");
+});
+
 it("should remove a legacy package-managed skill", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-legacy-"));
   roots.push(root);
@@ -128,4 +138,17 @@ it("should consume a validated uninstall plan and reject later user edits", asyn
 
   await expect(applyUninstall(root, false, preview)).rejects.toThrow("changed after preview");
   expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe("user replaced this file\n");
+});
+
+it("should preserve a planned removal changed after preview", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-uninstall-removal-plan-"));
+  roots.push(root);
+  const { writeFile } = await import("node:fs/promises");
+  await applySetup(root);
+  const preview = await previewUninstall(root, false);
+  const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+  await writeFile(skillPath, "user replacement\n", "utf8");
+
+  await expect(applyUninstall(root, false, preview)).rejects.toThrow("changed after preview");
+  expect(await readFile(skillPath, "utf8")).toBe("user replacement\n");
 });

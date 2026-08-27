@@ -98,16 +98,28 @@ Setup installs `/ccr-hooks`, but not the hooks themselves. With `hooks.enabled: 
 `/ccr-context initialize` runs `/ccr-hooks sync`. The skill selects a compatible framework, hook
 path, interpreter, or minimal Git hook. Disable hooks before initialization if they are unwanted.
 
-- `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file.
-- `post-commit` — starts the commit journal and prints an update instruction when needed.
+- `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file or the
+  staged review evidence or shared context differs from the latest recorded CCR review.
+- `post-commit` — starts the commit journal, marks a mismatched review stale, and prints an update
+  instruction when needed.
 
 Hooks are advisory by default. With `hooks.autoUpdateContext: true`, post-commit runs the update
-through headless Claude Code without permission questions, completes the same journal, and changes
-shared context only when justified. Successful commits are recorded in ignored private state so they
-are not processed twice. Automation never stages, commits, amends, resets, or pushes; failures stay
-non-blocking. Completion requires the exact commit journal, valid context, and no edits outside the
-journal, `project.md`, or opted-in `decisions.md`; stale locks from interrupted runs are reclaimed.
-Resulting shared context remains visible for review and a later commit.
+through headless Claude Code without permission questions. CCR first copies at most 200 approved
+paths and 200,000 retained characters, with a 512,000-byte final ceiling, from the exact immutable
+`HEAD` commit into a temporary ignored `.ccr/private/` packet. Headless Claude can read only approved
+`.ccr` inputs and that packet and can write only the exact journal and `.ccr/project.md`, plus append
+at most one normalized, nonduplicate decision line when its opt-in is true. Replacing, deleting, or
+otherwise rewriting `.ccr/decisions.md` fails closed.
+It receives no shell, task, glob, grep, raw repository-read, hook, MCP, Git-mutation, or saved-session
+capability.
+CCR attempts packet removal on every normal success and failure. Concurrent packet modification, an
+unavailable cleanup lock, or abrupt process termination fails closed but can leave an ignored packet
+for manual removal. Successful commits are recorded in bounded ignored private state so they are not
+processed twice. Automation never stages, commits, amends, resets, or pushes; failures stay
+non-blocking and print the manual fallback. Completion requires unchanged `HEAD`, a structurally
+complete exact-commit journal, valid context, and no unauthorized Git-visible or `.ccr` edit; the
+permission allowlist prevents agent writes to other ignored paths. Token-owned stale locks are
+reclaimed safely. Resulting shared context remains visible for review and a later commit.
 
 Inspect hooks with `npx --no-install ccr hooks status`. Remove provenance-managed hooks with
 `/ccr-hooks remove`, then disable future sync with
@@ -118,7 +130,9 @@ framework-aware removal to `/ccr-hooks`.
 Hooks call `ccr hooks pre-commit` and `ccr hooks post-commit`. The old `check` and `after-commit`
 names remain hidden compatibility aliases.
 
-CCR validates provenance before trusting it. Missing state with existing markers is
+CCR validates provenance before trusting it. Missing or invalid `.ccr/config.json` makes hook
+commands fail visibly; run `ccr config validate` instead of assuming the hooks were disabled.
+Missing state with existing markers is
 legacy/unprovenanced; invalid state blocks automatic changes. Preserve or move invalid state for
 investigation. After inspection, use `ccr hooks uninstall --apply` for marker-only cleanup, then
 `/ccr-hooks sync`. Cleanup preserves bytes outside CCR markers.
@@ -151,7 +165,13 @@ npx --no-install ccr config validate
 
 See `.ccr/config-manual.md` for every setting and accepted value.
 
-`.ccr/config.json` is human-owned and changes require explicit approval. It is strict JSON. Defaults:
+`.ccr/config.json` is human-owned and changes require explicit approval, except that the first
+`/ccr-context initialize` conditionally replaces only the generated `domain: "unspecified"` default
+with an evidence-backed product-domain label. It never overwrites a human-set domain. The file is
+strict JSON. Both `.ccr/config.json` and `.ccr/config.local.json` must be NUL-free valid UTF-8 within
+64,000 characters before CCR parses them. Applied CLI updates serialize with setup, uninstall, and
+automatic context operations; compare-and-swap writes preserve concurrent changes to other keys and
+reject an active lifecycle instead of changing its permissions mid-run. Defaults:
 
 ```json
 {
@@ -185,7 +205,15 @@ and an empty `decisions.md`. It preserves existing context and instruction files
 `index.md` is removed only when unedited. On upgrade, the former package-managed
 `.claude/skills/ccr-codebase/SKILL.md` is retired. Package-marked variants are removed because their
 header authorizes package replacement; user-owned or foreign-marked files are preserved.
-Hook strategy is selected later through repository analysis.
+Hook strategy is selected later through repository analysis. Applied setup, update, configuration,
+automatic context, and uninstall writers share one bounded token-owned lifecycle lock. Every planned
+write or delete compares the exact current content before mutation. CCR cooperating writers are
+serialized, and a change observed before comparison is preserved and reported. A direct editor can
+still write in the narrow interval after comparison, so do not manually edit a managed target while
+an apply command is running. If an interruption leaves only part of a multi-file operation applied,
+rerun the same idempotent command. Uninstall rechecks local state behind a global journal-mutation
+barrier; journal creation either preserves the existing continuity ignore block or restores it before
+writing the entry.
 
 ### Update after a package upgrade
 
@@ -208,8 +236,11 @@ Open Claude Code:
 ```
 
 Run this after setup. It populates `project.md` and `stakeholders.md`, leaves `decisions.md` empty,
-and syncs hooks when enabled. After initialization, CCR always reads `stakeholders.md` but never
-updates it automatically; stakeholder changes are human-owned.
+and syncs hooks when enabled. If `domain` is still the generated `"unspecified"` default, it also
+records one concise product-domain label supported by repository evidence (or `general-software` when
+the repository has no more specific product signal). A conditional updater prevents this one-time
+step from overwriting a human-set domain. After initialization, CCR always reads `stakeholders.md`
+but never updates it automatically; stakeholder changes are human-owned.
 
 Claude uses repository evidence plus supplied plans or specifications. It scales discovery to the
 repository, verifies material claims, preserves uncertainty and exceptions, and stops when important
@@ -294,7 +325,24 @@ review reuses the `HEAD` journal, and every `PR-<number>` reuses one PR-specific
 entries gain branch and commit fields after commit. Human feedback about the same code—such as
 marking findings as false positives—amends the same journal entry and review-run section instead of
 creating another. Each completed review replaces the journal's initial summary placeholder with a
-concise factual scope, evidence, and outcome record. Journals do not duplicate Git's path inventory. `project.md` changes only for a
+concise factual scope, evidence, and outcome record. New journal filenames use the UTC calendar date
+(`YYYY-MM-DD.md`), with numeric suffixes for additional entries on the same date. Different commits
+get separate journal entries; repeated reviews of one commit reuse its entry. `Started` records when
+the stable journal was created, while `Updated` advances when CCR reuses, completes, finalizes, or
+amends it. Work spanning several days does not rename the journal. Older `Timestamp` metadata migrates
+to `Started` and `Updated` when reused. For changes and codebase scopes, CCR separately fingerprints
+the privacy-approved code state and the bounded resolved configuration plus `project.md`,
+`stakeholders.md`, `decisions.md`, and prior recent branch journals. The active continuity target is
+excluded from the context fingerprint because the recorder validates its own write separately. PR
+freshness includes that PR's recent journals. CCR rechecks both fingerprints before the human-facing
+report and records them plus current status in the latest review run. A first code or context transition
+restarts the review against reloaded evidence; a second stops as unstable. PR review applies the same
+context-freshness rule alongside immutable base/head refs. The recorder rejects PR, old-branch,
+old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurrently modified
+journals. If code or context changes afterward, pre-commit warns before approval and post-commit
+marks the prior review stale; both hooks remain advisory. Journals do not duplicate Git's path
+inventory. `project.md`
+changes only for a
 verified major feature, architecture, public workflow, product constraint, stakeholder impact, or
 plan change; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
 after initialization.
@@ -342,7 +390,7 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 | `/ccr-hooks sync` | Install or update hooks |
 | `/ccr-hooks status` | Show hook status |
 | `/ccr-hooks remove` | Remove CCR hooks |
-| `/ccr-context initialize` | Populate project and stakeholder context |
+| `/ccr-context initialize` | Set the untouched default domain once and populate project and stakeholder context |
 | `/ccr-context update` | Complete the current journal and update durable context |
 | `/ccr-context verify` | Verify context |
 | `/ccr-context addition` | Add plans or knowledge |
@@ -350,6 +398,11 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 | `/ccr-review [scope] [all\|dimension,...]` | Review changes, codebase, or a pull request |
 | `ccr context append-decision <decision>` | Append one config-authorized decision line |
 | `ccr context journals [PR-<number>]` | Read configured recent branch or PR journals |
+| `ccr context commit-changes <HEAD> [--after <path>]` | Page through privacy-approved paths changed by the exact current commit |
+| `ccr context commit-read <HEAD> <file>` | Read one bounded immutable changed blob or deletion marker |
+| `ccr context review-context-state [PR-<number>]` | Fingerprint bounded shared context and recent branch or PR journals |
+| `ccr context review-state` | Fingerprint current approved code and shared context |
+| `ccr context record-review-state <journal> <code-fingerprint> <context-fingerprint>` | Validate and bind the latest completed local review run |
 | `ccr context review-pr PR-<number>` | Read bounded privacy-filtered PR metadata and patch |
 | `ccr context review-pr-head PR-<number> <files...>` | Read up to eight approved PR head files |
 
@@ -411,5 +464,10 @@ Also remove shared context:
 ```bash
 npx --no-install ccr uninstall --apply --remove-context
 ```
+
+Uninstall shares CCR's managed lifecycle lock and conditionally removes or rewrites only content that
+still matches its preview. A later human edit stops the operation and remains untouched. Empty
+internal lock scaffolding does not count as developer continuity, while real journals, private
+state, cache, or temporary content still protects local ignore rules.
 
 Local journals and private state remain preserved.

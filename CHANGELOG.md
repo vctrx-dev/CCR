@@ -9,12 +9,47 @@ contain incompatible changes when they are clearly documented.
 
 ### Changed
 
-- Added the default-off `hooks.autoUpdateContext` setting. When enabled, post-commit hooks run the
-  context skill through headless Claude Code and record successful commits locally to prevent
-  duplicate processing, without staging, committing, amending, resetting, or pushing. Completion is
-  validated against the exact journal and permitted context files, and interrupted-run locks recover.
-- Fixed advisory pre-commit integration so successful warning output remains visible while command
-  failures stay non-blocking, and made post-commit fallback text event-specific.
+- Refactored managed paths, locks, conditional writes, configuration persistence, journal and
+  decision document policy, Git inventory/process access, automatic-update execution, and review
+  state into focused reusable boundaries with stable façades. CLI output/repository helpers and
+  temporary Git test fixtures now have shared extension points for contributor handoff.
+- Changes and codebase reviews now fingerprint the privacy-approved code state and bounded shared
+  context—including prior recent journals—separately, verify both again before reporting, and record
+  both in the latest structurally
+  complete review run. Recording rejects placeholder, malformed, stale-branch, stale-HEAD, PR,
+  oversized, and concurrently changed journals. PR review also rechecks shared context alongside its
+  immutable refs. Advisory pre-commit and post-commit checks warn when later human edits make a review
+  stale; post-commit marks the recorded status stale without blocking Git.
+- Journal filenames now use a stable UTC creation date with numeric same-day suffixes. New entries
+  record immutable `Started` and monotonic `Updated` timestamps; reuse, review follow-up, and commit
+  finalization refresh `Updated` without renaming the journal, and legacy `Timestamp` headers migrate
+  in place.
+- The first `/ccr-context initialize` now replaces only the generated `domain: "unspecified"` default
+  with one concise, evidence-backed product-domain label (or `general-software` if no specific
+  classification is supported). A conditional CLI updater protects any human-set domain from being
+  overwritten on initial or later runs.
+- Added the default-off `hooks.autoUpdateContext` setting. When enabled, CCR assembles a bounded,
+  privacy-filtered exact-HEAD evidence packet under ignored `.ccr/private/`; headless Claude can read
+  only approved `.ccr` inputs and edit only the exact journal, project context, and opt-in decision
+  file. It receives no shell, raw repository-read, task, hook, settings, MCP, Git-mutation, or saved
+  session access.
+  Temporary evidence is conditionally removed after normal outcomes and fails closed if it was
+  changed or cannot be locked; 40- and 64-hex Git object IDs are supported, completion requires
+  strict journal/context structure and unchanged `HEAD`, opted-in decisions remain append-only, and
+  token-owned locks and bounded state recover safely without exposing upstream errors.
+- Hook commands now fail visibly for missing or invalid configuration. Incomplete code-plus-context
+  journals remain retryable after automatic failure, successful warning output remains visible, and
+  post-commit fallback text stays event-specific and non-blocking.
+- Repository and review evidence now streams Git blobs and diffs into fixed bounds before retention,
+  emits explicit binary/truncation/deletion markers, rejects live overlays above 5,000 paths, and
+  exposes paginated privacy-approved evidence for only the exact immutable current commit. Additions,
+  deletions, renames, binary files, excluded paths, symlinks, and submodules have deterministic cases.
+- Applied setup, update, configuration, automatic-context, and uninstall writers now share one
+  token-owned lifecycle lock. Config and journal allocation preserve concurrent changes, semantic
+  journal ensures converge, and setup/uninstall use exact-content compare-and-swap writes and
+  conditional deletes. Uninstall and journal mutation share a second barrier so a journal created
+  after preview cannot become unignored. Cooperating writers serialize, changed-after-preview content
+  observed before mutation is preserved, and interrupted multi-file work can be rerun idempotently.
 - Review reporting now waits for continuity-journal completion. Working journals remain reusable
   after their 4,000-character evidence preview is truncated, up to a separate 64,000-character
   managed-file safety bound.

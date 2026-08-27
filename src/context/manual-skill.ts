@@ -27,7 +27,9 @@ understand.
    \`.claude/skills/ccr/references/dimensions.md\`. Use its
    current registry order and IDs; do not rely on an example or a remembered dimension list.
 5. For a project-specific setting question, run \`npx --no-install ccr config\` and consult
-   \`.ccr/config-manual.md\` when present. Treat \`.ccr/config.json\` as human-owned.
+   \`.ccr/config-manual.md\` when present. Treat \`.ccr/config.json\` as human-owned, except that
+   \`/ccr-context initialize\` may conditionally replace its untouched \`domain: "unspecified"\`
+   default once; this support skill never performs that write.
 6. For installation, package-name, or version questions, run \`npx --no-install ccr --version\` and
    read \`node_modules/@vctrx/ccr/package.json\` plus its packaged \`README.md\` when present. Never
    infer a package name or installation command from the binary name.

@@ -1,7 +1,8 @@
-import { access, readFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import path from "node:path";
 import { parseContextConfig } from "./config";
-import { assertSafeManagedPath, readBoundedTextIfExists, readTextIfExists } from "./files";
+import { assertSafeManagedPath, readBoundedTextIfExists } from "./files";
+import { readContextConfigText } from "./privacy";
 import { CONTEXT_FILES } from "./templates";
 
 /**
@@ -95,17 +96,16 @@ function absoluteClaim(content: string): string | undefined {
 /** Validates committed CCR context without invoking an LLM or reading repository source. */
 export async function validateContext(root: string): Promise<ValidationResult> {
   const issues: string[] = [];
-  const configPath = await assertSafeManagedPath(root, ".ccr/config.json");
-  const configText = await readTextIfExists(configPath);
-  if (configText === undefined) {
-    issues.push(".ccr/config.json is missing.");
-  } else {
-    try {
+  try {
+    const configText = await readContextConfigText(root, ".ccr/config.json");
+    if (configText === undefined) {
+      issues.push(".ccr/config.json is missing.");
+    } else {
       parseContextConfig(configText);
-    } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : "unknown validation error";
-      issues.push(`.ccr/config.json is invalid: ${detail}`);
     }
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : "unknown validation error";
+    issues.push(`.ccr/config.json is invalid: ${detail}`);
   }
 
   for (const relativePath of Object.keys(CONTEXT_FILES).filter((file) => file.endsWith(".md"))) {

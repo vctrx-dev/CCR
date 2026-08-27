@@ -1,9 +1,15 @@
-import { unlink } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { DEFAULT_CONTEXT_CONFIG, parseContextConfig, serializeContextConfig } from "./config";
 import type { ContextConfig } from "./config";
 import { CONFIG_MANUAL } from "./config-manual";
-import { assertSafeManagedPath, readManagedTextIfExists, writeManagedText } from "./files";
+import {
+  MANAGED_LIFECYCLE_LOCK_PATH,
+  deleteManagedTextIfUnchanged,
+  readManagedTextIfExists,
+  withManagedLock,
+  writeManagedTextIfUnchanged,
+} from "./files";
 import {
   MANAGED_ARTIFACTS,
   MANAGED_BLOCK_ARTIFACTS,
@@ -31,6 +37,29 @@ export interface SetupPreview {
   root: string;
   config: ContextConfig;
   changes: SetupChange[];
+}
+
+const MAX_LIFECYCLE_LOCK_ATTEMPTS = 600;
+const LIFECYCLE_LOCK_RETRY_MS = 50;
+
+/**
+ * Serializes CCR lifecycle writers through one repository-local, token-owned lock. Keep new setup,
+ * update, and removal entry points inside this boundary so their previews cannot apply concurrently.
+ */
+export async function withManagedLifecycleLock<T>(
+  root: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return withManagedLock(
+    root,
+    MANAGED_LIFECYCLE_LOCK_PATH,
+    {
+      busyMessage: "CCR managed lifecycle remained busy; retry the operation.",
+      maximumAttempts: MAX_LIFECYCLE_LOCK_ATTEMPTS,
+      retryMilliseconds: LIFECYCLE_LOCK_RETRY_MS,
+    },
+    operation,
+  );
 }
 
 async function readSetupConfig(root: string): Promise<ContextConfig> {
@@ -111,29 +140,38 @@ export async function applySetup(
   root: string,
   suppliedPreview?: SetupPreview,
 ): Promise<{ changedPaths: string[] }> {
-  const preview = suppliedPreview ?? (await previewSetup(root));
-  if (path.resolve(preview.root) !== path.resolve(root)) {
-    throw new Error("CCR setup preview belongs to a different repository.");
-  }
-  for (const change of preview.changes) {
-    if (change.action === "unchanged" || change.action === "preserve") continue;
-    const current = await readManagedTextIfExists(root, change.path);
-    if (current !== change.expectedContent) {
-      throw new Error(`CCR managed file changed after preview: ${change.path}.`);
+  return withManagedLifecycleLock(root, async () => {
+    const preview = suppliedPreview ?? (await previewSetup(root));
+    if (path.resolve(preview.root) !== path.resolve(root)) {
+      throw new Error("CCR setup preview belongs to a different repository.");
     }
-  }
-  const changedPaths: string[] = [];
-  for (const change of preview.changes) {
-    if (change.action === "unchanged" || change.action === "preserve") continue;
-    if (change.action === "remove") {
-      await unlink(await assertSafeManagedPath(root, change.path));
+    for (const change of preview.changes) {
+      if (change.action === "unchanged" || change.action === "preserve") continue;
+      const current = await readManagedTextIfExists(root, change.path);
+      if (current !== change.expectedContent) {
+        throw new Error(`CCR managed file changed after preview: ${change.path}.`);
+      }
+    }
+    const changedPaths: string[] = [];
+    for (const change of preview.changes) {
+      if (change.action === "unchanged" || change.action === "preserve") continue;
+      const didApply =
+        change.action === "remove"
+          ? change.expectedContent !== undefined &&
+            (await deleteManagedTextIfUnchanged(root, change.path, change.expectedContent))
+          : await writeManagedTextIfUnchanged(
+              root,
+              change.path,
+              change.expectedContent,
+              change.content,
+            );
+      if (!didApply) {
+        throw new Error(`CCR managed file changed after preview: ${change.path}.`);
+      }
       changedPaths.push(change.path);
-      continue;
     }
-    await writeManagedText(root, change.path, change.content);
-    changedPaths.push(change.path);
-  }
-  return { changedPaths };
+    return { changedPaths };
+  });
 }
 
 export interface ConfigSetupResult {
@@ -149,17 +187,35 @@ function planConfigFile(path: string, content: string, existing: string | undefi
 
 /** Explicitly creates or upgrades the human-owned configuration and its companion manual. */
 export async function applyConfigSetup(root: string): Promise<ConfigSetupResult> {
-  const config = await readSetupConfig(root);
-  const configPath = ".ccr/config.json";
-  const manualPath = ".ccr/config-manual.md";
-  const [existingConfig, existingManual] = await Promise.all([
-    readManagedTextIfExists(root, configPath),
-    readManagedTextIfExists(root, manualPath),
-  ]);
-  const configChange = planConfigFile(configPath, serializeContextConfig(config), existingConfig);
-  const manualChange = planConfigFile(manualPath, CONFIG_MANUAL, existingManual);
-  for (const change of [configChange, manualChange]) {
-    if (change.action !== "unchanged") await writeManagedText(root, change.path, change.content);
-  }
-  return { config: configChange, manual: manualChange };
+  return withManagedLifecycleLock(root, async () => {
+    const updateConfigFile = async (): Promise<SetupChange> => {
+      const configPath = ".ccr/config.json";
+      for (let attempt = 0; attempt < MAX_LIFECYCLE_LOCK_ATTEMPTS; attempt += 1) {
+        const existing = await readManagedTextIfExists(root, configPath);
+        const config =
+          existing === undefined ? DEFAULT_CONTEXT_CONFIG : parseContextConfig(existing);
+        const change = planConfigFile(configPath, serializeContextConfig(config), existing);
+        if (change.action === "unchanged") return change;
+        if (await writeManagedTextIfUnchanged(root, configPath, existing, change.content)) {
+          return change;
+        }
+        await delay(LIFECYCLE_LOCK_RETRY_MS);
+      }
+      throw new Error("CCR configuration remained busy; retry initialization.");
+    };
+    const updateManualFile = async (): Promise<SetupChange> => {
+      const manualPath = ".ccr/config-manual.md";
+      for (let attempt = 0; attempt < MAX_LIFECYCLE_LOCK_ATTEMPTS; attempt += 1) {
+        const existing = await readManagedTextIfExists(root, manualPath);
+        const change = planConfigFile(manualPath, CONFIG_MANUAL, existing);
+        if (change.action === "unchanged") return change;
+        if (await writeManagedTextIfUnchanged(root, manualPath, existing, change.content)) {
+          return change;
+        }
+        await delay(LIFECYCLE_LOCK_RETRY_MS);
+      }
+      throw new Error("CCR configuration manual remained busy; retry initialization.");
+    };
+    return { config: await updateConfigFile(), manual: await updateManualFile() };
+  });
 }

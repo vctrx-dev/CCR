@@ -1,3 +1,5 @@
+import { reconcileCommittedReviewState } from "../review/review-state";
+import type { ReviewFreshnessStatus } from "../review/review-state";
 import {
   classifyContextChanges,
   hasWorkingTreeChanges,
@@ -9,6 +11,8 @@ import {
   createJournalEntry,
   finalizeWorkingJournalEntry,
   journalEntryForCommit,
+  journalEntryForCommitParent,
+  readCompleteJournalEntry,
 } from "./journal";
 import type { JournalDetails } from "./journal";
 
@@ -24,6 +28,7 @@ export interface AfterCommitResult {
   journalCreated: boolean;
   journalPath?: string;
   prompt?: string;
+  reviewStatus: ReviewFreshnessStatus;
   shouldWarn: boolean;
 }
 
@@ -42,6 +47,7 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
       hasRepositoryChanges: false,
       journalCreated: false,
       journalPath: undefined,
+      reviewStatus: "unrecorded",
       shouldWarn: false,
     };
   }
@@ -50,9 +56,11 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
 
   let journalCreated = false;
   let journalPath: string | undefined;
+  let reviewJournalPath: string | undefined;
   try {
     const { branch, directory } = branchDetails(root);
     const details: JournalDetails = { branch, directory, commit };
+    reviewJournalPath = (await journalEntryForCommitParent(root, details))?.path;
     const existing = await journalEntryForCommit(root, commit, directory);
     if (existing) {
       journalPath = existing.path;
@@ -72,13 +80,37 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
     // Journaling must never break the advisory hook; the context warning still applies.
   }
 
+  let reviewStatus: ReviewFreshnessStatus = "unrecorded";
+  const freshnessJournalPath = reviewJournalPath ?? journalPath;
+  if (freshnessJournalPath !== undefined) {
+    try {
+      reviewStatus = await reconcileCommittedReviewState(root, freshnessJournalPath, commit);
+    } catch {
+      // Review freshness is advisory and must never break the post-commit hook.
+    }
+  }
+
+  let journalNeedsCompletion = journalPath === undefined;
+  if (journalPath !== undefined) {
+    try {
+      journalNeedsCompletion = (await readCompleteJournalEntry(root, journalPath)).includes(
+        "Needs concise completion.",
+      );
+    } catch {
+      journalNeedsCompletion = true;
+    }
+  }
+
   return {
     commit,
     hasRepositoryChanges,
     journalCreated,
     journalPath,
+    reviewStatus,
     shouldWarn,
     prompt:
-      shouldWarn || (journalCreated && hasRepositoryChanges) ? AFTER_COMMIT_PROMPT : undefined,
+      hasRepositoryChanges && (shouldWarn || journalNeedsCompletion)
+        ? AFTER_COMMIT_PROMPT
+        : undefined,
   };
 }

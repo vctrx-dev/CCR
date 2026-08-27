@@ -154,4 +154,19 @@ describe("validateContext", () => {
     expect(readFileMock).not.toHaveBeenCalledWith(projectPath, "utf8");
     expect(readFileMock).not.toHaveBeenCalledWith(stakeholdersPath, "utf8");
   });
+
+  it("should reject oversized and malformed config through the bounded UTF-8 path", async () => {
+    const root = await makeSetup();
+    const configPath = path.join(root, ".ccr/config.json");
+    await writeFile(configPath, " ".repeat(64_001), "utf8");
+
+    expect((await validateContext(root)).issues).toContain(
+      ".ccr/config.json is invalid: .ccr/config.json exceeds 64000 characters.",
+    );
+
+    await writeFile(configPath, Buffer.from([255]));
+    expect((await validateContext(root)).issues).toContain(
+      ".ccr/config.json is invalid: .ccr/config.json is not valid UTF-8 text.",
+    );
+  });
 });

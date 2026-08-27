@@ -1,10 +1,21 @@
+import { z } from "zod";
+import { approveGitInventory } from "./approved-git-inventory";
 import {
   normalizeRepositoryPath,
   sortUniqueRepositoryPaths,
   truncateEvidence,
 } from "./evidence-format";
-import { assertSafeManagedPath, readBoundedTextIfExists } from "./files";
-import { readChangedPaths, readGitBlob, readIndexEntries, readStagedDiff } from "./git";
+import { assertSafeManagedPath, readBoundedUtf8TextIfExists } from "./files";
+import {
+  readBoundedGitBlob,
+  readBoundedStagedDiff,
+  readChangedPaths,
+  readCommitChangedPaths,
+  readCommitEntries,
+  readCurrentCommit,
+  readIndexEntries,
+  readParentCommit,
+} from "./git";
 import {
   filterExcludedPaths,
   hasControlCharacters,
@@ -40,6 +51,89 @@ export interface SafeRecentPaths {
   excludedCount: number;
 }
 
+interface SafeCommitInventory {
+  paths: string[];
+  excludedCount: number;
+}
+
+function boundedPathPage(paths: string[], excludedCount: number, after?: string): SafePathList {
+  const normalizedAfter = after ? normalizeRepositoryPath(after) : undefined;
+  if (
+    normalizedAfter &&
+    (/^\/|(?:^|\/)\.\.(?:\/|$)/u.test(normalizedAfter) || hasControlCharacters(normalizedAfter))
+  ) {
+    throw new Error("Cursor must be a safe repository-relative path.");
+  }
+  const candidates = normalizedAfter
+    ? paths.filter((candidate) => candidate.localeCompare(normalizedAfter) > 0)
+    : paths;
+  const page: string[] = [];
+  let usedCharacters = 0;
+  for (const candidate of candidates) {
+    if (usedCharacters + candidate.length + 3 > MAX_PATH_LIST_CHARACTERS) break;
+    page.push(candidate);
+    usedCharacters += candidate.length + 3;
+  }
+  const omittedCount = candidates.length - page.length;
+  const nextCursor = omittedCount > 0 ? page.at(-1) : undefined;
+  return {
+    paths: page,
+    excludedCount,
+    omittedCount,
+    ...(nextCursor ? { nextCursor } : {}),
+  };
+}
+
+const gitCommitSchema = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u);
+
+function validateCurrentCommit(root: string, commit: string): string {
+  const validated = gitCommitSchema.parse(commit);
+  if (readCurrentCommit(root) !== validated) {
+    throw new Error("Commit evidence is available only for the exact current HEAD.");
+  }
+  return validated;
+}
+
+async function safeCommitFiles(
+  root: string,
+  commit: string,
+): Promise<{
+  entriesByPath: Map<string, ReturnType<typeof readCommitEntries>[number]>;
+  result: SafeCommitInventory;
+}> {
+  const validated = validateCurrentCommit(root, commit);
+  const config = await readResolvedContextConfig(root);
+  const changedPaths = readCommitChangedPaths(root, validated);
+  const entries = readCommitEntries(root, validated);
+  const parent = readParentCommit(root, validated);
+  const parentEntries = parent === "unborn" ? [] : readCommitEntries(root, parent);
+  const approved = approveGitInventory({
+    baselineEntries: parentEntries,
+    candidatePaths: changedPaths,
+    currentEntries: entries,
+    excludedPatterns: config.privacy.excludedPaths,
+  });
+  const paths = sortUniqueRepositoryPaths(approved.included);
+  validateCurrentCommit(root, validated);
+  return {
+    entriesByPath: approved.entriesByPath,
+    result: {
+      paths,
+      excludedCount: approved.excluded.length,
+    },
+  };
+}
+
+async function renderRepositoryBlob(root: string, oid: string): Promise<string> {
+  const bounded = await readBoundedGitBlob(root, oid, MAX_EVIDENCE_CHARACTERS);
+  if (bounded.isBinary) return "[CCR binary repository evidence omitted]\n";
+  return truncateEvidence(bounded.content, {
+    isTruncated: bounded.isTruncated,
+    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
+  });
+}
+
 async function safeRegularPaths(root: string): Promise<{
   config: Awaited<ReturnType<typeof readResolvedContextConfig>>;
   entriesByPath: Map<string, ReturnType<typeof readIndexEntries>[number]>;
@@ -49,21 +143,18 @@ async function safeRegularPaths(root: string): Promise<{
 }> {
   const config = await readResolvedContextConfig(root);
   const entries = readIndexEntries(root);
-  const regularPaths = entries
-    .filter((entry) => entry.mode.startsWith("100"))
-    .map((entry) => entry.path);
-  const filtered = filterExcludedPaths(regularPaths, config.privacy.excludedPaths);
-  const paths = sortUniqueRepositoryPaths(filtered.included);
-  const entriesByPath = new Map<string, ReturnType<typeof readIndexEntries>[number]>();
-  for (const entry of entries) {
-    if (!entriesByPath.has(entry.path)) entriesByPath.set(entry.path, entry);
-  }
+  const approved = approveGitInventory({
+    candidatePaths: entries.map(({ path }) => path),
+    currentEntries: entries,
+    excludedPatterns: config.privacy.excludedPaths,
+  });
+  const paths = sortUniqueRepositoryPaths(approved.included);
   return {
     config,
-    entriesByPath,
+    entriesByPath: approved.entriesByPath,
     paths,
     pathSet: new Set(paths),
-    excludedCount: filtered.excluded.length + entries.length - regularPaths.length,
+    excludedCount: approved.excluded.length,
   };
 }
 
@@ -93,24 +184,7 @@ export async function listSafeRepositoryPaths(
         (candidate) => candidate === pathPrefix || candidate.startsWith(`${pathPrefix}/`),
       )
     : [...new Set(safe.paths.map((candidate) => candidate.split("/")[0] ?? candidate))];
-  const candidates = normalizedAfter
-    ? matchingCandidates.filter((candidate) => candidate.localeCompare(normalizedAfter) > 0)
-    : matchingCandidates;
-  const paths: string[] = [];
-  let usedCharacters = 0;
-  for (const candidate of candidates) {
-    if (usedCharacters + candidate.length + 3 > MAX_PATH_LIST_CHARACTERS) break;
-    paths.push(candidate);
-    usedCharacters += candidate.length + 3;
-  }
-  const omittedCount = candidates.length - paths.length;
-  const nextCursor = omittedCount > 0 ? paths.at(-1) : undefined;
-  return {
-    paths,
-    excludedCount: safe.excludedCount,
-    omittedCount,
-    ...(nextCursor ? { nextCursor } : {}),
-  };
+  return boundedPathPage(matchingCandidates, safe.excludedCount, normalizedAfter);
 }
 
 /** Lists readable current files touched by the latest five commits after privacy filtering. */
@@ -127,6 +201,36 @@ export async function listSafeRecentPaths(root: string): Promise<SafeRecentPaths
   };
 }
 
+/** Lists privacy-approved regular files changed by the exact immutable current commit. */
+export async function listSafeCommitPaths(
+  root: string,
+  commit: string,
+  after?: string,
+): Promise<SafePathList> {
+  const safe = (await safeCommitFiles(root, commit)).result;
+  return boundedPathPage(safe.paths, safe.excludedCount, after);
+}
+
+/** Reads one privacy-approved changed blob from the exact immutable current commit. */
+export async function readSafeCommitFile(
+  root: string,
+  commit: string,
+  candidate: string,
+): Promise<string> {
+  const normalized = normalizeRepositoryPath(candidate);
+  const safe = await safeCommitFiles(root, commit);
+  if (!safe.result.paths.includes(normalized)) {
+    throw new Error("Path is not an approved changed file for the current commit.");
+  }
+  const entry = safe.entriesByPath.get(normalized);
+  const content =
+    entry === undefined
+      ? "[CCR file deleted in current commit]\n"
+      : await renderRepositoryBlob(root, entry.oid);
+  validateCurrentCommit(root, commit);
+  return content;
+}
+
 /** Reads one approved index blob, never a newer unstaged worktree version. */
 export async function readSafeRepositoryFile(root: string, candidate: string): Promise<string> {
   const safe = await safeRegularPaths(root);
@@ -136,10 +240,7 @@ export async function readSafeRepositoryFile(root: string, candidate: string): P
   }
   const entry = safe.entriesByPath.get(normalized);
   if (!entry) throw new Error("Approved index entry disappeared.");
-  return truncateEvidence(readGitBlob(root, entry.oid), {
-    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
-    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
-  });
+  return renderRepositoryBlob(root, entry.oid);
 }
 
 /** Reads one current shared context document, including an uncommitted setup or human edit. */
@@ -148,11 +249,12 @@ export async function readSharedContextFile(root: string, candidate: string): Pr
   if (!SHARED_CONTEXT_PATHS.some((approved) => approved === normalized)) {
     throw new Error("Path is not an approved shared context document.");
   }
-  const content = await readBoundedTextIfExists(
+  const content = await readBoundedUtf8TextIfExists(
     await assertSafeManagedPath(root, normalized),
     MAX_EVIDENCE_CHARACTERS,
   );
   if (content === undefined) throw new Error("Shared context document does not exist.");
+  if (content.isBinary) throw new Error("Shared context document is not valid UTF-8 text.");
   return truncateEvidence(content.content, {
     isTruncated: content.isTruncated,
     marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
@@ -167,7 +269,10 @@ export async function readSafeRepositoryDiff(root: string, candidate: string): P
   if (!safePaths.included.includes(normalized)) {
     throw new Error("Path is not an approved staged file.");
   }
-  return truncateEvidence(readStagedDiff(root, normalized), {
+  const bounded = await readBoundedStagedDiff(root, normalized, MAX_EVIDENCE_CHARACTERS);
+  if (bounded.isBinary) return "[CCR binary staged diff omitted]\n";
+  return truncateEvidence(bounded.content, {
+    isTruncated: bounded.isTruncated,
     marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
     maximumCharacters: MAX_EVIDENCE_CHARACTERS,
   });

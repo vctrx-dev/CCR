@@ -1,17 +1,21 @@
 import { z } from "zod";
-import { assertSafeManagedPath, readBoundedTextIfExists, writeManagedText } from "./files";
+import {
+  assertSafeManagedPath,
+  readBoundedUtf8TextIfExists,
+  writeManagedTextIfUnchanged,
+} from "./files";
 import { hasControlCharacters, readResolvedContextConfig } from "./privacy";
 
 /**
- * Config-gated decision-writing boundary. Review and future context features must append through
- * this module so a human-owned opt-in, one-line input validation, safe path handling, and document
- * size limit remain consistent; extend this contract rather than writing `decisions.md` directly.
+ * Decision-document policy and persistence boundary. Interactive writes and headless postcondition
+ * checks share the same append format, size limit, duplicate handling, and text validation.
  */
 
 export const DECISIONS_PATH = ".ccr/decisions.md";
 
 const MAX_DECISION_CHARACTERS = 500;
 const MAX_DECISIONS_DOCUMENT_CHARACTERS = 10_000;
+const MAX_DECISION_APPEND_ATTEMPTS = 50;
 
 const decisionSchema = z
   .string()
@@ -20,6 +24,55 @@ const decisionSchema = z
   .refine((value) => !hasControlCharacters(value), "A decision must be one line of plain text.")
   .transform((value) => value.trim())
   .pipe(z.string().min(1, "A decision cannot be blank."));
+
+/** Reads the complete decisions document through its bounded fatal-UTF-8 boundary. */
+export async function readDecisionDocument(root: string): Promise<string> {
+  const target = await assertSafeManagedPath(root, DECISIONS_PATH);
+  const existing = await readBoundedUtf8TextIfExists(target, MAX_DECISIONS_DOCUMENT_CHARACTERS);
+  if (existing === undefined) {
+    throw new Error("Decisions document is missing. Run `ccr setup --apply` first.");
+  }
+  if (existing.isBinary) throw new Error("Decisions document is not valid UTF-8 text.");
+  if (existing.isTruncated) {
+    throw new Error(
+      `Decisions document exceeds ${MAX_DECISIONS_DOCUMENT_CHARACTERS} characters; shorten it before appending.`,
+    );
+  }
+  return existing.content;
+}
+
+/** Returns the canonical document after one validated append, or the original for a duplicate. */
+export function appendDecisionToDocument(content: string, candidate: unknown): string {
+  const decision = decisionSchema.parse(candidate);
+  const entry = `- ${decision}`;
+  if (content.split(/\r?\n/u).includes(entry)) return content;
+  const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+  const updated = `${content}${separator}${entry}\n`;
+  if (updated.length > MAX_DECISIONS_DOCUMENT_CHARACTERS) {
+    throw new Error(
+      `Decision append would exceed ${MAX_DECISIONS_DOCUMENT_CHARACTERS} characters; shorten the document first.`,
+    );
+  }
+  return updated;
+}
+
+/** Verifies that a headless edit is unchanged or exactly one canonical, nonduplicate append. */
+export function assertDecisionDocumentAppend(previous: string, current: string): void {
+  if (current === previous) return;
+  const separator = previous.length > 0 && !previous.endsWith("\n") ? "\n" : "";
+  const prefix = `${previous}${separator}`;
+  if (!current.startsWith(prefix)) throw new Error("Decision document is not append-only.");
+  const match = /^- ([^\r\n]+)\n$/u.exec(current.slice(prefix.length));
+  const candidate = match?.[1];
+  if (candidate === undefined) throw new Error("Decision append is not canonical.");
+  const parsed = decisionSchema.safeParse(candidate);
+  if (!parsed.success || parsed.data !== candidate) {
+    throw new Error("Decision append is not canonical.");
+  }
+  if (appendDecisionToDocument(previous, candidate) !== current) {
+    throw new Error("Decision append is duplicate or malformed.");
+  }
+}
 
 /**
  * Appends one human-confirmed, bounded decision only when the committed opt-in is enabled.
@@ -33,26 +86,12 @@ export async function appendDecision(root: string, candidate: unknown): Promise<
       "Decision updates are disabled because instructions.updateDecisionsMd is false.",
     );
   }
-  const existing = await readBoundedTextIfExists(
-    await assertSafeManagedPath(root, DECISIONS_PATH),
-    MAX_DECISIONS_DOCUMENT_CHARACTERS,
-  );
-  if (existing === undefined) {
-    throw new Error("Decisions document is missing. Run `ccr setup --apply` first.");
+  for (let attempt = 0; attempt < MAX_DECISION_APPEND_ATTEMPTS; attempt += 1) {
+    const existing = await readDecisionDocument(root);
+    const updated = appendDecisionToDocument(existing, decision);
+    if (updated === existing) return;
+    if (await writeManagedTextIfUnchanged(root, DECISIONS_PATH, existing, updated)) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
   }
-  if (existing.isTruncated) {
-    throw new Error(
-      `Decisions document exceeds ${MAX_DECISIONS_DOCUMENT_CHARACTERS} characters; shorten it before appending.`,
-    );
-  }
-  const separator = existing.content.length > 0 && !existing.content.endsWith("\n") ? "\n" : "";
-  const entry = `- ${decision}`;
-  if (existing.content.split(/\r?\n/u).includes(entry)) return;
-  const updated = `${existing.content}${separator}${entry}\n`;
-  if (updated.length > MAX_DECISIONS_DOCUMENT_CHARACTERS) {
-    throw new Error(
-      `Decision append would exceed ${MAX_DECISIONS_DOCUMENT_CHARACTERS} characters; shorten the document first.`,
-    );
-  }
-  await writeManagedText(root, DECISIONS_PATH, updated);
+  throw new Error("Decisions document remained busy or changed repeatedly; retry the append.");
 }

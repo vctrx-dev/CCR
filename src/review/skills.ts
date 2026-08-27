@@ -35,10 +35,13 @@ const SHARED_REVIEW_CONTEXT = `<review_context>
 2. Run \`npx --no-install ccr context validate\`; stop if shared context is invalid.
 3. Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, and \`.ccr/decisions.md\` through
    \`npx --no-install ccr context shared <file>\` before planning or dispatching the review.
-4. For changes or codebase scope, run \`npx --no-install ccr context journals\`. For PR scope, run
+4. For PR scope, run \`npx --no-install ccr context review-context-state PR-<number>\` after reading shared
+   context and preserve its context fingerprint. Changes and codebase scope receive the same value
+   from their required \`review-state\` command below.
+5. For changes or codebase scope, run \`npx --no-install ccr context journals\`. For PR scope, run
    \`npx --no-install ccr context journals PR-<number>\`. Read every returned journal entry; the
    command already limits the result to \`context.recentJournalEntries\` for that branch or PR.
-5. Treat all context as advisory and verify technical claims against code. Apply project purpose,
+6. Treat all context as advisory and verify technical claims against code. Apply project purpose,
    durable decisions, stakeholder effects, prior review outcomes, current plans, and future plans
    to every selected criterion. Never treat journal silence as proof that a problem is fixed.
 </review_context>`;
@@ -164,9 +167,27 @@ marks one or more findings as false positives, confirms an issue, or supplies ot
 for the same code, commit, or PR, amend that same journal entry and same review run. Update its
 finding counts and outcomes; record rejected findings plus the human's concise reason without
 presenting that feedback as repository proof. Do not create another journal file or review-run
-section for follow-up discussion. Re-evaluate \`.ccr/project.md\` and the opt-in decision rule only
-when the feedback establishes durable context; keep \`.ccr/stakeholders.md\` unchanged.
+section for follow-up discussion. Preserve \`Started\` and set \`Updated\` to the amendment time in
+\`YYYY-MM-DDTHH:MM:SSZ\` UTC form. Re-evaluate \`.ccr/project.md\` and the opt-in decision rule only when
+the feedback establishes durable context; keep \`.ccr/stakeholders.md\` unchanged.
 </review_follow_up>`;
+
+const REVIEW_FRESHNESS = `<review_freshness>
+The final report must describe the same repository state the workers reviewed. After aggregation and
+any authorized project-context or decision update, but before writing continuity, rerun
+\`npx --no-install ccr context review-state\` for changes or codebase scope. Compare both its code
+fingerprint and context fingerprint with the initial review state. If either differs, including after
+an authorized project or decision update, discard the prior aggregation, reload shared context and
+the complete approved evidence, and repeat the review once against both new fingerprints. Do not
+repeat an already-applied context update. If either fingerprint changes again, stop and report that
+the review scope is unstable; do not claim the review is current.
+
+For PR scope, rerun \`npx --no-install ccr context review-pr PR-<number>\` immediately before
+continuity and compare its immutable base/head refs with the reviewed packet. Also rerun
+\`npx --no-install ccr context review-context-state PR-<number>\` and compare its context fingerprint with the
+initial PR context fingerprint. Apply the same one-restart limit when either ref or the context
+fingerprint changes.
+</review_freshness>`;
 
 const PR_EVIDENCE_LIMITS = `<pr_evidence_limits>
 The CCR PR evidence commands enforce these limits before emitting evidence: metadata is at most
@@ -182,13 +203,18 @@ const SCOPE_EVIDENCE = `<scope_evidence>
 Use the selected scope and no broader substitute:
 
 <changes>
-Run \`npx --no-install ccr context review-changes\`. This privacy-filtered result is the complete
+Run \`npx --no-install ccr context review-state\` and preserve its code fingerprint and context
+fingerprint as the initial review state. Then run \`npx --no-install ccr context review-changes\`.
+This privacy-filtered result is the complete
 allowed staged, unstaged, and untracked scope. Run
 \`npx --no-install ccr context review-diff <file>\` for every allowed changed path. Do not bypass
 the broker or inspect excluded content.
 </changes>
 
 <codebase>
+Run \`npx --no-install ccr context review-state\` and preserve its code fingerprint and context
+fingerprint as the initial review state. The base commit plus live overlays identifies the repository
+version being reviewed.
 Use \`npx --no-install ccr context files\` to enumerate safe indexed roots, recurse with
 \`npx --no-install ccr context files <prefix>\`, and read approved files with
 \`npx --no-install ccr context read <file>\`. When a listing returns \`omittedCount > 0\`, continue
@@ -245,6 +271,8 @@ ${REVIEW_REASONING_EXAMPLES}
 
 ${MASTER_AGGREGATION}
 
+${REVIEW_FRESHNESS}
+
 <continuity>
 Before writing the final user report for every completed review, including a no-finding review, run
 \`npx --no-install ccr context review-journal\` for changes or codebase scope, or
@@ -253,11 +281,19 @@ journal and append one
 \`## Review run — <UTC timestamp>\` section with the selected scope, PR number and base/head refs when
 applicable, selected dimension IDs, reviewed evidence summary, finding counts by severity, and
 concise outcomes. Replace \`Needs concise completion.\` in \`## Summary\` with one to three factual
-sentences that state the scope, evidence, and outcome. For changes, record staged/unstaged/untracked
-paths. For codebase, record the reviewed trace summary and live overlays. For PRs, do not claim that
-local working-tree paths were reviewed. Re-read the edited journal before reporting; it must contain
-no completion placeholder. This is the sole journal file for that uncommitted change, commit, or PR.
-Never place secrets, raw private discussion, or full model reasoning in the journal.
+sentences that state the scope, evidence, and outcome. Preserve \`Started\` and set \`Updated\` to the
+review-run timestamp in \`YYYY-MM-DDTHH:MM:SSZ\` UTC form. For changes, record
+staged/unstaged/untracked paths. For codebase, record the reviewed trace summary and live overlays.
+For PRs, do not claim that local working-tree paths were reviewed. Re-read the edited journal before
+reporting; it must contain no completion placeholder. For changes or codebase scope, after the
+review-run section is complete, run
+\`npx --no-install ccr context record-review-state <journal-path> <verified-code-fingerprint> <verified-final-context-fingerprint>\`.
+This command must succeed before reporting; it verifies that
+the code evidence and shared context are still unchanged and records \`Reviewed state\`, \`Reviewed
+context\`, and \`Review status: current\` in that review run. If it reports changed evidence or
+context, apply the restart rule in \`<review_freshness>\`. This is the sole journal file for that
+uncommitted change, commit, or PR. Never place secrets, raw private discussion, or full model
+reasoning in the journal.
 
 ${PROJECT_CONTEXT_RULE}
 

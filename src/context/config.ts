@@ -115,6 +115,8 @@ export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
   },
 };
 
+const UNSPECIFIED_DOMAIN = "unspecified";
+
 function fromPublicConfig(config: PublicContextConfig): ContextConfig {
   return resolvedConfigSchema.parse({
     ...DEFAULT_CONTEXT_CONFIG,
@@ -298,4 +300,13 @@ export function updateContextConfig(
       );
   }
   return resolvedConfigSchema.parse(updated);
+}
+
+/**
+ * Records the evidence-derived domain from initial context discovery only while the generated
+ * default remains untouched. This preserves a human-selected domain across later skill runs.
+ */
+export function setDomainIfUnspecified(config: ContextConfig, domain: string): ContextConfig {
+  if (config.domain !== UNSPECIFIED_DOMAIN) return config;
+  return updateContextConfig(config, "domain", domain);
 }

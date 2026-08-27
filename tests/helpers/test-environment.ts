@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
-import { rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach } from "vitest";
 
@@ -13,4 +15,17 @@ export function createTemporaryRootRegistry(): string[] {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
   return roots;
+}
+
+/** Creates an isolated Git repository and registers it with the suite's cleanup boundary. */
+export async function createTemporaryGitRepository(
+  roots: string[],
+  prefix: string,
+  initialBranch?: string,
+): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), prefix));
+  roots.push(root);
+  const branchArguments = initialBranch ? ["-b", initialBranch] : [];
+  await runCommand("git", ["init", "--quiet", ...branchArguments], { cwd: root });
+  return root;
 }

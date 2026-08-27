@@ -36,10 +36,10 @@ it("should create a branch-local working journal without premature commit metada
   const result = await createJournalEntry(root, new Date("2026-07-29T06:45:12Z"));
   const content = await readFile(path.join(root, result.path), "utf8");
 
-  expect(result.path).toMatch(
-    /^\.ccr\/journal\/feature_context-[0-9a-f]{8}\/2026-07-29T06-45-12Z\.md$/,
-  );
-  expect(content).toContain("2026-07-29T06:45:12Z");
+  expect(result.path).toMatch(/^\.ccr\/journal\/feature_context-[0-9a-f]{8}\/2026-07-29\.md$/);
+  expect(content).toContain("**Started**: 2026-07-29T06:45:12Z");
+  expect(content).toContain("**Updated**: 2026-07-29T06:45:12Z");
+  expect(content).not.toContain("**Timestamp**");
   expect(content).toContain("# CCR Journal");
   expect(content).not.toContain("CCR Continuity");
   expect(content).not.toContain("**Branch**");
@@ -48,8 +48,33 @@ it("should create a branch-local working journal without premature commit metada
 
   const newer = await ensureWorkingJournalEntry(root, new Date("2026-07-29T07:45:12Z"));
   expect(newer).toEqual(result);
+  const refreshed = await readFile(path.join(root, result.path), "utf8");
+  expect(refreshed).toContain("**Started**: 2026-07-29T06:45:12Z");
+  expect(refreshed).toContain("**Updated**: 2026-07-29T07:45:12Z");
   const recent = await readRecentJournalEntries(root);
   expect(recent.map((entry) => entry.path)).toEqual([result.path]);
+});
+
+it("should migrate legacy timestamp metadata when reusing a working journal", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-legacy-journal-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  const { directory } = branchDetails(root);
+  const relativePath = `.ccr/journal/${directory}/2026-07-28T09-00-00Z.md`;
+  await mkdir(path.dirname(path.join(root, relativePath)), { recursive: true });
+  await writeFile(
+    path.join(root, relativePath),
+    "# CCR Journal\n\n- **Timestamp**: 2026-07-28T09:00:00Z\n- **Base commit**: `unborn`\n\n## Summary\n\nNeeds concise completion.\n",
+    "utf8",
+  );
+
+  const reused = await ensureWorkingJournalEntry(root, new Date("2026-07-30T10:00:00Z"));
+  const content = await readFile(path.join(root, relativePath), "utf8");
+
+  expect(reused.path).toBe(relativePath);
+  expect(content).toContain("**Started**: 2026-07-28T09:00:00Z");
+  expect(content).toContain("**Updated**: 2026-07-30T10:00:00Z");
+  expect(content).not.toContain("**Timestamp**");
 });
 
 it("should record commit metadata only for a committed journal", async () => {
@@ -83,7 +108,7 @@ it("should record commit metadata only for a committed journal", async () => {
   expect(await journalEntryExistsForCommit(root, otherCommit)).toBe(false);
 });
 
-it("should not overwrite a journal entry created in the same second", async () => {
+it("should not overwrite journal entries created on the same date", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-collision-"));
   roots.push(root);
   await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
@@ -99,9 +124,9 @@ it("should not overwrite a journal entry created in the same second", async () =
   await runCommand("git", ["add", "file.txt"], { cwd: root });
   await runCommand("git", ["commit", "--quiet", "-m", "test"], { cwd: root });
 
-  const sameSecond = new Date("2026-07-29T10:00:00Z");
-  const first = await createJournalEntry(root, sameSecond);
-  const second = await createJournalEntry(root, sameSecond);
+  const sameDate = new Date("2026-07-29T10:00:00Z");
+  const first = await createJournalEntry(root, sameDate);
+  const second = await createJournalEntry(root, sameDate);
   const third = await createJournalEntry(root, new Date("2026-07-29T10:01:00Z"));
   const fourth = await createJournalEntry(root, new Date("2026-07-29T10:02:00Z"));
 
@@ -115,7 +140,7 @@ it("should not overwrite a journal entry created in the same second", async () =
   expect(recent.map((entry) => entry.path)).toHaveLength(
     DEFAULT_CONTEXT_CONFIG.context.recentJournalEntries,
   );
-  expect(recent.map((entry) => entry.path)).toEqual([fourth.path, third.path, first.path]);
+  expect(recent.map((entry) => entry.path)).toEqual([fourth.path, third.path, second.path]);
 });
 
 it("should attach commit metadata to the existing working journal after commit", async () => {
@@ -132,11 +157,17 @@ it("should attach commit metadata to the existing working journal after commit",
   const commit = (await runCommand("git", ["rev-parse", "HEAD"], { cwd: root })).stdout.trim();
   const { branch, directory } = branchDetails(root);
 
-  const finalized = await finalizeWorkingJournalEntry(root, { branch, directory, commit });
+  const finalized = await finalizeWorkingJournalEntry(
+    root,
+    { branch, directory, commit },
+    new Date("2026-07-31T08:30:00Z"),
+  );
 
   expect(finalized).toEqual(working);
   const content = await readFile(path.join(root, working.path), "utf8");
-  expect(content.indexOf("**Timestamp**")).toBeLessThan(content.indexOf("**Branch**"));
+  expect(content).toContain("**Started**: 2026-07-29T11:00:00Z");
+  expect(content).toContain("**Updated**: 2026-07-31T08:30:00Z");
+  expect(content.indexOf("**Updated**")).toBeLessThan(content.indexOf("**Branch**"));
   expect(content).toContain("**Branch**: `development`");
   expect(content).toContain(`**Commit**: \`${commit}\``);
   expect(content).not.toContain("## Changed paths");
@@ -160,11 +191,50 @@ it("should reuse one review journal entry for repeated reviews of the same commi
 
   const first = await ensureJournalEntryForHead(root, new Date("2026-07-29T11:00:00Z"));
   const second = await ensureJournalEntryForHead(root, new Date("2026-07-29T12:00:00Z"));
+  const clockSkewed = await ensureJournalEntryForHead(root, new Date("2026-07-29T11:30:00Z"));
 
   expect(second).toEqual(first);
+  expect(clockSkewed).toEqual(first);
+  expect(await readFile(path.join(root, first.path), "utf8")).toContain(
+    "**Updated**: 2026-07-29T12:00:00Z",
+  );
   expect((await readRecentJournalEntries(root)).map(({ path: entryPath }) => entryPath)).toEqual([
     first.path,
   ]);
+});
+
+it("should create separate date-suffixed journals for different commits on the same date", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-commit-journals-date-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    "utf8",
+  );
+
+  await writeFile(path.join(root, "first.txt"), "first\n", "utf8");
+  await runCommand("git", ["add", "first.txt"], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+  const firstCommit = (await runCommand("git", ["rev-parse", "HEAD"], { cwd: root })).stdout.trim();
+  const first = await ensureJournalEntryForHead(root, new Date("2026-07-29T10:00:00Z"));
+
+  await writeFile(path.join(root, "second.txt"), "second\n", "utf8");
+  await runCommand("git", ["add", "second.txt"], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", "second"], { cwd: root });
+  const secondCommit = (
+    await runCommand("git", ["rev-parse", "HEAD"], { cwd: root })
+  ).stdout.trim();
+  const second = await ensureJournalEntryForHead(root, new Date("2026-07-29T11:00:00Z"));
+
+  expect(first.path).toMatch(/\/2026-07-29\.md$/);
+  expect(second.path).toMatch(/\/2026-07-29\.1\.md$/);
+  expect(second.path).not.toBe(first.path);
+  expect(await readFile(path.join(root, first.path), "utf8")).toContain(firstCommit);
+  expect(await readFile(path.join(root, second.path), "utf8")).toContain(secondCommit);
 });
 
 it("should reuse a working journal after its bounded evidence preview is truncated", async () => {
@@ -201,9 +271,9 @@ it("should reuse one isolated journal entry for each pull request", async () => 
 
   expect(repeated).toEqual(first);
   expect(other).not.toEqual(first);
-  expect(await readFile(path.join(root, first.path), "utf8")).toContain(
-    "**Pull request**: `PR-42`",
-  );
+  const firstContent = await readFile(path.join(root, first.path), "utf8");
+  expect(firstContent).toContain("**Pull request**: `PR-42`");
+  expect(firstContent).toContain("**Updated**: 2026-07-29T12:00:00Z");
   expect(
     (await readRecentJournalEntries(root, 42)).map(({ path: entryPath }) => entryPath),
   ).toEqual([first.path]);

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { findRepositoryRoot, isGitIgnored } from "../context/git";
+import { isGitIgnored } from "../context/git";
 import { readHookState } from "../context/hook-state";
 import {
   previewContextHookRemoval,
@@ -9,6 +9,7 @@ import {
 } from "../context/hooks";
 import { applySetup, previewSetup } from "../context/setup";
 import type { CliIo } from "./index";
+import { findCliRepositoryRoot, writeCliLines } from "./io";
 import { formatAction, formatHeading, formatStatus, formatTone } from "./output";
 
 interface SetupOptions {
@@ -19,16 +20,12 @@ interface SetupOptions {
 
 type SetupOperation = "setup" | "update";
 
-function writeLines(io: CliIo, lines: string[]): void {
-  io.write(`${lines.join("\n")}\n`);
-}
-
 async function showSetup(
   io: CliIo,
   options: SetupOptions,
   operation: SetupOperation = "setup",
 ): Promise<void> {
-  const root = findRepositoryRoot(io.cwd);
+  const root = findCliRepositoryRoot(io);
   const preview = await previewSetup(root);
   const isSkillLocal = isGitIgnored(root, ".claude/skills/ccr/SKILL.md");
   const hookState = await readHookState(root);
@@ -81,7 +78,7 @@ async function showSetup(
       );
       return;
     }
-    writeLines(io, [
+    writeCliLines(io, [
       formatHeading(`${actionLabel} preview · no files written`, io.isColorEnabled === true),
       compatibility,
       `Claude skill: ${formatStatus(isSkillLocal ? "local" : "shareable", io.isColorEnabled === true)}${isSkillLocal ? " (ignored by Git)" : ""}`,
@@ -176,7 +173,7 @@ async function showSetup(
     const hookResult = await removeAllContextHooks(root, hookRemovalPreview);
     hookLine = `CCR hooks disabled by .ccr/config.json: pre-commit ${hookResult.preCommit.status}, post-commit ${hookResult.postCommit.status}.`;
   }
-  writeLines(io, [
+  writeCliLines(io, [
     compatibility,
     `Claude skill: ${formatStatus(isSkillLocal ? "local" : "shareable", io.isColorEnabled === true)}${isSkillLocal ? " (ignored by Git)" : ""}`,
     result.changedPaths.length

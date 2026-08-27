@@ -165,7 +165,7 @@ describe("hooks CLI", () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-unprovenanced-"));
     roots.push(root);
     await runCommand("git", ["init", "--quiet"], { cwd: root });
-    const { io, output } = captureIo(root);
+    const { io, output, clear } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     await writeFile(
       path.join(root, ".git/hooks/pre-commit"),
@@ -270,7 +270,7 @@ describe("hooks CLI", () => {
     await runCommand("git", ["add", "--", "app.py"], { cwd: root });
     await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
 
-    const { io, output } = captureIo(root);
+    const { io, output, clear } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
 
     expect(automaticContextUpdate).toHaveBeenCalledOnce();
@@ -279,6 +279,28 @@ describe("hooks CLI", () => {
     expect(calledCommit).toMatch(/^[a-f0-9]{40}$/);
     expect(output()).toContain("automatic context update completed");
     expect(output()).not.toContain("Paste this into Claude Code");
+
+    for (const [status, expected] of [
+      ["already-updated", "already completed for this commit"],
+      ["in-progress", "already running"],
+    ] as const) {
+      automaticContextUpdate.mockResolvedValueOnce({ status });
+      clear();
+      await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
+      expect(output()).toContain(expected);
+      expect(output()).not.toContain("Paste this into Claude Code");
+    }
+
+    automaticContextUpdate.mockRejectedValueOnce(new Error("provider failed"));
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
+    expect(output()).toContain("automatic context update failed");
+    expect(output()).toContain("/ccr-context update");
+
+    automaticContextUpdate.mockResolvedValueOnce({ status: "updated" });
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
+    expect(output()).toContain("automatic context update completed");
   });
 
   it("should retain hidden compatibility aliases for previously generated hooks", async () => {
@@ -302,5 +324,26 @@ describe("hooks CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "hooks", "after-commit"]);
 
     expect(output()).toBe("");
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["invalid", "{ not valid json\n"],
+  ])("should fail visibly when hook configuration is %s", async (_condition, config) => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-hook-invalid-config-"));
+    roots.push(root);
+    await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+    if (config !== undefined) {
+      await mkdir(path.join(root, ".ccr"));
+      await writeFile(path.join(root, ".ccr/config.json"), config, "utf8");
+    }
+    const { io } = captureIo(root);
+
+    await expect(createCli(io).parseAsync(["node", "ccr", "hooks", "pre-commit"])).rejects.toThrow(
+      /CCR hook settings are unavailable/i,
+    );
+    await expect(createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"])).rejects.toThrow(
+      /CCR hook settings are unavailable/i,
+    );
   });
 });

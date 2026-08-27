@@ -1,13 +1,14 @@
 import type { Command } from "commander";
 import {
+  listSafeCommitPaths,
   listSafeRecentPaths,
   listSafeRepositoryPaths,
+  readSafeCommitFile,
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
   readSharedContextFile,
 } from "../context/broker";
 import { appendDecision } from "../context/decisions";
-import { findRepositoryRoot } from "../context/git";
 import {
   ensureJournalEntryForHead,
   ensurePullRequestJournalEntry,
@@ -21,11 +22,17 @@ import {
   readSafePullRequestEvidence,
   readSafePullRequestHeadEvidence,
 } from "../review/pr-evidence";
+import {
+  computeReviewContextFingerprint,
+  computeWorkingReviewState,
+  recordWorkingReviewState,
+} from "../review/review-state";
 import type { CliIo } from "./index";
+import { findCliRepositoryRoot } from "./io";
 
 /** Registers privacy-filtered evidence, local continuity inspection, and opt-in decision commands. */
 export function registerContextInspectionCommands(context: Command, io: CliIo): void {
-  const root = () => findRepositoryRoot(io.cwd);
+  const root = () => findCliRepositoryRoot(io);
   context.command("changes").action(async () => {
     const changes = await readSafeStagedPaths(root());
     io.write(
@@ -63,6 +70,19 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   context.command("recent").action(async () => {
     io.write(`${JSON.stringify(await listSafeRecentPaths(root()))}\n`);
   });
+  context
+    .command("commit-changes <commit>")
+    .description("List privacy-approved regular paths changed by the current HEAD commit")
+    .option("--after <path>", "continue a truncated listing after this cursor")
+    .action(async (commit: string, options: { after?: string }) => {
+      io.write(`${JSON.stringify(await listSafeCommitPaths(root(), commit, options.after))}\n`);
+    });
+  context
+    .command("commit-read <commit> <file>")
+    .description("Read one bounded immutable blob changed by the current HEAD commit")
+    .action(async (commit: string, file: string) => {
+      io.write(await readSafeCommitFile(root(), commit, file));
+    });
   context.command("journal").action(async () => {
     const result = await ensureWorkingJournalEntry(root());
     io.write(`Created ${result.path}\n`);
@@ -83,6 +103,32 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   context.command("review-changes").action(async () => {
     io.write(`${JSON.stringify(await listSafeReviewChanges(root()))}\n`);
   });
+  context
+    .command("review-state")
+    .description("Fingerprint the current privacy-approved review evidence")
+    .action(async () => {
+      io.write(`${JSON.stringify(await computeWorkingReviewState(root()))}\n`);
+    });
+  context
+    .command("review-context-state [pull-request]")
+    .description("Fingerprint bounded shared context and recent branch or PR journals")
+    .action(async (pullRequest: string | undefined) => {
+      io.write(
+        `${JSON.stringify({
+          contextFingerprint: await computeReviewContextFingerprint(
+            root(),
+            pullRequest === undefined ? undefined : parsePullRequestToken(pullRequest),
+          ),
+        })}\n`,
+      );
+    });
+  context
+    .command("record-review-state <journal> <fingerprint> <context-fingerprint>")
+    .description("Verify and record code and context fingerprints in the latest journal review run")
+    .action(async (journal: string, fingerprint: string, contextFingerprint: string) => {
+      await recordWorkingReviewState(root(), journal, fingerprint, contextFingerprint);
+      io.write("Review state recorded.\n");
+    });
   context
     .command("review-diff <file>")
     .description("Read privacy-filtered staged, unstaged, or untracked evidence")

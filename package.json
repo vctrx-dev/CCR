@@ -34,7 +34,7 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": ["dist", "README.md", "USER_MANUAL.md", "TEST.md", "LICENSE"],
   "publishConfig": {
     "access": "public"
   },
