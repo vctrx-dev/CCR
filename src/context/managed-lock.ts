@@ -40,6 +40,14 @@ function ignoreError(): undefined {
   return undefined;
 }
 
+function isTransientLockObservationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    ["EACCES", "ENOTDIR", "EPERM"].includes(String(error.code))
+  );
+}
+
 async function unlinkIfExists(target: string): Promise<void> {
   try {
     await unlink(target);
@@ -118,6 +126,7 @@ async function isObservedManagedLockStale(target: string, details: Stats): Promi
     entries = await readdir(target, { withFileTypes: true });
   } catch (error: unknown) {
     if (isFileNotFound(error)) return true;
+    if (isTransientLockObservationError(error)) return false;
     throw error;
   }
   if (entries.length === 1) {
@@ -214,7 +223,12 @@ export async function tryAcquireManagedLock(
       await mkdir(target);
       return true;
     } catch (error: unknown) {
-      if (error instanceof Error && "code" in error && error.code === "EEXIST") return false;
+      if (
+        (error instanceof Error && "code" in error && error.code === "EEXIST") ||
+        isTransientLockObservationError(error)
+      ) {
+        return false;
+      }
       throw error;
     }
   };

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   assertSafeManagedPath,
   readBoundedUtf8TextIfExists,
+  withManagedLock,
   writeManagedTextIfUnchanged,
 } from "./files";
 import { hasControlCharacters, readResolvedContextConfig } from "./privacy";
@@ -16,6 +17,8 @@ export const DECISIONS_PATH = ".ccr/decisions.md";
 const MAX_DECISION_CHARACTERS = 500;
 const MAX_DECISIONS_DOCUMENT_CHARACTERS = 10_000;
 const MAX_DECISION_APPEND_ATTEMPTS = 50;
+const MAX_DECISION_LOCK_ATTEMPTS = 600;
+const DECISION_APPEND_LOCK_PATH = ".ccr/private/decision-append.lock";
 
 const decisionSchema = z
   .string()
@@ -86,12 +89,23 @@ export async function appendDecision(root: string, candidate: unknown): Promise<
       "Decision updates are disabled because instructions.updateDecisionsMd is false.",
     );
   }
-  for (let attempt = 0; attempt < MAX_DECISION_APPEND_ATTEMPTS; attempt += 1) {
-    const existing = await readDecisionDocument(root);
-    const updated = appendDecisionToDocument(existing, decision);
-    if (updated === existing) return;
-    if (await writeManagedTextIfUnchanged(root, DECISIONS_PATH, existing, updated)) return;
-    await new Promise<void>((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error("Decisions document remained busy or changed repeatedly; retry the append.");
+  await withManagedLock(
+    root,
+    DECISION_APPEND_LOCK_PATH,
+    {
+      busyMessage: "Decisions document remained busy; retry the append.",
+      maximumAttempts: MAX_DECISION_LOCK_ATTEMPTS,
+      retryMilliseconds: 5,
+    },
+    async () => {
+      for (let attempt = 0; attempt < MAX_DECISION_APPEND_ATTEMPTS; attempt += 1) {
+        const existing = await readDecisionDocument(root);
+        const updated = appendDecisionToDocument(existing, decision);
+        if (updated === existing) return;
+        if (await writeManagedTextIfUnchanged(root, DECISIONS_PATH, existing, updated)) return;
+        await new Promise<void>((resolve) => setTimeout(resolve, 5));
+      }
+      throw new Error("Decisions document changed repeatedly; retry the append.");
+    },
+  );
 }

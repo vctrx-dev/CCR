@@ -1,6 +1,6 @@
 {
   "name": "@vctrx/ccr",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": false,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.32.0",
@@ -8,9 +8,13 @@
     "node": ">=22.12.0"
   },
   "description": "Repository context management for ethical code review",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vctrx-dev/CCR.git"
+  },
   "type": "module",
   "bin": {
-    "ccr": "./dist/cli/index.cjs"
+    "ccr": "dist/cli/index.cjs"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
