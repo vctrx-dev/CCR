@@ -2,19 +2,22 @@
 
 Enforced by `scripts/audit.mjs` pre-commit. Do not modify that file without approval.
 
-## File LOC Limits
+## File Size
 
-| Type | Limit |
-|---|---|
-| Implementation | 700 |
-| Type definitions | 1000 |
-| Tests | 500 |
+One file should represent one concern. Size is a signal to reconsider boundaries, not a reason to
+split cohesive code mechanically.
+
+| Type | Soft limit | Hard limit |
+|---|---:|---:|
+| Implementation | 300 | 500 |
+| Type definitions | 500 | 700 |
+| Tests | 300 | 400 |
 
 ## Naming Conventions
 
 | Element | Convention | Example |
 |---|---|---|
-| Files/dirs | `kebab-case` | `file-filter.ts`, `src/github/` |
+| Files/dirs | `kebab-case` | `managed-block.ts`, `src/context/` |
 | Functions/vars | `camelCase` | `getDiff()`, `changedFiles` |
 | Classes/interfaces/types | `PascalCase` | `ReviewConfig`, `ReviewEngine` |
 | Constants (primitives) | `UPPER_CASE` | `MAX_FILE_SIZE` |
@@ -33,7 +36,9 @@ No `I` prefix on interfaces. No `any`. Use `unknown` + narrow.
 
 ## Function Documentation
 
-Every function needs JSDoc: what it does, why it exists, `@param`, `@returns`. Not needed on getters, overrides, or test blocks.
+Document exported APIs and behavior that is surprising, safety-sensitive, or constrained by a
+non-obvious decision. Do not add JSDoc that merely restates a function name or TypeScript signature.
+Internal helpers need comments only when their reason or constraints are not clear from the code.
 
 ```typescript
 /**
@@ -45,9 +50,63 @@ Every function needs JSDoc: what it does, why it exists, `@param`, `@returns`. N
  */
 ```
 
+## Reusable Code and Extension Comments
+
+When adding a reusable boundary, document it where future developers and coding agents will first
+look: at the top of its file and on its exported API. State the intended reuse, the important
+constraint, and the preferred extension path—not a restatement of the implementation.
+
+- Check existing modules before creating a helper, registry, type, parser, filesystem operation,
+  Git operation, or managed-file workflow.
+- Reuse an existing boundary when it fits. If a new feature needs a compatible generalization,
+  evolve the shared code with regression coverage so current behavior stays intact; do not copy it
+  into a feature-specific implementation.
+- File-level reuse comments belong on shared registries, safety boundaries, and adapters. Exported
+  reusable APIs need JSDoc that names their safety or behavior constraint.
+- Do not comment obvious one-off helpers or repeat TypeScript types in prose. Comments must make the
+  next implementation safer or easier to extend.
+
+### Reusable Boundary Map (required for coding agents)
+
+Before creating a helper, parser, provider call, Git read, or managed-file workflow, identify the
+matching boundary below. Reuse it when it fits; when the new behavior is compatible but missing,
+extend that boundary with regression coverage. Do not duplicate a boundary merely to make a
+feature-local implementation convenient.
+
+| Need | Reuse first | Preferred extension path |
+|---|---|---|
+| Repository-relative reads, writes, deletes, symlink checks, or bounded file content | `src/context/files.ts` | Add a constrained helper there; callers must not bypass managed-path checks. |
+| Privacy filtering, approved staged paths, or repository evidence | `src/context/privacy.ts`, `src/context/broker.ts`, `src/review/evidence.ts` | Preserve each source's authorization semantics; share only post-approval formatting via `src/context/evidence-format.ts`. |
+| Generated CCR file or instruction-block lifecycle | `src/context/managed-artifacts.ts`, `src/context/managed-block.ts` | Add registry metadata and let setup/uninstall derive behavior; do not add path-specific lifecycle branches. |
+| CCR configuration parsing, migration, or safe updates | `src/context/config.ts` | Add schema, default, migration, and update behavior together; do not parse or mutate config ad hoc. |
+| Provider contracts, ASU requests, retries, or response-size handling | `src/llm/index.ts`, `src/llm/asu-api-transport.ts`, `src/llm/asu-api-response-body.ts` | Add an adapter behind `ReviewProvider`; reuse the transport and bounded-response boundaries instead of copying retry logic. |
+| Review taxonomy or review evidence presentation | `src/review/dimensions.ts`, `src/review/evidence.ts`, `src/context/evidence-format.ts` | Keep taxonomy data-driven and evidence privacy-filtered; do not add a second registry or formatter. |
+| Supported external API | `src/index.ts`, `src/context/index.ts`, `src/review/index.ts`, `src/llm/index.ts` | Export only stable, documented contracts and update package smoke coverage for each new public entry point. |
+
 ## Testing & TDD
 
-TDD: write failing test first. Every exported function, public method, and non-trivial helper must have at least one test. Three levels enforced by the blast radius analyzer (`npm run test:changed`):
+Use TDD for behavior changes and bug fixes: write or identify a failing behavioral test, implement
+the smallest change, then refactor. Documentation, formatting, generated files, and mechanical
+configuration changes do not require a contrived failing test.
+
+Test observable behavior through stable boundaries. Do not require a one-to-one test for every
+helper or mirror implementation details in assertions. Add the narrowest test level that proves the
+change:
+
+### Prompt and taxonomy test exception
+
+- Do not add unit tests, snapshots, regex assertions, or exact-string assertions for prose in shipped
+  prompts or for the specific dimension/criterion content in `src/review/dimensions.json`.
+- Prompt-only sources (`src/context/skills.ts`, `src/context/manual-skill.ts`,
+  `src/context/templates.ts`, and `src/review/skills.ts`) and the data-only review taxonomy are exempt
+  from one-to-one test discovery and blast-radius test execution when they are the only changed source
+  files.
+- Validate prompt and taxonomy edits through JSON/schema loading, lint/audit, build, package smoke,
+  and focused manual or end-to-end model evaluation when the change warrants it.
+- Executable parsers, validators, evidence boundaries, setup/install behavior, and orchestration code
+  remain subject to behavioral tests. Tests may verify that a packaged artifact exists or parses, but
+  must not assert its prose or examples or hard-code specific dimension IDs, criterion IDs, ordering,
+  or wording.
 
 | Level | Dir | Scope |
 |---|---|---|
@@ -55,17 +114,29 @@ TDD: write failing test first. Every exported function, public method, and non-t
 | Medium (integration) | `tests/integration/` | Combined functions, cross-module |
 | Large (e2e) | `tests/e2e/` | Full workflows (CLI, GH Action) |
 
-Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thresholds guard against regression — set low enough to not block dev, high enough to catch completely untested modules.
+Unit test paths normally mirror source paths when that improves discovery. Test names describe
+behavior and conditions clearly; `it("should ...")` is preferred but not mandatory. Coverage
+protects against untested modules, not against every uncovered line.
 
 **Blast radius** — `scripts/audit.mjs --blast` maps changed files to affected tests: unit (1:1), integration (module-level), e2e (all).
 
-## UI Components (Future)
+### Safety-critical change discipline
 
-- Own file per component, named export, `displayName` set
-- Props interface: `ComponentNameProps`, exported
-- Composition (compound components, children) over giant props
-- Controlled + uncontrolled via `value`/`onChange` + `defaultValue`
-- Headless pattern: separate hooks/behavior from rendering
+- For behavior changes and bug fixes, write or identify the failing observable test before changing
+  production code. Keep the regression test when the fix lands; do not satisfy coverage with a test
+  that only mirrors implementation details.
+- Treat the source coverage thresholds as a regression floor. Do not lower them or exclude product
+  code to pass a change; add the narrow behavioral coverage that demonstrates the new contract.
+- Treat request bodies, provider responses, files, Git output, and environment-derived strings as
+  untrusted. Validate their shape, place a size/count/time bound before retaining or forwarding them,
+  and test the boundary and truncation behavior.
+- Errors, logs, CLI output, review context, and telemetry must be safe to disclose. Never echo
+  credentials, tokens, private content, or raw upstream response bodies; preserve only a bounded,
+  redacted diagnostic and prove that behavior with a test.
+- When a user-visible command, packaged help surface, configuration, or review taxonomy changes,
+  update `README.md` and `USER_MANUAL.md` in the same change. Keep `scripts/package-smoke.mjs`
+  deriving its consumer assertions from the shipped source of truth so the package, help, and docs
+  cannot silently diverge.
 
 ## Backend Structure
 
@@ -80,12 +151,95 @@ Test dir tree mirrors source tree. Test names: `it("should ...")`. Coverage thre
   - ✅ `feat: add code quality audit rules and scripts`
   - ❌ `Added Rules and scripts` (commitlint will reject this)
   - If commitlint blocks you, run: `git commit -m "type: message"` where type is one of the list above.
-- Feature branches off `dev`, squash-merge to `main`
+- Feature branches start from `dev` and merge back into `dev`
   - `dev` → feature work, PRs target `dev`
-  - `stage` → pre-production validation
-  - `main` → stable, protected by CI
+  - `stage` → pre-production validation promoted from `dev`
+  - `main` → stable releases promoted from `stage`
 - Lint: Biome recommended. Format: 2-space, double quotes, semicolons, line width 100
 - Comments only for non-obvious WHY
+
+## Prompt Writing
+
+Before authoring or editing any prompt shipped in this package — Claude Code skills
+(`src/context/skills.ts`), the post-commit copy-paste instruction
+(`src/context/after-commit.ts`), the `CLAUDE.md`/`AGENTS.md` pointer block
+(`src/context/templates.ts`), or future review prompts — read and follow the official Claude
+prompting best practices:
+
+<https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>
+
+For Claude Code skills, also read and follow Anthropic's complete skill-building guide:
+
+<https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf>
+
+Key practices to apply: be clear and direct with specific output constraints; give Claude a role;
+provide context and motivation for instructions; use 3-5 relevant, structured few-shot examples;
+structure complex prompts with XML tags; direct tool use explicitly; and define success criteria
+and when to stop. Prefer telling Claude what to do over what not to do.
+
+Skill-specific practices: define concrete use cases and measurable success criteria; include both
+what and when in frontmatter; keep `SKILL.md` concise through progressive disclosure; provide error
+handling and examples; use deterministic scripts for critical validation; and test triggering,
+non-triggering, functional behavior, repeated runs, and first-use clarity.
+
+## Repository Quality Gates
+
+Biome is the formatter and linter; do not add Prettier unless the formatter is deliberately
+replaced. Git hooks and CI use the same package scripts:
+
+- Pre-commit formats and safely fixes supported staged files first.
+- It then checks staged files for secrets, private key files, generated output, oversized files,
+  conflict markers, and remaining whitespace errors.
+- Finally, it runs the code audit, typecheck, and affected tests.
+- Pre-push runs the complete `pnpm verify` gate: tracked-file safety, audit, typecheck, lint,
+  coverage tests, and build.
+- CI runs `pnpm verify` with a frozen lockfile and is authoritative because local hooks can be
+  bypassed with `--no-verify`.
+- Never weaken or skip a failing gate merely to complete a commit. Fix the cause or obtain explicit
+  maintainer approval for a policy change.
+- Repository quality gates may stop commits or pushes. This is separate from CCR review findings
+  and future target-repository context hooks, which remain advisory.
+
+## CCR Context Ownership
+
+- Commit shared repository context so local agents and CI use the same project knowledge.
+- Keep per-developer continuity journals local. They describe work on one branch and must not
+  influence another developer's review.
+- Shared context must not contain secrets, credentials, student records, personal data, or raw
+  private discussions.
+- Source, tests, schemas, and interfaces outrank generated context.
+- Generated context is advisory and must link important claims to live paths, symbols, commands,
+  decisions, or Git history.
+- Never treat a developer's silence as confirmation of a finding.
+- Review results are advisory by default. Distinguish confirmed issues, questions, and observations;
+  uncertainty must not be presented as a proven bug.
+- Default hooks may detect stale context and print a repair command. They must not invoke an LLM,
+  rewrite or stage files, retry Git operations, or block a commit or push.
+
+## Versioning and Releases
+
+CCR uses Semantic Versioning (`MAJOR.MINOR.PATCH`):
+
+- `PATCH` fixes defects without intentionally changing a public interface.
+- `MINOR` adds backward-compatible behavior or interfaces.
+- `MAJOR` makes an incompatible change. Before `1.0.0`, incompatible changes increment `MINOR`.
+- The version in `package.json` is the source of truth.
+- Release tags use the exact form `vMAJOR.MINOR.PATCH`, such as `v0.1.0` or `v1.0.0`.
+- Do not change a version for ordinary development commits. Change it only in a release-preparation
+  change.
+- Every release must update `CHANGELOG.md` and move relevant entries from `Unreleased` into a
+  heading for the released version and date.
+- Release notes describe user-visible behavior, migration steps, known limitations, and notable
+  fixes. Do not list internal refactors unless they affect users or contributors.
+- A release is complete only after validation passes, the release change reaches `main`, and the
+  matching immutable Git tag is created from that commit.
+- Never move or reuse a published release tag. Fix a release through a new version.
+
+## User Documentation
+
+- Update `USER_MANUAL.md` in the same change as any user-facing skill, slash operation, CLI command,
+  configuration setting, setup flow, privacy boundary, or uninstall behavior.
+- Keep examples aligned with the current package version and clearly label future capabilities.
 
 ## Debug Artifacts
 
@@ -95,22 +249,25 @@ No `console.log()` in source (use the `log` module). No `debugger`. No commented
 
 | Command | Purpose |
 |---|---|
-| `npm run build` | tsup — 3 targets |
-| `npm test` | Full vitest suite |
-| `npm run test:unit` / `test:integration` / `test:e2e` | Run specific level |
-| `npm run test:changed` | Blast radius: affected tests only |
-| `npm run test:coverage` | Coverage with thresholds |
-| `npm run typecheck` | tsc --noEmit |
-| `npm run lint` | biome check src/ |
-| `npm run audit` | Code quality audit |
+| `pnpm build` | tsup — 3 targets |
+| `pnpm test` | Full vitest suite |
+| `pnpm test:unit` / `test:integration` / `test:e2e` | Run specific level |
+| `pnpm test:changed` | Blast radius: affected tests only |
+| `pnpm test:coverage` | Coverage with thresholds |
+| `pnpm typecheck` | tsc --noEmit |
+| `pnpm lint` | biome check src/ |
+| `pnpm run audit` | Code quality audit |
+| `pnpm check:staged` | Check staged content for repository safety issues |
+| `pnpm check:tracked` | Check all tracked content for repository safety issues |
+| `pnpm verify` | Complete pre-push and CI verification |
 
 ## Self-Review Checklist
 
-1. `npm run audit && npm run typecheck && npm run lint && npm test && npm run build` — all pass
-2. `npm run test:changed:print` — confirm no unexpected test impacts
+1. `pnpm verify` — complete safety, quality, test coverage, and build gate passes
+2. `pnpm test:changed:print` — confirm no unexpected test impacts
 3. No debug artifacts, no TODOs, no commented code
 4. Edge cases tested (empty input, error paths, boundaries)
 
 ## Architecture
 
-Runtime: Node >=24, ESM. Modules under `src/`: `core/`, `log/`, `git/`, `github/`, `llm/`, `prompt/`, `patch/`, `cli/`, `action/`. Zod for validation, picomatch for globbing, ASU AIML API for LLM.
+Runtime: Node.js >=22.12 is the supported package floor; `.node-version` pins Node 24 as the development default. ESM. Modules under `src/`: `cli/` (terminal interface), `context/` (managed repository context and privacy boundaries), `llm/` (provider contracts and ASU AIML adapter), `review/` (taxonomy and review evidence), and `types/` (ambient declarations). Zod validates external input and picomatch applies privacy globs.

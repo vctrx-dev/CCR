@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# ccr:start - post-commit context check
+npx --no-install ccr hooks after-commit || echo "CCR: post-commit context check unavailable." >&2
+# ccr:end

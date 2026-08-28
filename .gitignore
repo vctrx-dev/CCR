@@ -1,12 +1,89 @@
-dist/
-docs/
+# Dependencies and package-manager state
 node_modules/
+.pnpm-store/
+.npm/
+package-lock.json
+npm-shrinkwrap.json
+
+# Build, coverage, and test output
+dist/
 coverage/
-*.response.*
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+blob-report/
+junit.xml
+*.tsbuildinfo
+*.tgz
+
+# Logs, diagnostics, caches, and temporary files
+logs/
+*.log
+*-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+.cache/
+.temp/
+.tmp/
+tmp/
+temp/
+
+# Environment files and local credential configuration
 .env
 .env.*
-.DS_Store
-*.tsbuildinfo
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+.envrc
+.npmrc
+.pypirc
+.netrc
+
+# Private keys, signing material, and cloud credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+credentials.json
+service-account*.json
+
+# Local AI-agent state. Shared Claude settings and skills remain tracked.
+.claude/settings.local.json
+.claude/worktrees/
 .superpowers/
-docs/superpowers/
-package-lock.json
+docs/
+
+# Per-developer CCR continuity. Shared context remains tracked.
+.ccr/config.local.json
+.ccr/journal/
+.ccr/private/
+.ccr/cache/
+.ccr/tmp/
+
+# Raw LLM/provider responses may contain source code or sensitive prompt data.
+*.response.*
+
+# Editor and operating-system state
+.idea/
+.fleet/
+.vscode/*.local.*
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ccr:start - local context continuity
+.ccr/config.local.json
+.ccr/journal/
+.ccr/private/
+.ccr/cache/
+.ccr/tmp/
+# ccr:end
