@@ -1,3 +1,8 @@
+/**
+ * Stable LLM-provider boundary. New integrations should depend on `ReviewProvider` and add a
+ * provider-specific adapter behind this entry point; do not copy ASU transport or response logic.
+ */
+
 export type {
   AsuAimlProviderConfig,
   ReviewProvider,

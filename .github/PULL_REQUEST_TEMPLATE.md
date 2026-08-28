@@ -2,16 +2,13 @@
 
 Brief description of the change and what it accomplishes.
 
-## Related issues
+## Related work
 
-Closes #[issue number]
+Link an issue, decision, research note, or roadmap item when one exists.
 
 ## Test plan
 
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
-- [ ] `npm run lint` passes
-- [ ] `npm run build` passes
+- [ ] `pnpm verify` passes
 - [ ] New code has tests
 - [ ] Edge cases considered (empty input, error paths, boundaries)
 
