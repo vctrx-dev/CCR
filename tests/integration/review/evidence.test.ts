@@ -81,7 +81,7 @@ it("should expose staged, unstaged, and untracked review evidence through privac
   expect(untrackedEvidence).toContain("## Untracked file");
   expect(untrackedEvidence).toContain("untracked = true");
   await expect(readSafeReviewEvidence(root, ".env.review")).rejects.toThrow(/approved review/i);
-}, 10_000);
+}, 30_000);
 
 it("should use a bounded file read for approved untracked evidence", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-review-bounded-evidence-"));
@@ -233,4 +233,4 @@ it("should exclude a staged symlink mode from all review evidence", async () => 
     untrackedPaths: [],
     excludedPathCount: 1,
   });
-}, 15_000);
+}, 30_000);

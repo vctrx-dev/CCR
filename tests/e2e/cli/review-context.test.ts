@@ -83,7 +83,7 @@ it("should expose review evidence and reuse the current-commit journal through t
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal"]);
   expect(JSON.parse(output)).toEqual(first);
-}, 15_000);
+}, 30_000);
 
 it("should reuse one journal entry for a pull request through the CLI", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-pr-journal-cli-"));

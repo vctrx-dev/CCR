@@ -79,7 +79,7 @@ describe("context CLI", () => {
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "uninstall", "--remove-context"]);
     expect(output).toContain("Shared context removed.");
-  }, 15_000);
+  }, 30_000);
 
   it("should apply uninstall by default while preserving shared context", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-uninstall-default-"));

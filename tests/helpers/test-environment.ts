@@ -17,7 +17,10 @@ export function createTemporaryRootRegistry(): string[] {
   return roots;
 }
 
-/** Creates an isolated Git repository and registers it with the suite's cleanup boundary. */
+/**
+ * Creates an isolated Git repository with a deterministic local author and registers it for
+ * cleanup. Keep repository identity local so tests never depend on or mutate developer settings.
+ */
 export async function createTemporaryGitRepository(
   roots: string[],
   prefix: string,
@@ -27,5 +30,7 @@ export async function createTemporaryGitRepository(
   roots.push(root);
   const branchArguments = initialBranch ? ["-b", initialBranch] : [];
   await runCommand("git", ["init", "--quiet", ...branchArguments], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
   return root;
 }

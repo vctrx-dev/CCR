@@ -12,7 +12,11 @@ import {
   readSharedContextFile,
 } from "../../../src/context/broker";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
-import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
+import {
+  createTemporaryGitRepository,
+  createTemporaryRootRegistry,
+  runCommand,
+} from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
 
@@ -146,7 +150,7 @@ it("should expose only privacy-approved regular files changed by the exact HEAD 
   await runCommand("git", ["commit", "--quiet", "-m", "later"], { cwd: root });
   await expect(listSafeCommitPaths(root, commit)).rejects.toThrow(/current HEAD/i);
   await expect(listSafeCommitPaths(root, "not-a-commit")).rejects.toThrow();
-}, 15_000);
+}, 30_000);
 
 it("should exclude a gitlink changed by the exact HEAD commit without reading its object", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-commit-gitlink-"));
@@ -255,9 +259,7 @@ it("should reject malformed UTF-8 and NUL bytes in shared context", async () => 
 });
 
 it("should bound index blobs and staged diffs before Git can overflow its output buffer", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-broker-bounded-git-"));
-  roots.push(root);
-  await runCommand("git", ["init", "--quiet"], { cwd: root });
+  const root = await createTemporaryGitRepository(roots, "ccr-broker-bounded-git-");
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),

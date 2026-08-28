@@ -48,7 +48,7 @@ it("should warn when staged review evidence changed after the latest recorded re
 
   expect(output).toContain("staged review evidence or shared context differs");
   expect(output).toContain("/ccr-review changes");
-}, 15_000);
+}, 30_000);
 
 it("should warn and mark stale when only shared context changes after review", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-stale-context-review-"));
@@ -88,4 +88,4 @@ it("should warn and mark stale when only shared context changes after review", a
   await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
   expect(output).toContain("review is now marked stale");
   expect(await readFile(journalTarget, "utf8")).toContain("**Review status**: stale");
-}, 15_000);
+}, 30_000);

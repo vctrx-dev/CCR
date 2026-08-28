@@ -234,7 +234,7 @@ describe("hooks CLI", () => {
     expect(output()).toContain("pre-commit removed");
     expect(output()).toContain("post-commit not-installed");
     expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe("#!/bin/sh\n");
-  }, 15_000);
+  }, 30_000);
 
   it("should run the post-commit check and print a copy-paste prompt", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-after-cli-"));

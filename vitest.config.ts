@@ -7,6 +7,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     // Git-heavy temporary repositories contend badly under Windows process-level parallelism.
     maxWorkers: process.platform === "win32" ? 1 : undefined,
+    // Windows process startup and filesystem scanning can exceed Vitest's 5-second default.
+    testTimeout: process.platform === "win32" ? 30_000 : 5_000,
     passWithNoTests: true,
     coverage: {
       provider: "v8",

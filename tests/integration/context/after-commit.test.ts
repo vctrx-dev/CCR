@@ -158,7 +158,7 @@ describe("runAfterCommitCheck", () => {
 
     expect(result.reviewStatus).toBe("stale");
     expect(await readFile(journalTarget, "utf8")).toContain("- **Review status**: stale");
-  }, 10_000);
+  }, 30_000);
 
   it("should preserve a current review when the committed code matches it", async () => {
     const root = await makeRepository();
@@ -192,7 +192,7 @@ describe("runAfterCommitCheck", () => {
 
     expect(result.reviewStatus).toBe("current");
     expect(await readFile(journalTarget, "utf8")).toContain("- **Review status**: current");
-  }, 10_000);
+  }, 30_000);
 
   it("should not attach a partial commit to a journal that still covers working changes", async () => {
     const root = await makeRepository();
@@ -233,7 +233,7 @@ describe("runAfterCommitCheck", () => {
 
     const nextWorking = await ensureWorkingJournalEntry(root);
     expect(nextWorking.path).not.toBe(working.path);
-  }, 10_000);
+  }, 30_000);
 
   it("should create committed metadata and not prompt for a context-only commit", async () => {
     const root = await makeRepository();

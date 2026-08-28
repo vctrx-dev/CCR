@@ -122,7 +122,7 @@ describe("review state", () => {
     await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
     await runCommand("git", ["add", "--", "source.ts"], { cwd: root });
     await runCommand("git", ["update-index", "--chmod=+x", "source.ts"], { cwd: root });
-    const reviewed = await computeWorkingReviewState(root);
+    const reviewed = await computeStagedReviewState(root);
 
     await runCommand("git", ["update-index", "--chmod=-x", "source.ts"], { cwd: root });
 
@@ -150,7 +150,7 @@ describe("review state", () => {
     await runCommand("git", ["add", "--", "source.ts"], { cwd: root });
 
     expect(await readStagedReviewFreshness(root)).toMatchObject({ status: "stale" });
-  }, 15_000);
+  }, 30_000);
 
   it("should not fingerprint privacy-excluded changes", async () => {
     const root = await makeRepository();
@@ -181,7 +181,7 @@ describe("review state", () => {
         reviewed.contextFingerprint,
       ),
     ).rejects.toThrow("Review evidence changed");
-  }, 15_000);
+  }, 30_000);
 
   it("should detect edits made after a clean codebase review", async () => {
     const root = await makeRepository();
@@ -201,7 +201,7 @@ describe("review state", () => {
       status: "stale",
       journalPath: journal.path,
     });
-  }, 15_000);
+  }, 30_000);
 
   it("should reject an oversized journal before retaining or rewriting it", async () => {
     const root = await makeRepository();
@@ -223,7 +223,7 @@ describe("review state", () => {
         reviewed.contextFingerprint,
       ),
     ).rejects.toThrow("exceeds 64000 characters");
-  }, 15_000);
+  }, 30_000);
 
   it("should reject a journal outside the current branch and repository state", async () => {
     const root = await makeRepository();
@@ -268,7 +268,7 @@ describe("review state", () => {
         current.contextFingerprint,
       ),
     ).rejects.toThrow("current review journal");
-  }, 15_000);
+  }, 30_000);
 
   it("should reject unresolved or structurally incomplete review continuity", async () => {
     const root = await makeRepository();
@@ -308,7 +308,7 @@ describe("review state", () => {
       "utf8",
     );
     expect(await readStagedReviewFreshness(root)).toMatchObject({ status: "unrecorded" });
-  }, 15_000);
+  }, 30_000);
 
   it("should fingerprint review context separately and reject an unverified context change", async () => {
     const root = await makeRepository();
@@ -329,7 +329,7 @@ describe("review state", () => {
     await expect(
       recordWorkingReviewState(root, journal.path, initial.fingerprint, initial.contextFingerprint),
     ).rejects.toThrow("Review context changed");
-  }, 15_000);
+  }, 30_000);
 
   it("should reject oversized shared context instead of hashing a truncated prefix", async () => {
     const root = await makeRepository();
@@ -375,7 +375,7 @@ describe("review state", () => {
       `- **Reviewed context**: \`${final.contextFingerprint}\``,
     );
     expect(await readStagedReviewFreshness(root)).toMatchObject({ status: "current" });
-  }, 15_000);
+  }, 30_000);
 
   it("should record only the latest complete review run and reject duplicate record metadata", async () => {
     const root = await makeRepository();
@@ -410,5 +410,5 @@ describe("review state", () => {
       "utf8",
     );
     expect(await readStagedReviewFreshness(root)).toMatchObject({ status: "unrecorded" });
-  }, 15_000);
+  }, 30_000);
 });
