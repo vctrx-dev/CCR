@@ -8,6 +8,10 @@
     "node": ">=22.12.0"
   },
   "description": "Repository context management for ethical code review",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vctrx-dev/CCR.git"
+  },
   "type": "module",
   "bin": {
     "ccr": "dist/cli/index.cjs"
