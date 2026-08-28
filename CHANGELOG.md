@@ -7,7 +7,12 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
-## 0.8.1 - 2026-08-27
+## 0.8.1 - 2026-08-28
+
+### Changed
+
+- Release tags now publish from verified `main` commits through GitHub Actions and npm trusted
+  publishing, with no long-lived npm token and automatic provenance.
 
 ### Fixed
 
