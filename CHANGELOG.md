@@ -7,6 +7,20 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.8.1 - 2026-08-28
+
+### Changed
+
+- Release tags now publish from verified `main` commits through GitHub Actions and npm trusted
+  publishing, with no long-lived npm token and automatic provenance.
+
+### Fixed
+
+- Published CLI metadata now uses npm's portable relative `bin` target so global installs and
+  `npm exec` retain the `ccr` executable mapping.
+- Concurrent decision updates now serialize through a repository-contained lock, preserving every
+  distinct append under load while treating transient Windows lock races as contention.
+
 ## 0.8.0 - 2026-08-27
 
 ### Changed

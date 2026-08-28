@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -70,6 +70,18 @@ function runNpm(arguments_, cwd) {
   });
 }
 
+function inspectNpm(arguments_, cwd) {
+  const result = spawnSync(npmCommand, [...npmPrefix, ...arguments_], {
+    cwd,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error("npm package inspection failed.");
+  }
+  return { stderr: result.stderr, stdout: result.stdout };
+}
+
 function runInstalled(bin, arguments_, cwd) {
   if (process.platform !== "win32") {
     return execFileSync(bin, arguments_, { cwd, encoding: "utf8", windowsHide: true });
@@ -86,6 +98,14 @@ try {
   // Keep npm's mutable cache inside this smoke run so concurrent Windows checks cannot lock a
   // workspace-shared cache. The finally block removes it with the consumer fixtures.
   const cache = path.join(temporaryRoot, "npm-cache");
+  const publishInspection = inspectNpm(
+    ["publish", "--dry-run", "--json", "--ignore-scripts", "--cache", cache],
+    root,
+  );
+  if (publishInspection.stderr.includes("npm auto-corrected some errors")) {
+    throw new Error("npm publish would remove or rewrite package metadata.");
+  }
+  JSON.parse(publishInspection.stdout);
   const pack = JSON.parse(
     runNpm(
       ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryRoot, "--cache", cache],
