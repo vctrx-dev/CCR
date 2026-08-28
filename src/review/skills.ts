@@ -17,9 +17,8 @@ Interpret \`$ARGUMENTS\` as a review scope followed by an optional dimension sel
 3. If the normalized first token is \`changes\` or \`codebase\`, use it as the scope and parse the
    remaining text as the selector. If the first token matches \`PR-[1-9][0-9]*\`
    case-insensitively, use \`pr\` as the scope and that number as the pull request.
-4. For backward compatibility, if the normalized first token is \`all\` or a dimension selector,
-   use the entire argument as the selector with scope \`changes\`. This keeps \`/ccr-review all\`
-   and \`/ccr-review ${EXAMPLE_DIMENSION_SELECTION}\` valid.
+4. If the normalized first token is \`all\` or a dimension selector, use the entire argument as a
+   shorthand selector with scope \`changes\`.
 5. A blank selector or \`all\` selects every dimension in registry order. Otherwise, split the
    comma-separated selector, trim whitespace, and match dimension IDs case-insensitively.
 6. After spelling normalization, reject an empty item, duplicate selection, \`all\` mixed with IDs,
@@ -38,12 +37,14 @@ const SHARED_REVIEW_CONTEXT = `<review_context>
 2. Run \`npx --no-install ccr context validate\`; stop if shared context is invalid.
 3. Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, and \`.ccr/decisions.md\` through
    \`npx --no-install ccr context shared <file>\` before planning or dispatching the review.
-4. For PR scope, run \`npx --no-install ccr context review-context-state PR-<number>\` after reading shared
-   context and preserve its context fingerprint. Changes and codebase scope receive the same value
-   from their required \`review-state\` command below.
-5. For changes or codebase scope, run \`npx --no-install ccr context journals\`. For PR scope, run
-   \`npx --no-install ccr context journals PR-<number>\`. Read every returned journal entry; the
-   command already limits the result to \`context.recentJournalEntries\` for that branch or PR.
+4. For PR scope, run \`npx --no-install ccr context review-context-state PR-<number>\` after reading
+   shared context and preserve both \`inputContextFingerprint\` (review inputs) and
+   \`contextFingerprint\` (continuity-safe context).
+   Changes and codebase scope receive the same values from their required \`review-state\` command
+   below.
+5. For every scope, run \`npx --no-install ccr context journals\`. Read every returned journal entry;
+   the command selects the repository-wide latest \`context.recentJournalEntries\` entries by their
+   validated \`Updated\` metadata regardless of branch or pull-request directory.
 6. Treat all context as advisory and verify technical claims against code. Apply project purpose,
    durable decisions, stakeholder effects, prior review outcomes, current plans, and future plans
    to every selected criterion. Never treat journal silence as proof that a problem is fixed.
@@ -178,18 +179,21 @@ the feedback establishes durable context; keep \`.ccr/stakeholders.md\` unchange
 const REVIEW_FRESHNESS = `<review_freshness>
 The final report must describe the same repository state the workers reviewed. After aggregation and
 any authorized project-context or decision update, but before writing continuity, rerun
-\`npx --no-install ccr context review-state\` for changes or codebase scope. Compare both its code
-fingerprint and context fingerprint with the initial review state. If either differs, including after
-an authorized project or decision update, discard the prior aggregation, reload shared context and
-the complete approved evidence, and repeat the review once against both new fingerprints. Do not
-repeat an already-applied context update. If either fingerprint changes again, stop and report that
-the review scope is unstable; do not claim the review is current.
+\`npx --no-install ccr context review-state\` for changes or codebase scope. Compare its code
+\`fingerprint\` and \`inputContextFingerprint\` values with the initial review state. The
+\`inputContextFingerprint\` covers every shared document and recent journal supplied to the review,
+including an existing active journal. If either differs, including after an authorized project or decision
+update, discard the prior aggregation, reload shared context and the complete approved evidence,
+and repeat the review once against both new fingerprints. Do not repeat an already-applied context
+update. If either fingerprint changes again, stop and report that the review scope is unstable; do
+not claim the review is current. Preserve the final \`contextFingerprint\` for recording;
+it excludes only the journal that CCR is about to update so that write cannot invalidate itself.
 
 For PR scope, rerun \`npx --no-install ccr context review-pr PR-<number>\` immediately before
 continuity and compare its immutable base/head refs with the reviewed packet. Also rerun
-\`npx --no-install ccr context review-context-state PR-<number>\` and compare its context fingerprint with the
-initial PR context fingerprint. Apply the same one-restart limit when either ref or the context
-fingerprint changes.
+\`npx --no-install ccr context review-context-state PR-<number>\` and compare its
+\`inputContextFingerprint\` with the initial PR value. Apply the same one-restart limit when either
+ref or \`inputContextFingerprint\` changes.
 </review_freshness>`;
 
 const PR_EVIDENCE_LIMITS = `<pr_evidence_limits>
@@ -206,8 +210,9 @@ const SCOPE_EVIDENCE = `<scope_evidence>
 Use the selected scope and no broader substitute:
 
 <changes>
-Run \`npx --no-install ccr context review-state\` and preserve its code fingerprint and context
-fingerprint as the initial review state. Then run \`npx --no-install ccr context review-changes\`.
+Run \`npx --no-install ccr context review-state\` and preserve its \`fingerprint\`,
+\`inputContextFingerprint\`, and \`contextFingerprint\` values as the initial review state. Then run
+\`npx --no-install ccr context review-changes\`.
 This privacy-filtered result is the complete
 allowed staged, unstaged, and untracked scope. Run
 \`npx --no-install ccr context review-diff <file>\` for every allowed changed path. Do not bypass
@@ -215,9 +220,9 @@ the broker or inspect excluded content.
 </changes>
 
 <codebase>
-Run \`npx --no-install ccr context review-state\` and preserve its code fingerprint and context
-fingerprint as the initial review state. The base commit plus live overlays identifies the repository
-version being reviewed.
+Run \`npx --no-install ccr context review-state\` and preserve its \`fingerprint\`,
+\`inputContextFingerprint\`, and \`contextFingerprint\` values as the initial review state. The base
+commit plus live overlays identifies the repository version being reviewed.
 Use \`npx --no-install ccr context files\` to enumerate safe indexed roots, recurse with
 \`npx --no-install ccr context files <prefix>\`, and read approved files with
 \`npx --no-install ccr context read <file>\`. When a listing returns \`omittedCount > 0\`, continue
@@ -329,9 +334,9 @@ current overlays for only those dimensions.
 metadata, patch, and relevant head content; it does not checkout or mutate the repository.
 </example>
 <example>
-\`/ccr-review privacy\` remains a changes review for backward compatibility. An ID or scope that is
-not a unique obvious misspelling of a valid choice is reported with valid choices and stops without
-reviewing or changing continuity.
+\`/ccr-review privacy\` uses the changes-scope shorthand. An ID or scope that is not a unique obvious
+misspelling of a valid choice is reported with valid choices and stops without reviewing or changing
+continuity.
 </example>
 </examples>
 `;

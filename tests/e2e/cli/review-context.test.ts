@@ -40,10 +40,12 @@ it("should expose review evidence and reuse the current-commit journal through t
   const reviewedState = JSON.parse(output);
   expect(reviewedState.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
   expect(reviewedState.contextFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+  expect(reviewedState.inputContextFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state"]);
   const initialContextState = JSON.parse(output);
   expect(initialContextState.contextFingerprint).toBe(reviewedState.contextFingerprint);
+  expect(initialContextState.inputContextFingerprint).toBe(reviewedState.inputContextFingerprint);
   const projectPath = path.join(root, ".ccr/project.md");
   const project = await readFile(projectPath, "utf8");
   await writeFile(projectPath, `${project}\nVerified context change.\n`, "utf8");
@@ -105,19 +107,23 @@ it("should reuse one journal entry for a pull request through the CLI", async ()
   const first = JSON.parse(output);
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state", "PR-42"]);
-  const initialContext = JSON.parse(output).contextFingerprint;
+  const initialContext = JSON.parse(output);
   const target = path.join(root, first.path);
   await writeFile(target, `${await readFile(target, "utf8")}Prior PR outcome.\n`, "utf8");
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-context-state", "PR-42"]);
-  expect(JSON.parse(output).contextFingerprint).not.toBe(initialContext);
+  const updatedContext = JSON.parse(output);
+  expect(updatedContext.contextFingerprint).toBe(initialContext.contextFingerprint);
+  expect(updatedContext.inputContextFingerprint).not.toBe(initialContext.inputContextFingerprint);
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "review-journal", "pr-42"]);
   expect(JSON.parse(output)).toEqual(first);
 
   output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "journals"]);
+  const recent = JSON.parse(output);
+  expect(recent.map(({ path: entryPath }: { path: string }) => entryPath)).toEqual([first.path]);
+  output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "journals", "PR-42"]);
-  expect(JSON.parse(output).map(({ path: entryPath }: { path: string }) => entryPath)).toEqual([
-    first.path,
-  ]);
+  expect(JSON.parse(output)).toEqual(recent);
 });

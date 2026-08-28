@@ -74,9 +74,11 @@ Example: \`ccr config set hooks.autoUpdateContext true\`
 - Default: \`3\`
 - Values: an integer from 1 to 10.
 - Effect: controls how many recent local continuity journal entries every context operation and
-  review must read before planning. Branch reviews read that branch's entries; PR reviews read the
-  selected PR's isolated entries. A higher value gives more continuity; a lower value keeps the
-  prompt smaller.
+  review must read before planning. CCR selects the repository-wide latest entries by validated
+  \`Updated\` metadata, regardless of their branch or pull-request directory. A higher value gives
+  more continuity; a lower value keeps the prompt smaller. Equal \`Updated\` values sort by
+  \`Started\` newest-first, then repository path for a deterministic tie. Until a legacy journal is
+  reused and migrated, its single valid \`Timestamp\` is treated as both \`Started\` and \`Updated\`.
 
 Example: \`ccr config set context.recentJournalEntries 5\`
 

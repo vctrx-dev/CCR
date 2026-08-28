@@ -1,9 +1,9 @@
-import { readdir } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import { truncateEvidence } from "./evidence-format";
 import {
   assertSafeManagedPath,
   createManagedTextExclusive,
-  isFileNotFound,
+  readBoundedManagedDirectory,
   readBoundedUtf8TextIfExists,
   writeManagedText,
   writeManagedTextIfUnchanged,
@@ -17,7 +17,8 @@ import {
 
 /**
  * Internal journal-entry storage boundary. Keep filename allocation, bounded content access, and
- * activity metadata migration here; journal workflow selection belongs in `journal.ts`.
+ * activity metadata migration here; identity workflow selection belongs in `journal.ts`, while
+ * repository-wide activity selection belongs in `journal-recency.ts`.
  */
 
 export interface JournalResult {
@@ -31,6 +32,22 @@ export interface JournalEntry extends JournalResult {
 const JOURNAL_FILENAME_PATTERN =
   /^(\d{4}-\d{2}-\d{2})(?:T(\d{2})-(\d{2})-(\d{2})Z)?(?:\.(\d+))?\.md$/u;
 const MAX_JOURNAL_EVIDENCE_CHARACTERS = 4_000;
+const MAX_JOURNAL_SCAN_ENTRY_COUNT = 10_000;
+
+interface JournalScanBudget {
+  entryCount: number;
+}
+
+async function readBoundedDirectory(
+  root: string,
+  relativeDirectory: string,
+  budget: JournalScanBudget,
+): Promise<Dirent[]> {
+  const remaining = MAX_JOURNAL_SCAN_ENTRY_COUNT - budget.entryCount;
+  const entries = await readBoundedManagedDirectory(root, relativeDirectory, remaining);
+  budget.entryCount += entries.length;
+  return entries;
+}
 
 function compareJournalNames(left: string, right: string): number {
   const leftMatch = JOURNAL_FILENAME_PATTERN.exec(left);
@@ -47,31 +64,72 @@ function compareJournalNames(left: string, right: string): number {
 }
 
 /** Lists recognized journal filenames from newest to oldest. */
+async function readSortedJournalNamesWithBudget(
+  root: string,
+  relativeDirectory: string,
+  budget: JournalScanBudget,
+): Promise<string[]> {
+  const entries = await readBoundedDirectory(root, relativeDirectory, budget);
+  const names: string[] = [];
+  for (const entry of entries) {
+    if (!JOURNAL_FILENAME_PATTERN.test(entry.name)) continue;
+    const relativePath = `${relativeDirectory}/${entry.name}`;
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Managed path is a symbolic link: ${relativePath}`);
+    }
+    if (!entry.isFile()) throw new Error(`Journal path is not a regular file: ${relativePath}`);
+    names.push(entry.name);
+  }
+  return names.sort(compareJournalNames);
+}
+
+/** Lists recognized journal filenames from newest to oldest. */
 export async function readSortedJournalNames(
   root: string,
   relativeDirectory: string,
 ): Promise<string[]> {
-  try {
-    const names = (
-      await readdir(await assertSafeManagedPath(root, relativeDirectory), { withFileTypes: true })
-    )
-      .filter((entry) => entry.isFile() && JOURNAL_FILENAME_PATTERN.test(entry.name))
-      .map((entry) => entry.name);
-    return names.sort(compareJournalNames);
-  } catch (error: unknown) {
-    if (isFileNotFound(error)) return [];
-    throw error;
-  }
+  return readSortedJournalNamesWithBudget(root, relativeDirectory, { entryCount: 0 });
 }
 
-/** Reads bounded journal evidence suitable for context presentation and metadata lookup. */
-export async function readJournalEvidence(root: string, relativePath: string): Promise<string> {
-  const content = await readCompleteJournalEntry(root, relativePath);
+async function readJournalPathInventory(
+  root: string,
+): Promise<{ directories: Set<string>; entryCount: number; paths: string[] }> {
+  const journalRoot = ".ccr/journal";
+  const budget = { entryCount: 0 };
+  const directories = await readBoundedDirectory(root, journalRoot, budget);
+  const directoryPaths = new Set<string>();
+  const paths: string[] = [];
+  for (const entry of directories) {
+    const relativeDirectory = `${journalRoot}/${entry.name}`;
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Managed path is a symbolic link: ${relativeDirectory}`);
+    }
+    if (!entry.isDirectory()) continue;
+    directoryPaths.add(relativeDirectory);
+    for (const name of await readSortedJournalNamesWithBudget(root, relativeDirectory, budget)) {
+      paths.push(`${relativeDirectory}/${name}`);
+    }
+  }
+  return { directories: directoryPaths, entryCount: budget.entryCount, paths };
+}
+
+/** Lists every recognized local journal path with a bound that fails closed on unsafe trees. */
+export async function readJournalPaths(root: string): Promise<string[]> {
+  return (await readJournalPathInventory(root)).paths;
+}
+
+/** Formats already-bounded journal content for context presentation. */
+export function formatJournalEvidence(content: string): string {
   return truncateEvidence(content, {
     isTruncated: content.length > MAX_JOURNAL_EVIDENCE_CHARACTERS,
     marker: `[CCR journal truncated at ${MAX_JOURNAL_EVIDENCE_CHARACTERS} characters]`,
     maximumCharacters: MAX_JOURNAL_EVIDENCE_CHARACTERS,
   });
+}
+
+/** Reads bounded journal evidence suitable for context presentation and metadata lookup. */
+export async function readJournalEvidence(root: string, relativePath: string): Promise<string> {
+  return formatJournalEvidence(await readCompleteJournalEntry(root, relativePath));
 }
 
 /** Reads one complete journal under the managed 64,000-character safety bound. */
@@ -153,11 +211,18 @@ export async function createJournalFile(
 ): Promise<JournalResult> {
   const document = createJournalDocument(now, identityMetadata);
   const date = document.timestamp.slice(0, 10);
-  const base = `.ccr/journal/${directory}/${date}`;
-  for (let index = 0; ; index += 1) {
+  const relativeDirectory = `.ccr/journal/${directory}`;
+  const inventory = await readJournalPathInventory(root);
+  const requiredEntries = inventory.directories.has(relativeDirectory) ? 1 : 2;
+  if (inventory.entryCount + requiredEntries > MAX_JOURNAL_SCAN_ENTRY_COUNT) {
+    throw new Error(`Journal tree cannot exceed ${MAX_JOURNAL_SCAN_ENTRY_COUNT} entries.`);
+  }
+  const base = `${relativeDirectory}/${date}`;
+  for (let index = 0; index < MAX_JOURNAL_SCAN_ENTRY_COUNT; index += 1) {
     const relativePath = `${base}${index === 0 ? "" : `.${index}`}.md`;
     if (await createManagedTextExclusive(root, relativePath, document.content)) {
       return { path: relativePath };
     }
   }
+  throw new Error(`Journal filename allocation exceeds ${MAX_JOURNAL_SCAN_ENTRY_COUNT} attempts.`);
 }

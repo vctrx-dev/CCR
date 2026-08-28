@@ -82,6 +82,10 @@ Confirm these ownership rules:
 - `stakeholders.md` is populated during initialization and read-only to later automatic operations.
 - `decisions.md` remains human-owned and changes only through the explicit configuration opt-in.
 - local journals are branch- or PR-specific and remain under ignored `.ccr/journal/`.
+- `ccr context journals` returns the configured repository-wide count ordered by validated
+  `Updated`, even when an older filename from another branch or PR was amended most recently.
+- a not-yet-migrated journal with one valid `Timestamp` uses that value for recency; activity-looking
+  examples below `## Summary` do not affect ordering.
 - secrets, mandatory excluded paths, symlinks, submodules, and private worktree content never appear
   in broker output or shared context.
 
@@ -92,7 +96,11 @@ npx --no-install ccr context files
 npx --no-install ccr context recent
 npx --no-install ccr context shared .ccr/project.md
 npx --no-install ccr context journals
+npx --no-install ccr context journals PR-123
 ```
+
+The two journal commands must return the same global result; the optional PR token is accepted only
+for v0.7 compatibility and never scopes recency.
 
 When a listing reports `omittedCount`, continue with its exact `nextCursor`. Bounded text must carry
 an explicit truncation marker. Binary, deleted, symlink, submodule, excluded, malformed UTF-8, and
@@ -180,9 +188,10 @@ state reuses one journal, and different commits or PRs stay isolated.
 Then test each freshness transition:
 
 1. Change approved code after review: pre-commit warns and post-commit marks the review stale.
-2. Change resolved config, project, stakeholder, decision, or a prior recent-journal context entry:
-   freshness becomes stale even when code is unchanged. The active branch continuity target is
-   excluded because its recorder validates that write separately.
+2. Change resolved config, project, stakeholder, decision, any recent-journal input, or an existing
+   active journal returned to the reviewer: the input-context fingerprint changes even when code is
+   unchanged. The continuity fingerprint alone excludes the active target so CCR's own later write
+   remains valid.
 3. Change code or context during review: the skill reloads and restarts once.
 4. Change it again during the restarted review: the skill stops as unstable.
 5. Try recording a PR, older branch, older `HEAD`, placeholder, incomplete, malformed, duplicate-

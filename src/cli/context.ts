@@ -24,7 +24,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .option("--apply", "apply removal (retained for backward compatibility; now the default)")
     .option("--dry-run", "preview removal without changing files")
     .option("--remove-context", "also delete known shared context files")
-    .action(async (options: { apply?: boolean; dryRun?: boolean; removeContext?: boolean }) => {
+    .action(async (options: { dryRun?: boolean; removeContext?: boolean }) => {
       const root = findCliRepositoryRoot(io);
       const hookState = await readHookState(root);
       if (hookState.status === "valid") {

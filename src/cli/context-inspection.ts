@@ -17,13 +17,17 @@ import {
   readRecentJournalEntries,
 } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
-import { listSafeReviewChanges, readSafeReviewEvidence } from "../review/evidence";
+import {
+  hasSafeReviewChanges,
+  listSafeReviewChanges,
+  readSafeReviewEvidence,
+} from "../review/evidence";
 import {
   readSafePullRequestEvidence,
   readSafePullRequestHeadEvidence,
 } from "../review/pr-evidence";
 import {
-  computeReviewContextFingerprint,
+  computeReviewContextState,
   computeWorkingReviewState,
   recordWorkingReviewState,
 } from "../review/review-state";
@@ -89,37 +93,31 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   });
   context
     .command("journals [pull-request]")
-    .description("Read configured recent journals for this branch or PR-<number>")
+    .description("Read repository-wide recent journals; a legacy PR token does not scope results")
     .action(async (pullRequest: string | undefined) => {
-      io.write(
-        `${JSON.stringify(
-          await readRecentJournalEntries(
-            root(),
-            pullRequest === undefined ? undefined : parsePullRequestToken(pullRequest),
-          ),
-        )}\n`,
-      );
+      if (pullRequest !== undefined) parsePullRequestToken(pullRequest);
+      io.write(`${JSON.stringify(await readRecentJournalEntries(root()))}\n`);
     });
   context.command("review-changes").action(async () => {
     io.write(`${JSON.stringify(await listSafeReviewChanges(root()))}\n`);
   });
   context
     .command("review-state")
-    .description("Fingerprint the current privacy-approved review evidence")
+    .description("Fingerprint current code, review inputs, and continuity context")
     .action(async () => {
       io.write(`${JSON.stringify(await computeWorkingReviewState(root()))}\n`);
     });
   context
     .command("review-context-state [pull-request]")
-    .description("Fingerprint bounded shared context and recent branch or PR journals")
+    .description("Fingerprint review inputs and continuity-safe context")
     .action(async (pullRequest: string | undefined) => {
       io.write(
-        `${JSON.stringify({
-          contextFingerprint: await computeReviewContextFingerprint(
+        `${JSON.stringify(
+          await computeReviewContextState(
             root(),
             pullRequest === undefined ? undefined : parsePullRequestToken(pullRequest),
           ),
-        })}\n`,
+        )}\n`,
       );
     });
   context
@@ -168,10 +166,7 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
         return;
       }
       const changes = await listSafeReviewChanges(root());
-      const hasWorkingChanges =
-        changes.stagedPaths.length + changes.unstagedPaths.length + changes.untrackedPaths.length >
-        0;
-      const journal = hasWorkingChanges
+      const journal = hasSafeReviewChanges(changes)
         ? await ensureWorkingJournalEntry(root())
         : await ensureJournalEntryForHead(root());
       io.write(`${JSON.stringify(journal)}\n`);

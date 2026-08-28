@@ -15,6 +15,7 @@ import {
   createManagedTextExclusive,
   deleteManagedTextIfUnchanged,
   fingerprintManagedTree,
+  readBoundedManagedDirectory,
   readRegularFileGitMode,
   tryAcquireManagedLock,
   writeManagedText,
@@ -44,6 +45,18 @@ it("should derive Git modes only for safe regular files", async () => {
   await expect(readRegularFileGitMode(root, "regular.txt")).resolves.toBe("100644");
   await expect(readRegularFileGitMode(root, "directory")).resolves.toBeUndefined();
   await expect(readRegularFileGitMode(root, "missing.txt")).resolves.toBeUndefined();
+});
+
+it("should bound managed directory enumeration before retaining excess entries", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-directory-files-"));
+  roots.push(root);
+  await expect(readBoundedManagedDirectory(root, ".ccr/missing", 1)).resolves.toEqual([]);
+  await mkdir(path.join(root, ".ccr/journal"), { recursive: true });
+  await writeFile(path.join(root, ".ccr/journal/a.md"), "a\n");
+  await writeFile(path.join(root, ".ccr/journal/b.md"), "b\n");
+
+  await expect(readBoundedManagedDirectory(root, ".ccr/journal", 1)).rejects.toThrow("entry limit");
+  await expect(readBoundedManagedDirectory(root, ".ccr/journal", 2)).resolves.toHaveLength(2);
 });
 
 it("should bound managed-tree fingerprints and tolerate an absent tree", async () => {

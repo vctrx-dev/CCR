@@ -15,7 +15,7 @@ Terminal commands:
   ccr uninstall [--dry-run] [--remove-context]      Remove integration; preserve context by default
   ccr context <command>                          Inspect context and review-safe evidence
   ccr context append-decision <decision>         Append one config-authorized decision
-  ccr context journals [PR-<number>]             Read bounded recent branch or PR journals
+  ccr context journals [PR-<number>]             Read repository-wide recent journals; PR is ignored
   ccr context review-pr PR-<number>              Read bounded privacy-filtered PR evidence
   ccr context review-pr-head PR-<number> <files...> Read approved PR head files
   ccr config [validate|defaults]                  Read or validate settings and defaults

@@ -16,6 +16,7 @@ export {
   assertSafeManagedPath,
   createManagedTextExclusive,
   fingerprintManagedTree,
+  readBoundedManagedDirectory,
   readManagedTextIfExists,
   readRegularFileGitMode,
   writeManagedText,

@@ -54,6 +54,11 @@ export interface JournalDocumentInspection {
   updatedValues: string[];
 }
 
+export interface JournalActivity {
+  started: string;
+  updated: string;
+}
+
 function readIdentityValues(header: string, label: string): string[] | undefined {
   const prefix = `- **${label}**:`;
   const exactPrefix = `${prefix} \``;
@@ -210,37 +215,61 @@ function parsedJournalTimestamp(value: string, relativePath: string): string {
   return value;
 }
 
+function splitJournalMetadata(content: string): { header: string; remainder: string } {
+  const summary = JOURNAL_SUMMARY_PATTERN.exec(content);
+  const headerEnd = summary?.index ?? content.length;
+  return { header: content.slice(0, headerEnd), remainder: content.slice(headerEnd) };
+}
+
+/** Reads validated activity metadata used for repository-wide recency ordering. */
+export function readJournalActivity(content: string, relativePath: string): JournalActivity {
+  const { header } = splitJournalMetadata(content);
+  const { startedValues, updatedValues } = inspectJournalDocument(header);
+  const legacyValues = [
+    ...header.matchAll(new RegExp(LEGACY_JOURNAL_TIMESTAMP_PATTERN, "gmu")),
+  ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+  if (startedValues.length === 1 && updatedValues.length === 1 && legacyValues.length === 0) {
+    const started = parsedJournalTimestamp(startedValues[0] ?? "", relativePath);
+    const updated = parsedJournalTimestamp(updatedValues[0] ?? "", relativePath);
+    if (updated < started) {
+      throw new Error(`Journal timestamp metadata is malformed: ${relativePath}`);
+    }
+    return { started, updated };
+  }
+  if (startedValues.length === 0 && updatedValues.length === 0 && legacyValues.length === 1) {
+    const timestamp = parsedJournalTimestamp(legacyValues[0] ?? "", relativePath);
+    return { started: timestamp, updated: timestamp };
+  }
+  throw new Error(`Journal timestamp metadata is malformed: ${relativePath}`);
+}
+
 /** Refreshes current activity metadata and migrates a valid legacy timestamp when encountered. */
 export function refreshJournalActivity(content: string, now: Date, relativePath: string): string {
+  const { header, remainder } = splitJournalMetadata(content);
   const lineEnding = content.includes("\r\n") ? "\r\n" : "\n";
   const nextTimestamp = journalTimestamp(now);
-  const startedMatch = content.match(JOURNAL_STARTED_PATTERN);
-  const updatedMatch = content.match(JOURNAL_UPDATED_PATTERN);
-  if (startedMatch !== null && updatedMatch !== null) {
-    const started = parsedJournalTimestamp(startedMatch[1] ?? "", relativePath);
-    const updated = parsedJournalTimestamp(updatedMatch[1] ?? "", relativePath);
+  const { started, updated } = readJournalActivity(content, relativePath);
+  const updatedMatch = header.match(JOURNAL_UPDATED_PATTERN);
+  if (updatedMatch !== null) {
     const latest = [started, updated, nextTimestamp].sort().at(-1);
     if (latest === undefined) {
       throw new Error(`Journal timestamp metadata is malformed: ${relativePath}`);
     }
-    return content.replace(updatedMatch[0], `- **Updated**: ${latest}`);
+    return `${header.replace(updatedMatch[0], `- **Updated**: ${latest}`)}${remainder}`;
   }
-  if (startedMatch !== null || updatedMatch !== null) {
-    throw new Error(`Journal timestamp metadata is malformed: ${relativePath}`);
-  }
-  const legacyMatch = content.match(LEGACY_JOURNAL_TIMESTAMP_PATTERN);
+  const legacyMatch = header.match(LEGACY_JOURNAL_TIMESTAMP_PATTERN);
   if (legacyMatch === null) {
     throw new Error(`Journal timestamp metadata is malformed: ${relativePath}`);
   }
-  const started = parsedJournalTimestamp(legacyMatch[1] ?? "", relativePath);
   const latest = [started, nextTimestamp].sort().at(-1);
   if (latest === undefined) {
     throw new Error(`Journal timestamp metadata is malformed: ${relativePath}`);
   }
-  return content.replace(
+  const migratedHeader = header.replace(
     legacyMatch[0],
     `- **Started**: ${started}${lineEnding}- **Updated**: ${latest}`,
   );
+  return `${migratedHeader}${remainder}`;
 }
 
 /** Creates the canonical journal skeleton and its normalized timestamp. */

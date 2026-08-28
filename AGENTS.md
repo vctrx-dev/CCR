@@ -83,23 +83,6 @@ feature-local implementation convenient.
 | Review taxonomy or review evidence presentation | `src/review/dimensions.ts`, `src/review/evidence.ts`, `src/context/evidence-format.ts` | Keep taxonomy data-driven and evidence privacy-filtered; do not add a second registry or formatter. |
 | Supported external API | `src/index.ts`, `src/context/index.ts`, `src/review/index.ts`, `src/llm/index.ts` | Export only stable, documented contracts and update package smoke coverage for each new public entry point. |
 
-### Reusable Boundary Map (required for coding agents)
-
-Before creating a helper, parser, provider call, Git read, or managed-file workflow, identify the
-matching boundary below. Reuse it when it fits; when the new behavior is compatible but missing,
-extend that boundary with regression coverage. Do not duplicate a boundary merely to make a
-feature-local implementation convenient.
-
-| Need | Reuse first | Preferred extension path |
-|---|---|---|
-| Repository-relative reads, writes, deletes, symlink checks, or bounded file content | `src/context/files.ts` | Add a constrained helper there; callers must not bypass managed-path checks. |
-| Privacy filtering, approved staged paths, or repository evidence | `src/context/privacy.ts`, `src/context/broker.ts`, `src/review/evidence.ts` | Preserve each source's authorization semantics; share only post-approval formatting via `src/context/evidence-format.ts`. |
-| Generated CCR file or instruction-block lifecycle | `src/context/managed-artifacts.ts`, `src/context/managed-block.ts` | Add registry metadata and let setup/uninstall derive behavior; do not add path-specific lifecycle branches. |
-| CCR configuration parsing, migration, or safe updates | `src/context/config.ts` | Add schema, default, migration, and update behavior together; do not parse or mutate config ad hoc. |
-| Provider contracts, ASU requests, retries, or response-size handling | `src/llm/index.ts`, `src/llm/asu-api-transport.ts`, `src/llm/asu-api-response-body.ts` | Add an adapter behind `ReviewProvider`; reuse the transport and bounded-response boundaries instead of copying retry logic. |
-| Review taxonomy or review evidence presentation | `src/review/dimensions.ts`, `src/review/evidence.ts`, `src/context/evidence-format.ts` | Keep taxonomy data-driven and evidence privacy-filtered; do not add a second registry or formatter. |
-| Supported external API | `src/index.ts`, `src/context/index.ts`, `src/review/index.ts`, `src/llm/index.ts` | Export only stable, documented contracts and update package smoke coverage for each new public entry point. |
-
 ## Testing & TDD
 
 Use TDD for behavior changes and bug fixes: write or identify a failing behavioral test, implement

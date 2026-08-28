@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import {
   readCompleteJournalEntry,
   readJournalEvidence,
+  readSortedJournalNames,
   refreshJournalEntry,
   writeJournalFile,
 } from "../../../src/context/journal-entry";
@@ -24,6 +25,18 @@ it("should bound complete journal reads and writes", async () => {
   await expect(writeJournalFile(root, relativePath, "x".repeat(64_001))).rejects.toThrow(
     "exceeds 64000 characters",
   );
+});
+
+it("should reject a recognized journal name that is a symbolic link", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-symlink-"));
+  roots.push(root);
+  const directory = path.join(root, ".ccr/journal/main");
+  const target = path.join(root, "outside");
+  await mkdir(directory, { recursive: true });
+  await mkdir(target);
+  await symlink(target, path.join(directory, "2026-07-29.md"), "junction");
+
+  await expect(readSortedJournalNames(root, ".ccr/journal/main")).rejects.toThrow("symbolic link");
 });
 
 it("should reject malformed UTF-8 and NUL bytes in complete journal entries", async () => {

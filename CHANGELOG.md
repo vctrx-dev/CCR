@@ -9,6 +9,16 @@ contain incompatible changes when they are clearly documented.
 
 ### Changed
 
+- `context.recentJournalEntries` now means the repository-wide most recently active journals:
+  CCR validates `Updated` metadata across branch and pull-request directories, sorts by activity,
+  and applies the configured count only after that global ordering. Journal identity metadata do not
+  influence selection; equal `Updated` values use `Started` newest-first and stable repository path
+  as deterministic ties. One valid legacy `Timestamp` remains the fallback activity value until that
+  entry is reused and migrated.
+- Review state now separates the complete input-context fingerprint from the continuity-context
+  fingerprint. Active journal edits are detected when that journal was supplied to the reviewer,
+  while CCR's own continuity write remains excluded from the value it records. The legacy
+  `ccr context journals PR-<number>` form remains accepted but no longer scopes the global result.
 - Refactored managed paths, locks, conditional writes, configuration persistence, journal and
   decision document policy, Git inventory/process access, automatic-update execution, and review
   state into focused reusable boundaries with stable façades. CLI output/repository helpers and

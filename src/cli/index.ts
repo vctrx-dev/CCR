@@ -26,7 +26,7 @@ function defaultIo(): CliIo {
 
 function normalizeVersionArguments(argv?: readonly string[]): readonly string[] | undefined {
   // Commander accepts only one-character short flags, so normalize the requested `-version`
-  // spelling and preserve the historical `-V` alias before Commander validates arguments.
+  // spelling and preserve the v0.7 `-V` alias before Commander validates arguments.
   const input = argv ?? process.argv;
   const normalized = input.map((argument) =>
     argument === "-version" || argument === "-V" ? "--version" : argument,

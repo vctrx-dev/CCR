@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { writeManagedTextIfUnchanged } from "../context/files";
-import { readCompleteJournalEntry, readCurrentReviewJournalEntry } from "../context/journal";
+import { readCompleteJournalEntry, readReviewJournalEntry } from "../context/journal";
 import {
   JOURNAL_COMPLETION_PLACEHOLDER,
   assertJournalContentWithinLimit,
   isValidJournalTimestamp,
   parseJournalPath,
 } from "../context/journal-document";
+import { hasSafeReviewChanges, listSafeReviewChanges } from "./evidence";
 import {
   computeCommittedReviewState,
   computeStagedReviewState,
@@ -140,7 +141,10 @@ function assertCompleteReviewContinuity(content: string, section: ReviewSection)
 }
 
 async function assertCurrentReviewJournal(root: string, journalPath: string): Promise<void> {
-  const selected = await readCurrentReviewJournalEntry(root);
+  const changes = await listSafeReviewChanges(root);
+  const selected = await readReviewJournalEntry(root, {
+    kind: hasSafeReviewChanges(changes) ? "working" : "head",
+  });
   if (selected?.path !== journalPath) {
     throw new Error("Journal is not the current review journal for this branch and state.");
   }
@@ -168,6 +172,8 @@ export async function recordWorkingReviewState(
 ): Promise<void> {
   const expected = reviewFingerprintSchema.parse(expectedFingerprint);
   const expectedContext = reviewFingerprintSchema.parse(expectedContextFingerprint);
+  const normalizedJournalPath = parseJournalPath(journalPath);
+  await assertCurrentReviewJournal(root, normalizedJournalPath);
   const current = await computeWorkingReviewState(root);
   if (current.fingerprint !== expected) {
     throw new Error("Review evidence changed before continuity completed; rerun the review.");
@@ -175,8 +181,6 @@ export async function recordWorkingReviewState(
   if (current.contextFingerprint !== expectedContext) {
     throw new Error("Review context changed before continuity completed; reload the context.");
   }
-  const normalizedJournalPath = parseJournalPath(journalPath);
-  await assertCurrentReviewJournal(root, normalizedJournalPath);
   const content = await readJournal(root, normalizedJournalPath);
   const section = latestReviewSection(content);
   if (section === undefined) throw new Error("Journal does not contain a review run.");
@@ -201,7 +205,14 @@ export async function recordWorkingReviewState(
 
 /** Compares the staged commit candidate with the latest review recorded for this working journal. */
 export async function readStagedReviewFreshness(root: string): Promise<ReviewFreshness> {
-  const journal = await readCurrentReviewJournalEntry(root);
+  const changes = await listSafeReviewChanges(root);
+  const hasWorkingChanges = hasSafeReviewChanges(changes);
+  const selected = await readReviewJournalEntry(root, {
+    kind: hasWorkingChanges ? "working" : "head",
+  });
+  const journal =
+    selected ??
+    (hasWorkingChanges ? await readReviewJournalEntry(root, { kind: "head" }) : undefined);
   if (journal === undefined) return { status: "unrecorded" };
   const record = readReviewRecord(await readJournal(root, journal.path));
   if (record === undefined) return { status: "unrecorded", journalPath: journal.path };

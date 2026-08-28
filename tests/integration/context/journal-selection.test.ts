@@ -43,6 +43,13 @@ function journalDocument(metadata: string[], body: string[]): string {
   ].join("\n");
 }
 
+function journalDocumentAt(updated: string, metadata: string[], body: string[] = []): string {
+  return journalDocument(metadata, body).replace(
+    "- **Updated**: 2026-08-27T01:00:00Z",
+    `- **Updated**: ${updated}`,
+  );
+}
+
 async function writeJournal(
   root: string,
   directory: string,
@@ -107,6 +114,63 @@ it("should ignore branch metadata quoted in a journal body", async () => {
   await expect(readRecentJournalEntries(root)).resolves.toEqual([
     expect.objectContaining({ path: relativePath }),
   ]);
+});
+
+it("should select the repository-wide latest journals by Updated regardless of branch or PR", async () => {
+  const root = await createRepository("ccr-journal-global-recency-");
+  const currentDirectory = branchDetails(root).directory;
+  const oldNameLatestUpdate = await writeJournal(
+    root,
+    "feature-a",
+    journalDocumentAt("2026-08-27T05:00:00Z", [
+      "- **Branch**: `feature/a`",
+      `- **Commit**: \`${"a".repeat(40)}\``,
+    ]),
+    "2026-08-20.md",
+  );
+  const pullRequest = await writeJournal(
+    root,
+    "pull-request-42",
+    journalDocumentAt("2026-08-27T04:00:00Z", ["- **Pull request**: `PR-42`"]),
+    "2026-08-27.md",
+  );
+  const currentBranch = await writeJournal(
+    root,
+    currentDirectory,
+    journalDocumentAt("2026-08-27T03:00:00Z", ["- **Base commit**: `unborn`"]),
+    "2026-08-26.md",
+  );
+  await writeJournal(
+    root,
+    "feature-b",
+    journalDocumentAt("2026-08-27T02:00:00Z", [
+      "- **Branch**: `feature/b`",
+      `- **Commit**: \`${"b".repeat(40)}\``,
+    ]),
+    "2026-08-27.md",
+  );
+
+  await expect(readRecentJournalEntries(root)).resolves.toEqual([
+    expect.objectContaining({ path: oldNameLatestUpdate }),
+    expect.objectContaining({ path: pullRequest }),
+    expect.objectContaining({ path: currentBranch }),
+  ]);
+});
+
+it("should fail closed when repository-wide recency metadata is ambiguous", async () => {
+  const root = await createRepository("ccr-journal-ambiguous-recency-");
+  await writeJournal(
+    root,
+    "feature-a",
+    journalDocumentAt("2026-08-27T05:00:00Z", ["- **Base commit**: `unborn`"]).replace(
+      "- **Updated**: 2026-08-27T05:00:00Z",
+      "- **Updated**: 2026-08-27T05:00:00Z\n- **Updated**: 2026-08-27T06:00:00Z",
+    ),
+  );
+
+  await expect(readRecentJournalEntries(root)).rejects.toThrow(
+    "Journal timestamp metadata is malformed",
+  );
 });
 
 it("should not select duplicate or conflicting commit header metadata", async () => {

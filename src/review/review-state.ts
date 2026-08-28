@@ -5,10 +5,11 @@
  * module when callers need the supported review-state contract; extend the focused implementation
  * module when adding behavior to only one concern.
  */
-export type { ReviewState } from "./review-fingerprint";
+export type { ReviewContextState, ReviewState } from "./review-fingerprint";
 export {
   computeCommittedReviewState,
   computeReviewContextFingerprint,
+  computeReviewContextState,
   computeStagedReviewState,
   computeWorkingReviewState,
 } from "./review-fingerprint";

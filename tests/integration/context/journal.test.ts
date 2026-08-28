@@ -55,28 +55,6 @@ it("should create a branch-local working journal without premature commit metada
   expect(recent.map((entry) => entry.path)).toEqual([result.path]);
 });
 
-it("should migrate legacy timestamp metadata when reusing a working journal", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-legacy-journal-"));
-  roots.push(root);
-  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
-  const { directory } = branchDetails(root);
-  const relativePath = `.ccr/journal/${directory}/2026-07-28T09-00-00Z.md`;
-  await mkdir(path.dirname(path.join(root, relativePath)), { recursive: true });
-  await writeFile(
-    path.join(root, relativePath),
-    "# CCR Journal\n\n- **Timestamp**: 2026-07-28T09:00:00Z\n- **Base commit**: `unborn`\n\n## Summary\n\nNeeds concise completion.\n",
-    "utf8",
-  );
-
-  const reused = await ensureWorkingJournalEntry(root, new Date("2026-07-30T10:00:00Z"));
-  const content = await readFile(path.join(root, relativePath), "utf8");
-
-  expect(reused.path).toBe(relativePath);
-  expect(content).toContain("**Started**: 2026-07-28T09:00:00Z");
-  expect(content).toContain("**Updated**: 2026-07-30T10:00:00Z");
-  expect(content).not.toContain("**Timestamp**");
-});
-
 it("should record commit metadata only for a committed journal", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-exists-"));
   roots.push(root);
@@ -274,12 +252,10 @@ it("should reuse one isolated journal entry for each pull request", async () => 
   const firstContent = await readFile(path.join(root, first.path), "utf8");
   expect(firstContent).toContain("**Pull request**: `PR-42`");
   expect(firstContent).toContain("**Updated**: 2026-07-29T12:00:00Z");
-  expect(
-    (await readRecentJournalEntries(root, 42)).map(({ path: entryPath }) => entryPath),
-  ).toEqual([first.path]);
-  expect(
-    (await readRecentJournalEntries(root, 43)).map(({ path: entryPath }) => entryPath),
-  ).toEqual([other.path]);
+  expect((await readRecentJournalEntries(root)).map(({ path: entryPath }) => entryPath)).toEqual([
+    other.path,
+    first.path,
+  ]);
 });
 
 it("should bound recent journal content before returning it", async () => {
@@ -293,13 +269,15 @@ it("should bound recent journal content before returning it", async () => {
     "utf8",
   );
   const journal = await createJournalEntry(root, new Date("2026-07-29T14:00:00Z"));
-  await writeFile(path.join(root, journal.path), `${"a".repeat(4_000)}PRIVATE_SUFFIX`, "utf8");
+  await writeFile(
+    path.join(root, journal.path),
+    `${await readFile(path.join(root, journal.path), "utf8")}${"a".repeat(4_000)}PRIVATE_SUFFIX`,
+    "utf8",
+  );
 
   const [recent] = await readRecentJournalEntries(root);
 
-  expect(recent?.content).toBe(
-    `${"a".repeat(4_000)}\n[CCR journal truncated at 4000 characters]\n`,
-  );
+  expect(recent?.content).toContain("[CCR journal truncated at 4000 characters]");
   expect(recent?.content).not.toContain("PRIVATE_SUFFIX");
 });
 

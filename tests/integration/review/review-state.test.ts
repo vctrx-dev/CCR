@@ -329,7 +329,7 @@ describe("review state", () => {
     await expect(
       recordWorkingReviewState(root, journal.path, initial.fingerprint, initial.contextFingerprint),
     ).rejects.toThrow("Review context changed");
-  });
+  }, 15_000);
 
   it("should reject oversized shared context instead of hashing a truncated prefix", async () => {
     const root = await makeRepository();

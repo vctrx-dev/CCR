@@ -13,7 +13,6 @@ import { findCliRepositoryRoot, writeCliLines } from "./io";
 import { formatAction, formatHeading, formatStatus, formatTone } from "./output";
 
 interface SetupOptions {
-  apply?: boolean;
   dryRun?: boolean;
   json?: boolean;
 }

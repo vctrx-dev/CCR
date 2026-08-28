@@ -296,9 +296,12 @@ and producer/consumer or configuration drift.
 uses read-only GitHub CLI metadata, the pull-request patch, and relevant head content; it does not
 checkout or mutate branches. Before dispatching review workers, every scope reads current
 `project.md`, `stakeholders.md`, and `decisions.md`, then reads every bounded journal returned within
-the configured `context.recentJournalEntries` count. Changes and codebase scopes use the current
-branch history; PR scope uses that PR's isolated history. These files remain advisory context; code,
-tests, and schemas remain authoritative. The shared-context
+the configured `context.recentJournalEntries` count. CCR selects those entries repository-wide by
+validated `Updated` metadata, regardless of branch or pull-request directory. Stable paths and
+branch/PR metadata identify continuity; they do not determine recency. Equal `Updated` values sort by
+`Started` newest-first, then stable repository path. A legacy entry's single valid `Timestamp` serves
+as its activity time until reuse migrates it to `Started` and `Updated`. These files remain advisory
+context; code, tests, and schemas remain authoritative. The shared-context
 reader accepts only `.ccr/project.md`, `.ccr/stakeholders.md`, and `.ccr/decisions.md`.
 PR evidence is bounded to 64 KiB of metadata, 200 changed paths, a 512 KiB patch, 128 KiB per head
 file, and 2 MiB total. The internal `ccr context review-pr` and `review-pr-head` commands enforce
@@ -306,7 +309,7 @@ those limits and configured privacy exclusions before evidence reaches review wo
 contains an excluded path or exceeds a limit, review reports a blocker and stops before dispatch.
 
 The general form is `/ccr-review [changes|codebase|PR-<number>] [all|dimension,...]`. A missing scope
-defaults to `changes`, and a selector without a scope remains a changes review for compatibility.
+defaults to `changes`, and a selector without a scope is a supported changes-review shorthand.
 After unique obvious misspellings are normalized, unrelated scopes or dimension IDs, invalid PR
 numbers, duplicate IDs, and mixed `all` selections stop before review or journal writes. PR review
 requires an authenticated `gh` CLI and never uses the current working tree as PR evidence.
@@ -335,12 +338,15 @@ concise factual scope, evidence, and outcome record. New journal filenames use t
 get separate journal entries; repeated reviews of one commit reuse its entry. `Started` records when
 the stable journal was created, while `Updated` advances when CCR reuses, completes, finalizes, or
 amends it. Work spanning several days does not rename the journal. Older `Timestamp` metadata migrates
-to `Started` and `Updated` when reused. For changes and codebase scopes, CCR separately fingerprints
-the privacy-approved code state and the bounded resolved configuration plus `project.md`,
-`stakeholders.md`, `decisions.md`, and prior recent branch journals. The active continuity target is
-excluded from the context fingerprint because the recorder validates its own write separately. PR
-freshness includes that PR's recent journals. CCR rechecks both fingerprints before the human-facing
-report and records them plus current status in the latest review run. A first code or context transition
+to `Started` and `Updated` when reused. For changes and codebase scopes, CCR fingerprints the
+privacy-approved code state and every bounded review input: resolved configuration, `project.md`,
+`stakeholders.md`, `decisions.md`, and the repository-wide recent journals. The input-context
+fingerprint includes an existing active journal whenever the reviewer reads it. A separate
+continuity-context fingerprint excludes only CCR's active write target and selects the configured
+count from the remaining journals, preventing CCR's own journal write from invalidating its record.
+PR freshness uses the same complete review-input fingerprint. CCR rechecks code and review inputs
+before the human-facing report and records continuity plus current status in the latest review run.
+A first code or context transition
 restarts the review against reloaded evidence; a second stops as unstable. PR review applies the same
 context-freshness rule alongside immutable base/head refs. The recorder rejects PR, old-branch,
 old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurrently modified
@@ -402,11 +408,11 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 | `/ccr-context compact` | Compact project context only |
 | `/ccr-review [scope] [all\|dimension,...]` | Review changes, codebase, or a pull request |
 | `ccr context append-decision <decision>` | Append one config-authorized decision line |
-| `ccr context journals [PR-<number>]` | Read configured recent branch or PR journals |
+| `ccr context journals [PR-<number>]` | Read configured repository-wide recent journals ordered by `Updated`; the validated legacy PR token does not scope results |
 | `ccr context commit-changes <HEAD> [--after <path>]` | Page through privacy-approved paths changed by the exact current commit |
 | `ccr context commit-read <HEAD> <file>` | Read one bounded immutable changed blob or deletion marker |
-| `ccr context review-context-state [PR-<number>]` | Fingerprint bounded shared context and recent branch or PR journals |
-| `ccr context review-state` | Fingerprint current approved code and shared context |
+| `ccr context review-context-state [PR-<number>]` | Fingerprint review inputs and continuity-safe context; the optional PR identifies only the continuity write target |
+| `ccr context review-state` | Fingerprint current approved code, review inputs, and continuity-safe context |
 | `ccr context record-review-state <journal> <code-fingerprint> <context-fingerprint>` | Validate and bind the latest completed local review run |
 | `ccr context review-pr PR-<number>` | Read bounded privacy-filtered PR metadata and patch |
 | `ccr context review-pr-head PR-<number> <files...>` | Read up to eight approved PR head files |

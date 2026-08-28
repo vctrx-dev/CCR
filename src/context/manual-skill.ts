@@ -47,7 +47,7 @@ installation. Do not install, upgrade, or alter PATH while answering a help ques
   shell; slash skills run inside Claude Code after \`ccr setup\`.
 - State defaults and accepted arguments exactly. For reviews, explain blank/all, comma-separated
   selection, and invalid-ID behavior only as supported by the current installed sources.
-- When an operation can write or remove files, state its preview/apply or approval boundary before
+- When an operation can write or remove files, state its preview/write or approval boundary before
   showing the command.
 - Answer from current installed behavior. Label future roadmap items as unavailable instead of
   presenting them as commands.
@@ -73,14 +73,14 @@ command, change PATH, or install anything unless the user separately asks for th
 <example>
 User: \`/ccr Can I review only privacy?\`
 Action: Read current help and the review dimension reference. If \`privacy\` is a configured ID, show
-\`/ccr-review privacy\` for changes and \`/ccr-review codebase privacy\` for the whole repository.
+\`/ccr-review privacy\` as the changes shorthand and \`/ccr-review codebase privacy\` for the whole repository.
 Use \`/ccr-review PR-123 privacy\` for a pull request. Explain that reviews run inside Claude Code
 and report without fixing.
 </example>
 <example>
 User: \`/ccr What does --remove-context do?\`
 Action: Run \`npx --no-install ccr help uninstall\`, explain the currently documented removal scope
-and preview/apply boundary, and do not invoke uninstall. Do not add internal preservation or deletion
+and preview/write boundary, and do not invoke uninstall. Do not add internal preservation or deletion
 claims that the current help and installed documentation do not establish.
 </example>
 <example>

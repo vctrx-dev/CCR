@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Dirent } from "node:fs";
+import type { Dir, Dirent } from "node:fs";
 import {
   type FileHandle,
   lstat,
   mkdir,
   open,
+  opendir,
   readdir,
   rename,
   unlink,
@@ -134,6 +135,32 @@ export async function readManagedTextIfExists(
   relativePath: string,
 ): Promise<string | undefined> {
   return readTextIfExists(await assertSafeManagedPath(root, relativePath));
+}
+
+/** Enumerates one safe managed directory without retaining entries beyond the caller's bound. */
+export async function readBoundedManagedDirectory(
+  root: string,
+  relativeDirectory: string,
+  maximumEntries: number,
+): Promise<Dirent[]> {
+  if (!Number.isSafeInteger(maximumEntries) || maximumEntries < 0) {
+    throw new Error("Managed directory entry limit must be a non-negative safe integer.");
+  }
+  let directory: Dir;
+  try {
+    directory = await opendir(await assertSafeManagedPath(root, relativeDirectory));
+  } catch (error: unknown) {
+    if (isFileNotFound(error)) return [];
+    throw error;
+  }
+  const entries: Dirent[] = [];
+  for await (const entry of directory) {
+    if (entries.length >= maximumEntries) {
+      throw new Error(`Managed directory exceeds its entry limit: ${relativeDirectory}`);
+    }
+    entries.push(entry);
+  }
+  return entries;
 }
 
 /**

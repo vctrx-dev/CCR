@@ -40,6 +40,13 @@ export interface SafeReviewChanges {
   excludedPathCount: number;
 }
 
+/** Returns whether the current approved live overlay requires working-state continuity. */
+export function hasSafeReviewChanges(changes: SafeReviewChanges): boolean {
+  return (
+    changes.stagedPaths.length + changes.unstagedPaths.length + changes.untrackedPaths.length > 0
+  );
+}
+
 /** Lists safe live change paths, retaining separate staged/unstaged states for partially staged files. */
 export async function listSafeReviewChanges(root: string): Promise<SafeReviewChanges> {
   const [config, staged] = await Promise.all([

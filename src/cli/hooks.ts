@@ -137,7 +137,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
       "remove CCR's marked hook blocks (retained for compatibility; now the default)",
     )
     .option("--dry-run", "preview legacy hook cleanup without changing files")
-    .action(async (options: { apply?: boolean; dryRun?: boolean }) => {
+    .action(async (options: { dryRun?: boolean }) => {
       const root = findCliRepositoryRoot(io);
       const hookState = await readHookState(root);
       if (hookState.status === "valid") {

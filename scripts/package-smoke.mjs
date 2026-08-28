@@ -151,6 +151,7 @@ try {
   for (const command of [
     "commit-changes",
     "commit-read",
+    "journals",
     "review-state",
     "review-context-state",
     "record-review-state",
@@ -159,7 +160,21 @@ try {
       throw new Error(`Installed context help is missing ${command}.`);
     }
   }
-  for (const versionFlag of ["-v", "-version", "--version"]) {
+  if (!installedContextHelp.includes("repository-wide recent journals")) {
+    throw new Error("Installed context help has stale journal selection guidance.");
+  }
+  const installedJournalHelp = runInstalled(
+    installedBin,
+    ["context", "journals", "--help"],
+    consumer,
+  );
+  if (
+    !installedJournalHelp.includes("Usage: ccr context journals [options] [pull-request]") ||
+    !installedJournalHelp.includes("legacy PR token does not scope results")
+  ) {
+    throw new Error("Installed journal help has stale compatibility or recency guidance.");
+  }
+  for (const versionFlag of ["-v", "-version", "--version", "-V"]) {
     const installedVersion = runInstalled(installedBin, [versionFlag], consumer).trim();
     if (installedVersion !== packageJson.version) {
       throw new Error(

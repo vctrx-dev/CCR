@@ -14,7 +14,6 @@ import { findCliRepositoryRoot, writeCliLines } from "./io";
 import { formatHeading, formatStatus, formatSuccess, formatTone } from "./output";
 
 interface MutationOptions {
-  apply?: boolean;
   dryRun?: boolean;
 }
 

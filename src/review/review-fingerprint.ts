@@ -14,9 +14,9 @@ import {
   readIndexEntries,
   readParentCommit,
 } from "../context/git";
-import { readCurrentReviewJournalEntry, readRecentJournalEntries } from "../context/journal";
+import { type ReviewJournalTarget, readReviewJournalEntriesForReview } from "../context/journal";
 import { readResolvedContextConfig, readSafeStagedPaths } from "../context/privacy";
-import { listSafeReviewChanges } from "./evidence";
+import { hasSafeReviewChanges, listSafeReviewChanges } from "./evidence";
 
 /**
  * Deterministic review fingerprinting. These functions bind privacy-approved final content and
@@ -34,18 +34,33 @@ export interface ReviewState {
   baseCommit: string;
   fingerprint: string;
   contextFingerprint: string;
+  inputContextFingerprint: string;
   pathCount: number;
 }
 
+export interface ReviewContextState {
+  contextFingerprint: string;
+  inputContextFingerprint: string;
+}
+
+function hashReviewContext(
+  config: Awaited<ReturnType<typeof readResolvedContextConfig>>,
+  contextEntries: Array<[string, "missing"] | [string, "present", string]>,
+  journalEntries: Array<readonly [string, string]>,
+): string {
+  const canonical = JSON.stringify({ config, contextEntries, journalEntries });
+  return `sha256:${createHash("sha256").update(canonical).digest("hex")}`;
+}
+
 /**
- * Fingerprints bounded shared context, resolved configuration, and the recent journals supplied to
- * a review. The active branch continuity target is excluded because review recording mutates it and
- * validates that mutation separately with compare-and-swap semantics.
+ * Computes a complete review-input hash and a continuity-safe hash from one repository-wide journal
+ * snapshot. The latter excludes the active write target before applying the configured count;
+ * `pullRequest` identifies only that target and never scopes journal recency.
  */
-export async function computeReviewContextFingerprint(
+async function computeReviewContextStateForTarget(
   root: string,
-  pullRequest?: number,
-): Promise<string> {
+  target: ReviewJournalTarget,
+): Promise<ReviewContextState> {
   const config = await readResolvedContextConfig(root);
   const contextEntries = await Promise.all(
     REVIEW_CONTEXT_PATHS.map(
@@ -67,29 +82,67 @@ export async function computeReviewContextFingerprint(
       },
     ),
   );
-  const activeJournal =
-    pullRequest === undefined ? await readCurrentReviewJournalEntry(root) : undefined;
-  const journalEntries = (await readRecentJournalEntries(root, pullRequest))
-    .filter(({ path: journalPath }) => journalPath !== activeJournal?.path)
-    .map(({ path: journalPath, content }) => [journalPath, content] as const)
-    .sort(([left], [right]) => left.localeCompare(right));
-  const canonical = JSON.stringify({ config, contextEntries, journalEntries });
-  return `sha256:${createHash("sha256").update(canonical).digest("hex")}`;
+  const journals = await readReviewJournalEntriesForReview(
+    root,
+    config.context.recentJournalEntries,
+    target,
+  );
+  const canonicalEntries = (entries: typeof journals.inputEntries) =>
+    entries
+      .map(({ path: journalPath, content }) => [journalPath, content] as const)
+      .sort(([left], [right]) => left.localeCompare(right));
+  return {
+    contextFingerprint: hashReviewContext(
+      config,
+      contextEntries,
+      canonicalEntries(journals.continuityEntries),
+    ),
+    inputContextFingerprint: hashReviewContext(
+      config,
+      contextEntries,
+      canonicalEntries(journals.inputEntries),
+    ),
+  };
+}
+
+/**
+ * Fingerprints every bounded review-context input and returns a separate continuity-safe hash.
+ * An optional PR identifies only its active journal; local targets follow the approved live state.
+ */
+export async function computeReviewContextState(
+  root: string,
+  pullRequest?: number,
+): Promise<ReviewContextState> {
+  const target: ReviewJournalTarget =
+    pullRequest === undefined
+      ? { kind: hasSafeReviewChanges(await listSafeReviewChanges(root)) ? "working" : "head" }
+      : { kind: "pull-request", pullRequest };
+  return computeReviewContextStateForTarget(root, target);
+}
+
+/** Returns the continuity-stable context hash retained for existing API consumers. */
+export async function computeReviewContextFingerprint(
+  root: string,
+  pullRequest?: number,
+): Promise<string> {
+  return (await computeReviewContextState(root, pullRequest)).contextFingerprint;
 }
 
 async function fingerprintState(
   root: string,
   baseCommit: string,
   entries: Array<[string, string, string]>,
+  target: ReviewJournalTarget,
 ): Promise<ReviewState> {
   const canonical = JSON.stringify({
     baseCommit,
     entries: entries.sort(([a], [b]) => a.localeCompare(b)),
   });
+  const context = await computeReviewContextStateForTarget(root, target);
   return {
     baseCommit,
     fingerprint: `sha256:${createHash("sha256").update(canonical).digest("hex")}`,
-    contextFingerprint: await computeReviewContextFingerprint(root),
+    ...context,
     pathCount: entries.length,
   };
 }
@@ -128,12 +181,18 @@ export async function computeWorkingReviewState(root: string): Promise<ReviewSta
       return [relativePath, mode ?? "missing", oid];
     }),
   );
-  return fingerprintState(root, readCurrentCommit(root), entries);
+  return fingerprintState(root, readCurrentCommit(root), entries, {
+    kind: hasSafeReviewChanges(changes) ? "working" : "head",
+  });
 }
 
 /** Fingerprints the exact privacy-approved commit candidate currently in Git's index. */
 export async function computeStagedReviewState(root: string): Promise<ReviewState> {
-  const paths = (await readSafeStagedPaths(root)).included.filter(isReviewTrackedPath);
+  const [staged, changes] = await Promise.all([
+    readSafeStagedPaths(root),
+    listSafeReviewChanges(root),
+  ]);
+  const paths = staged.included.filter(isReviewTrackedPath);
   const index = new Map(readIndexEntries(root).map((entry) => [entry.path, entry]));
   return fingerprintState(
     root,
@@ -142,6 +201,7 @@ export async function computeStagedReviewState(root: string): Promise<ReviewStat
       const entry = index.get(relativePath);
       return [relativePath, entry?.mode ?? "missing", entry?.oid ?? "missing"];
     }),
+    { kind: hasSafeReviewChanges(changes) ? "working" : "head" },
   );
 }
 
@@ -168,5 +228,6 @@ export async function computeCommittedReviewState(
       const entry = approved.entriesByPath.get(relativePath);
       return [relativePath, entry?.mode ?? "missing", entry?.oid ?? "missing"];
     }),
+    { kind: "head" },
   );
 }

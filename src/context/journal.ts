@@ -13,17 +13,17 @@ import {
   type JournalResult,
   createJournalFile,
   readCompleteJournalEntry,
-  readJournalEvidence,
   readSortedJournalNames,
   refreshJournalEntry,
   replaceJournalFileIfUnchanged,
   writeJournalFile,
 } from "./journal-entry";
 import { withJournalIdentityLock, withJournalMutationLock } from "./journal-lock";
-import { readResolvedContextConfig } from "./privacy";
+import { type ReviewJournalEntries, readReviewJournalEntriesWhileLocked } from "./journal-recency";
 
 export type { JournalEntry, JournalResult } from "./journal-entry";
 export { readCompleteJournalEntry } from "./journal-entry";
+export { readRecentJournalEntries } from "./journal-recency";
 export { JOURNAL_MUTATION_LOCK_PATH, withJournalMutationLock } from "./journal-lock";
 
 /** Metadata for a commit that already exists, supplied by post-commit or clean-HEAD workflows. */
@@ -32,6 +32,11 @@ export interface JournalDetails {
   directory: string;
   commit: string;
 }
+
+export type ReviewJournalTarget =
+  | { kind: "head" }
+  | { kind: "pull-request"; pullRequest: number }
+  | { kind: "working" };
 
 const pullRequestNumberSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const pullRequestTokenSchema = z
@@ -167,14 +172,21 @@ async function findWorkingJournalPath(
   return (await findWorkingJournalEntry(root, directory, baseCommit))?.path;
 }
 
-/** Returns the pending journal or the current-commit journal used by a clean codebase review. */
-export async function readCurrentReviewJournalEntry(
+/** Returns only the journal selected by the review's explicit evidence-state target. */
+export async function readReviewJournalEntry(
   root: string,
+  target: ReviewJournalTarget,
 ): Promise<JournalResult | undefined> {
+  if (target.kind === "pull-request") {
+    return journalEntryForPullRequest(root, target.pullRequest);
+  }
   const { directory } = branchDetails(root);
   const commit = readCurrentCommit(root);
-  const working = await findWorkingJournalPath(root, directory, commit);
-  return working === undefined ? journalEntryForCommit(root, commit, directory) : { path: working };
+  if (target.kind === "working") {
+    const working = await findWorkingJournalPath(root, directory, commit);
+    return working === undefined ? undefined : { path: working };
+  }
+  return journalEntryForCommit(root, commit, directory);
 }
 
 /** Returns the pending journal whose base is the parent of an already-created commit. */
@@ -259,49 +271,50 @@ export async function ensurePullRequestJournalEntry(
 ): Promise<JournalResult> {
   const normalized = pullRequestNumberSchema.parse(pullRequest);
   const directory = pullRequestDirectory(normalized);
-  const relativeDirectory = `.ccr/journal/${directory}`;
   return withJournalMutationLock(root, () =>
     withJournalIdentityLock(root, `pull-request:${normalized}`, async () => {
-      for (const name of await readSortedJournalNames(root, relativeDirectory)) {
-        const path = `${relativeDirectory}/${name}`;
-        const { content, identity } = await readJournalIdentity(root, path);
-        if (identity.kind === "pull-request" && identity.pullRequest === normalized) {
-          const refreshed = await refreshJournalEntry(root, { path, content }, now);
-          return { path: refreshed.path };
-        }
+      const existing = await findPullRequestJournalEntry(root, normalized);
+      if (existing) {
+        const refreshed = await refreshJournalEntry(root, existing, now);
+        return { path: refreshed.path };
       }
       return createJournalFile(root, now, directory, `- **Pull request**: \`PR-${normalized}\`\n`);
     }),
   );
 }
 
-/** Reads the configured number of newest bounded entries for the current branch or one exact PR. */
-export async function readRecentJournalEntries(
+async function findPullRequestJournalEntry(
   root: string,
-  pullRequest?: number,
-): Promise<JournalEntry[]> {
-  const config = await readResolvedContextConfig(root);
-  const branch = pullRequest === undefined ? branchDetails(root) : undefined;
-  const directory =
-    pullRequest === undefined ? branch?.directory : pullRequestDirectory(pullRequest);
-  if (directory === undefined) throw new Error("Journal directory could not be resolved.");
-  const relativeDirectory = `.ccr/journal/${directory}`;
-  const names = (await readSortedJournalNames(root, relativeDirectory)).slice(
-    0,
-    config.context.recentJournalEntries,
-  );
-  return Promise.all(
-    names.map(async (name) => {
-      const relativePath = `${relativeDirectory}/${name}`;
-      const content = await readJournalEvidence(root, relativePath);
-      const identity = parseJournalIdentity(content);
-      if (identity.kind === "malformed") {
-        throw new Error(`Journal identity metadata is malformed: ${relativePath}`);
-      }
-      if (branch && identity.kind === "commit" && identity.branch !== branch.branch) {
-        throw new Error(`Journal branch metadata mismatch: ${relativePath}`);
-      }
-      return { path: relativePath, content };
-    }),
-  );
+  pullRequest: number,
+): Promise<JournalEntry | undefined> {
+  const relativeDirectory = `.ccr/journal/${pullRequestDirectory(pullRequest)}`;
+  for (const name of await readSortedJournalNames(root, relativeDirectory)) {
+    const path = `${relativeDirectory}/${name}`;
+    const { content, identity } = await readJournalIdentity(root, path);
+    if (identity.kind === "pull-request" && identity.pullRequest === pullRequest) {
+      return { path, content };
+    }
+  }
+  return undefined;
+}
+
+/** Returns the existing local continuity entry for one pull request without creating it. */
+export async function journalEntryForPullRequest(
+  root: string,
+  pullRequest: number,
+): Promise<JournalResult | undefined> {
+  const entry = await findPullRequestJournalEntry(root, pullRequestNumberSchema.parse(pullRequest));
+  return entry === undefined ? undefined : { path: entry.path };
+}
+
+/** Resolves the active write target and both global journal sets under one mutation barrier. */
+export async function readReviewJournalEntriesForReview(
+  root: string,
+  recentJournalEntries: number,
+  target: ReviewJournalTarget,
+): Promise<ReviewJournalEntries> {
+  return withJournalMutationLock(root, async () => {
+    const activeJournal = await readReviewJournalEntry(root, target);
+    return readReviewJournalEntriesWhileLocked(root, recentJournalEntries, activeJournal?.path);
+  });
 }

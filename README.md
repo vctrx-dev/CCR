@@ -41,10 +41,11 @@ creates the commit, reusing the working entry instead of creating a duplicate. D
 separate journal entries, while repeated reviews of one commit reuse its entry. Each pull request has
 one separate local journal entry that repeated reviews and human follow-up reuse. Each completed
 review replaces the initial summary placeholder with a concise factual scope, evidence, and outcome
-record. Changes and codebase reviews record separate deterministic fingerprints for the approved
-code state and the bounded shared context/configuration used by the review. CCR verifies both
-immediately before reporting; later code or context edits trigger advisory pre-commit and post-commit
-stale-review warnings. Older `Timestamp` metadata is migrated to `Started` and `Updated` when reused.
+record. Changes and codebase reviews record deterministic fingerprints for the approved code state,
+every bounded context input supplied to the review, and continuity-safe context. CCR verifies code
+and review inputs immediately before reporting; later code or context edits trigger advisory
+pre-commit and post-commit stale-review warnings. Older `Timestamp` metadata is migrated to
+`Started` and `Updated` when reused.
 
 ## Install in a project or globally
 
@@ -171,7 +172,7 @@ Blank arguments default to a changes review across all dimensions. Use `/ccr-rev
 clarity, `/ccr-review codebase` for the complete codebase, or `/ccr-review PR-123` for pull request
 123. Put `all` or comma-separated dimension IDs after the scope, such as
 `/ccr-review codebase privacy, transparency`. A selector without a scope remains a changes review
-for backward compatibility. `npx --no-install ccr help` prints the IDs bundled in the installed
+as a supported shorthand. `npx --no-install ccr help` prints the IDs bundled in the installed
 version. An empty registry stops a review and reports that condition instead of inventing criteria.
 To add, delete, reorder, or revise dimensions, change the registry first; also update matching README
 and user-manual references, then run package smoke to verify the shipped help and documentation
@@ -192,12 +193,19 @@ authentication and request integrity, unsafe input boundaries, resource exhausti
 and cross-layer contract or configuration drift. The master reports one root cause with every
 supported dimension instead of duplicating overlapping findings.
 Before any worker is dispatched, every review reads bounded `project.md`, `stakeholders.md`, and
-`decisions.md` plus every journal returned within `context.recentJournalEntries`. Changes and
-codebase scopes use the current branch journals; PR scope uses that PR's isolated journal history.
-Changes and codebase reviews bind both code and shared context—including prior recent journals—to the
-recorded review run. Their active continuity target is excluded from that context digest because the
-recorder validates its own write separately. PR reviews bind immutable base/head refs and recheck
-shared context plus that PR's recent journals. One state transition
+`decisions.md` plus every journal returned within `context.recentJournalEntries`. CCR enumerates the
+local repository journal history, validates each entry's activity metadata, and selects the newest
+entries by `Updated` regardless of branch or pull-request directory. Stable filenames and branch/PR
+metadata remain identity and reference information; they do not determine recency. Equal `Updated`
+values sort by `Started` newest-first, then stable repository path. Until a legacy entry is reused
+and migrated, its single valid `Timestamp` is treated as both `Started` and `Updated`.
+Changes and codebase reviews bind both code and shared context—including recent journals—to the
+recorded review run. The review-input digest covers every journal the reviewer reads, including an
+existing active journal. A separate continuity digest excludes only CCR's active write target and
+selects the configured count from the remaining journals, so creating or updating that target
+cannot invalidate CCR's own record. PR reviews bind immutable base/head refs and recheck the same
+complete review-input digest.
+One state transition
 causes a complete reload and review restart; a second transition stops as unstable instead of
 claiming a current result. Recording refuses a PR, old-branch, old-HEAD, placeholder, incomplete, or
 concurrently modified journal.
@@ -253,6 +261,9 @@ npx --no-install ccr setup
 npx --no-install ccr update
 npx --no-install ccr uninstall
 ```
+
+`ccr context journals PR-<number>` remains accepted for v0.7 compatibility, but the token is only
+validated and never scopes the result. New integrations should use the argument-free command.
 
 The Git hooks are optional and advisory. `.ccr/config.json` is the control plane. When
 `hooks.enabled` is true (the default), `/ccr-context initialize` runs `/ccr-hooks sync`. The skill
