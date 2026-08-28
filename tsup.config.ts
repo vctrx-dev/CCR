@@ -1,4 +1,9 @@
+import { rmSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsup";
+
+// Array configs build concurrently, so clean once before workers can race over the shared directory.
+rmSync(fileURLToPath(new URL("./dist", import.meta.url)), { force: true, recursive: true });
 
 export default defineConfig([
   {
@@ -7,7 +12,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     noExternal: ["picomatch", "zod"],
-    clean: true,
+    clean: false,
     outDir: "dist",
   },
   {

@@ -7,6 +7,8 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.8.0 - 2026-08-27
+
 ### Changed
 
 - `context.recentJournalEntries` now means the repository-wide most recently active journals:
