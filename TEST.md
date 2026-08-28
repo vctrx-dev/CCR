@@ -7,7 +7,20 @@ advisory and automatic hooks, concurrency, privacy, bounded evidence, and cleanu
 > Run commits, malformed-state cases, races, and artificial defects only in a disposable clone.
 > Back up existing `.ccr/`, `.claude/skills/`, instruction files, and hook configuration first.
 
-## 1. Build and install the package
+## 1. Install the package
+
+For a published-release smoke test, install the exact registry version rather than a local folder or
+tarball:
+
+```powershell
+cd D:\Code\your-test-repository
+npm install --save-dev @vctrx/ccr@VERSION
+npx --no-install ccr -v
+npx --no-install ccr -version
+npx --no-install ccr --version
+```
+
+For pre-release package validation, build and pack from the CCR repository:
 
 From the CCR repository:
 

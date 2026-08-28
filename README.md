@@ -114,7 +114,8 @@ The API never installs CCR, modifies a repository, reads repository evidence, or
 request merely because it is imported. Writes and evidence reads occur only through explicit API
 calls and retain the same managed-path and privacy safeguards as the CLI.
 
-CCR is not published yet. To test a packed build from this repository:
+CCR is published as [`@vctrx/ccr`](https://www.npmjs.com/package/@vctrx/ccr). To test an
+unpublished build from this repository:
 
 ```bash
 pnpm verify
