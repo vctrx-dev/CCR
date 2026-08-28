@@ -90,7 +90,7 @@ describe("hooks CLI", () => {
     );
 
     clear();
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall"]);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--dry-run"]);
     expect(output()).toContain("malformed");
     expect(output()).not.toContain("uninstall --apply");
 
@@ -185,11 +185,11 @@ describe("hooks CLI", () => {
     await runCommand("git", ["init", "--quiet"], { cwd: root });
     const { io, output, clear } = captureIo(root);
 
-    await createCli(io).parseAsync(["node", "ccr", "setup"]);
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--dry-run"]);
     expect(output()).toContain("Hooks: enabled");
     await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
 
-    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "setup"]);
     expect(output()).toContain("/ccr-hooks sync");
     await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
     await expect(readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).rejects.toThrow();
@@ -198,17 +198,9 @@ describe("hooks CLI", () => {
     );
 
     clear();
-    await createCli(io).parseAsync([
-      "node",
-      "ccr",
-      "config",
-      "set",
-      "hooks.enabled",
-      "false",
-      "--apply",
-    ]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "set", "hooks.enabled", "false"]);
     expect(output()).toContain("/ccr-hooks remove");
-    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "setup"]);
     expect(output()).toContain("CCR hooks disabled by .ccr/config.json");
     await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
     await expect(readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).rejects.toThrow();
@@ -224,10 +216,24 @@ describe("hooks CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toBe("");
 
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--apply"]);
-    expect(output()).toContain("pre-commit not-installed");
+    await writeFile(
+      path.join(root, ".git/hooks/pre-commit"),
+      "#!/bin/sh\n# ccr:start - advisory context check\nlegacy command\n# ccr:end\n",
+      "utf8",
+    );
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall", "--dry-run"]);
+    expect(output()).toContain("preview");
+    expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toContain(
+      "legacy command",
+    );
+
+    clear();
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "uninstall"]);
+    expect(output()).toContain("pre-commit removed");
     expect(output()).toContain("post-commit not-installed");
-    await expect(readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).rejects.toThrow();
+    expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe("#!/bin/sh\n");
   }, 15_000);
 
   it("should run the post-commit check and print a copy-paste prompt", async () => {

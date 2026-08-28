@@ -18,8 +18,8 @@ Project-local package, recommended when the repository should own the CCR versio
 npm install --save-dev @vctrx/ccr
 # or: pnpm add --save-dev @vctrx/ccr
 
-npx --no-install ccr config init --apply
-npx --no-install ccr setup --apply
+npx --no-install ccr config init
+npx --no-install ccr setup
 ```
 
 Global CLI, useful when one CLI should serve multiple repositories:
@@ -29,8 +29,8 @@ npm install --global @vctrx/ccr
 # or: pnpm add --global @vctrx/ccr
 
 cd /path/to/your/repository
-ccr config init --apply
-ccr setup --apply
+ccr config init
+ccr setup
 ```
 
 Installation adds the CLI and, for project-local use, a programmatic Node.js API. Run `config init`
@@ -80,6 +80,8 @@ Show all commands and Claude Code skills:
 npx --no-install ccr help
 ```
 
+Print the installed version with `ccr -v`, `ccr -version`, or `ccr --version`.
+
 Show help for one command:
 
 ```bash
@@ -123,7 +125,7 @@ reclaimed safely. Resulting shared context remains visible for review and a late
 
 Inspect hooks with `npx --no-install ccr hooks status`. Remove provenance-managed hooks with
 `/ccr-hooks remove`, then disable future sync with
-`npx --no-install ccr config set hooks.enabled false --apply`. Provenance stores hashes and byte
+`npx --no-install ccr config set hooks.enabled false`. Provenance stores hashes and byte
 counts, not contents, so removal can verify restoration. While provenance exists, the CLI defers
 framework-aware removal to `/ccr-hooks`.
 
@@ -134,27 +136,28 @@ CCR validates provenance before trusting it. Missing or invalid `.ccr/config.jso
 commands fail visibly; run `ccr config validate` instead of assuming the hooks were disabled.
 Missing state with existing markers is
 legacy/unprovenanced; invalid state blocks automatic changes. Preserve or move invalid state for
-investigation. After inspection, use `ccr hooks uninstall --apply` for marker-only cleanup, then
+investigation. After inspection, use `ccr hooks uninstall` for marker-only cleanup, then
 `/ccr-hooks sync`. Cleanup preserves bytes outside CCR markers.
 
 ## 2. Configure
 
 ```bash
 npx --no-install ccr config init
-npx --no-install ccr config init --apply
+npx --no-install ccr config init --dry-run
 ```
 
-The first command previews; `--apply` creates or upgrades the configuration and its manual.
+The first command creates or upgrades the configuration and its manual. Use `--dry-run` to preview
+the same validated operation without writing.
 
 After it succeeds, edit `.ccr/config.json` directly or use the validated updater:
 
 ```bash
-npx --no-install ccr config set domain your-domain --apply
-npx --no-install ccr config set hooks.enabled false --apply
-npx --no-install ccr config set hooks.checkBeforeCommit false --apply
-npx --no-install ccr config set hooks.autoUpdateContext true --apply
-npx --no-install ccr config set instructions.updateClaudeMd true --apply
-npx --no-install ccr config set instructions.updateDecisionsMd true --apply
+npx --no-install ccr config set domain your-domain
+npx --no-install ccr config set hooks.enabled false
+npx --no-install ccr config set hooks.checkBeforeCommit false
+npx --no-install ccr config set hooks.autoUpdateContext true
+npx --no-install ccr config set instructions.updateClaudeMd true
+npx --no-install ccr config set instructions.updateDecisionsMd true
 ```
 
 Review the settings and validate:
@@ -197,11 +200,12 @@ reject an active lifecycle instead of changing its permissions mid-run. Defaults
 
 ```bash
 npx --no-install ccr setup
-npx --no-install ccr setup --apply
+npx --no-install ccr setup --dry-run
 ```
 
 `config init` creates configuration files. `setup` adds Claude skills, `project.md`, `stakeholders.md`,
-and an empty `decisions.md`. It preserves existing context and instruction files. An obsolete generated
+and an empty `decisions.md`; it applies these safe managed changes by default. Use `--dry-run` for a
+non-mutating preview. It preserves existing context and instruction files. An obsolete generated
 `index.md` is removed only when unedited. On upgrade, the former package-managed
 `.claude/skills/ccr-codebase/SKILL.md` is retired. Package-marked variants are removed because their
 header authorizes package replacement; user-owned or foreign-marked files are preserved.
@@ -219,11 +223,12 @@ writing the entry.
 
 ```bash
 npx --no-install ccr update
-npx --no-install ccr update --apply
+npx --no-install ccr update --dry-run
 ```
 
-Run this after updating `@vctrx/ccr`. It previews by default and refreshes only package-managed
-skills, progressive-disclosure resources, and CCR-marked instruction blocks. It preserves
+Run the first command after updating `@vctrx/ccr`; it applies safe managed upgrades by default.
+Use `--dry-run` to preview. Update refreshes only package-managed skills,
+progressive-disclosure resources, and CCR-marked instruction blocks. It preserves
 `.ccr/config.json`, `project.md`, `stakeholders.md`, `decisions.md`, local journals, private state,
 and user-owned files. A foreign or malformed managed skill stops the update instead of replacing it.
 
@@ -450,19 +455,19 @@ to remove an unknown framework entry.
 Preview:
 
 ```bash
-npx --no-install ccr uninstall
+npx --no-install ccr uninstall --dry-run
 ```
 
 Remove CCR but preserve shared context:
 
 ```bash
-npx --no-install ccr uninstall --apply
+npx --no-install ccr uninstall
 ```
 
 Also remove shared context:
 
 ```bash
-npx --no-install ccr uninstall --apply --remove-context
+npx --no-install ccr uninstall --remove-context
 ```
 
 Uninstall shares CCR's managed lifecycle lock and conditionally removes or rewrites only content that

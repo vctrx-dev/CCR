@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from "commander";
+import { Command, type ParseOptions } from "commander";
 import packageJson from "../../package.json";
 import { registerConfigCommands } from "./config";
 import { registerContextCommands } from "./context";
@@ -24,12 +24,32 @@ function defaultIo(): CliIo {
   };
 }
 
+function normalizeVersionArguments(argv?: readonly string[]): readonly string[] | undefined {
+  // Commander accepts only one-character short flags, so normalize the requested `-version`
+  // spelling and preserve the historical `-V` alias before Commander validates arguments.
+  const input = argv ?? process.argv;
+  const normalized = input.map((argument) =>
+    argument === "-version" || argument === "-V" ? "--version" : argument,
+  );
+  return normalized.some((argument, index) => argument !== input[index]) ? normalized : argv;
+}
+
+class CcrCommand extends Command {
+  override parse(argv?: readonly string[], parseOptions?: ParseOptions): this {
+    return super.parse(normalizeVersionArguments(argv), parseOptions);
+  }
+
+  override parseAsync(argv?: readonly string[], parseOptions?: ParseOptions): Promise<this> {
+    return super.parseAsync(normalizeVersionArguments(argv), parseOptions);
+  }
+}
+
 /** Creates the CCR CLI with injectable working directory and output for safe testing. */
 export function createCli(io: CliIo = defaultIo()): Command {
-  const program = new Command()
+  const program = new CcrCommand()
     .name("ccr")
     .description("Context-aware, stakeholder-aware code review for Claude Code")
-    .version(packageJson.version)
+    .version(packageJson.version, "-v, --version")
     .addHelpText("after", renderProductHelp());
   registerContextCommands(program, io);
   registerConfigCommands(program, io);

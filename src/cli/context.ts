@@ -20,10 +20,11 @@ export function registerContextCommands(program: Command, io: CliIo): void {
 
   program
     .command("uninstall")
-    .description("Preview or remove CCR-managed integration")
-    .option("--apply", "apply the previewed removal")
+    .description("Remove CCR-managed integration while preserving context by default")
+    .option("--apply", "apply removal (retained for backward compatibility; now the default)")
+    .option("--dry-run", "preview removal without changing files")
     .option("--remove-context", "also delete known shared context files")
-    .action(async (options: { apply?: boolean; removeContext?: boolean }) => {
+    .action(async (options: { apply?: boolean; dryRun?: boolean; removeContext?: boolean }) => {
       const root = findCliRepositoryRoot(io);
       const hookState = await readHookState(root);
       if (hookState.status === "valid") {
@@ -50,7 +51,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
         return;
       }
       const preview = await previewUninstall(root, options.removeContext ?? false);
-      if (!options.apply) {
+      if (options.dryRun) {
         writeCliLines(io, [
           formatHeading("CCR uninstall preview · no files changed", io.isColorEnabled === true),
           formatHeading("Planned changes", io.isColorEnabled === true),
@@ -66,7 +67,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
             io.isColorEnabled === true,
           ),
           formatTone(
-            "Run `ccr uninstall --apply` to remove the integration.",
+            "Run `ccr uninstall` to remove the integration.",
             "success",
             io.isColorEnabled === true,
           ),

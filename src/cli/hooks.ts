@@ -132,8 +132,12 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
   });
   hooks
     .command("uninstall")
-    .option("--apply", "remove CCR's marked hook blocks")
-    .action(async (options: { apply?: boolean }) => {
+    .option(
+      "--apply",
+      "remove CCR's marked hook blocks (retained for compatibility; now the default)",
+    )
+    .option("--dry-run", "preview legacy hook cleanup without changing files")
+    .action(async (options: { apply?: boolean; dryRun?: boolean }) => {
       const root = findCliRepositoryRoot(io);
       const hookState = await readHookState(root);
       if (hookState.status === "valid") {
@@ -151,7 +155,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
         );
         return;
       }
-      if (!options.apply) {
+      if (options.dryRun) {
         const preCommit = await readContextHookStatus(root, "pre-commit");
         const postCommit = await readContextHookStatus(root, "post-commit");
         io.write(
@@ -163,7 +167,7 @@ export function registerHooksCommands(program: Command, io: CliIo): void {
         io.write(
           isCleanupBlocked
             ? `${formatTone("Cleanup cannot be applied until the reported hook state is repaired.", "error", io.isColorEnabled === true)}\n`
-            : `${formatTone("Run `ccr hooks uninstall --apply` to remove both advisory hooks.", "success", io.isColorEnabled === true)}\n`,
+            : `${formatTone("Run `ccr hooks uninstall` to remove both advisory hooks.", "success", io.isColorEnabled === true)}\n`,
         );
         return;
       }

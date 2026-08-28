@@ -37,7 +37,7 @@ describe("configuration CLI", () => {
     expect(output).not.toContain("maxIndexCharacters");
     expect(output).not.toContain("maxFileCharacters");
 
-    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init"]);
     const configText = await readFile(path.join(root, ".ccr/config.json"), "utf8");
     const manualText = await readFile(path.join(root, ".ccr/config-manual.md"), "utf8");
     expect(JSON.parse(configText).hooks).toEqual({
@@ -63,8 +63,8 @@ describe("configuration CLI", () => {
     );
     expect(output).toContain("Configuration manual created: .ccr/config-manual.md");
     expect(output).toContain("\u001b[1;32m✔ CCR configuration created: .ccr/config.json\u001b[0m");
-    expect(output).toContain("ccr config set <key> <value> --apply");
-    expect(output).toContain("ccr setup --apply` to apply the settings during setup");
+    expect(output).toContain("ccr config set <key> <value>");
+    expect(output).toContain("ccr setup` to apply the settings during setup");
     await expect(
       readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
     ).rejects.toThrow();
@@ -80,12 +80,12 @@ describe("configuration CLI", () => {
       },
     };
 
-    await createCli(io).parseAsync(["node", "ccr", "config", "init"]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--dry-run"]);
     expect(output).toContain("CCR configuration preview · no files changed");
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
 
     output = "";
-    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init"]);
     await createCli(io).parseAsync(["node", "ccr", "config", "validate"]);
     expect(output).toContain("CCR configuration is valid.");
 
@@ -96,6 +96,7 @@ describe("configuration CLI", () => {
       "config",
       "set-domain-if-unspecified",
       "education-technology",
+      "--dry-run",
     ]);
     expect(output).toContain("CCR initial domain · preview");
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).domain).toBe(
@@ -109,7 +110,6 @@ describe("configuration CLI", () => {
       "config",
       "set-domain-if-unspecified",
       "education-technology",
-      "--apply",
     ]);
     expect(output).toContain("Set initial repository domain to education-technology.");
 
@@ -120,7 +120,6 @@ describe("configuration CLI", () => {
       "config",
       "set-domain-if-unspecified",
       "civic-tech",
-      "--apply",
     ]);
     expect(output).toContain("Domain is already set; no files changed.");
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).domain).toBe(
@@ -141,6 +140,7 @@ describe("configuration CLI", () => {
       "set",
       "hooks.checkBeforeCommit",
       "false",
+      "--dry-run",
     ]);
     expect(output).toContain("CCR configuration change · preview");
     expect(
@@ -155,20 +155,11 @@ describe("configuration CLI", () => {
       "set",
       "hooks.checkBeforeCommit",
       "false",
-      "--apply",
     ]);
     expect(output).toContain("This advisory pre-commit setting takes effect immediately");
 
     output = "";
-    await createCli(io).parseAsync([
-      "node",
-      "ccr",
-      "config",
-      "set",
-      "hooks.enabled",
-      "false",
-      "--apply",
-    ]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "set", "hooks.enabled", "false"]);
     expect(output).toContain("Run `/ccr-hooks remove` in Claude Code");
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).hooks).toEqual({
       enabled: false,
@@ -191,7 +182,7 @@ describe("configuration CLI", () => {
     if (firstIo === undefined || secondIo === undefined) {
       throw new Error("Expected two isolated CLI outputs.");
     }
-    await createCli(firstIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(firstIo).parseAsync(["node", "ccr", "config", "init"]);
     outputs[0] = "";
     outputs[1] = "";
 
@@ -202,7 +193,6 @@ describe("configuration CLI", () => {
         "config",
         "set-domain-if-unspecified",
         "education-technology",
-        "--apply",
       ]),
       createCli(secondIo).parseAsync([
         "node",
@@ -210,7 +200,6 @@ describe("configuration CLI", () => {
         "config",
         "set-domain-if-unspecified",
         "civic-tech",
-        "--apply",
       ]),
     ]);
 
@@ -226,7 +215,7 @@ describe("configuration CLI", () => {
   it("should preserve concurrent updates to different configuration keys", async () => {
     const root = await createTemporaryGitRepository(roots, "ccr-config-update-race-");
     const io = { cwd: root, write() {} };
-    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init"]);
 
     await Promise.all([
       createCli(io).parseAsync([
@@ -236,7 +225,6 @@ describe("configuration CLI", () => {
         "set",
         "hooks.checkBeforeCommit",
         "false",
-        "--apply",
       ]),
       createCli(io).parseAsync([
         "node",
@@ -245,7 +233,6 @@ describe("configuration CLI", () => {
         "set",
         "instructions.updateAgentsMd",
         "true",
-        "--apply",
       ]),
     ]);
 
@@ -258,7 +245,7 @@ describe("configuration CLI", () => {
   it("should not change configuration during another managed lifecycle operation", async () => {
     const root = await createTemporaryGitRepository(roots, "ccr-config-lifecycle-lock-");
     const io = { cwd: root, write() {} };
-    await createCli(io).parseAsync(["node", "ccr", "config", "init", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "config", "init"]);
     const release = await tryAcquireManagedLock(root, MANAGED_LIFECYCLE_LOCK_PATH);
     if (release === undefined) throw new Error("Expected the lifecycle lock.");
 
@@ -271,7 +258,6 @@ describe("configuration CLI", () => {
           "set",
           "instructions.updateDecisionsMd",
           "true",
-          "--apply",
         ]),
       ).rejects.toThrow(/managed lifecycle is busy/i);
     } finally {

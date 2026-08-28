@@ -13,8 +13,9 @@ import type { CliIo } from "./index";
 import { findCliRepositoryRoot, writeCliLines } from "./io";
 import { formatHeading, formatStatus, formatSuccess, formatTone } from "./output";
 
-interface ApplyOptions {
+interface MutationOptions {
   apply?: boolean;
+  dryRun?: boolean;
 }
 
 function configActionLabel(action: SetupAction): string {
@@ -55,14 +56,18 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
   config
     .command("init")
     .description("Create editable settings and their manual before installing the Claude skill")
-    .option("--apply", "write .ccr/config.json and .ccr/config-manual.md")
-    .action(async (options: ApplyOptions) => {
-      if (!options.apply) {
+    .option(
+      "--apply",
+      "write .ccr/config.json and .ccr/config-manual.md (retained for compatibility; now the default)",
+    )
+    .option("--dry-run", "preview configuration initialization without changing files")
+    .action(async (options: MutationOptions) => {
+      if (options.dryRun) {
         writeCliLines(io, [
           formatHeading("CCR configuration preview · no files changed", io.isColorEnabled === true),
           "Would create or upgrade .ccr/config.json and .ccr/config-manual.md only.",
           formatTone("Preview only: no files changed.", "muted", io.isColorEnabled === true),
-          "Review the proposed settings, then add `--apply` to write the file.",
+          "Run `ccr config init` to write the files.",
         ]);
         return;
       }
@@ -76,30 +81,31 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
       writeCliLines(io, [
         `Configuration manual ${configActionLabel(change.manual.action)}: .ccr/config-manual.md`,
         formatHeading("Next steps", io.isColorEnabled === true),
-        "  1. Edit .ccr/config.json, or use `ccr config set <key> <value> --apply`.",
+        "  1. Edit .ccr/config.json, or use `ccr config set <key> <value>`.",
         "  2. Run `ccr config validate`.",
-        "  3. Run `ccr setup --apply` to apply the settings during setup.",
+        "  3. Run `ccr setup` to apply the settings during setup.",
         "Examples:",
-        "  ccr config set hooks.enabled false --apply",
-        "  ccr config set hooks.checkBeforeCommit false --apply",
-        "  ccr config set hooks.autoUpdateContext true --apply",
-        "  ccr config set instructions.updateClaudeMd true --apply",
-        "  ccr config set instructions.updateDecisionsMd true --apply",
+        "  ccr config set hooks.enabled false",
+        "  ccr config set hooks.checkBeforeCommit false",
+        "  ccr config set hooks.autoUpdateContext true",
+        "  ccr config set instructions.updateClaudeMd true",
+        "  ccr config set instructions.updateDecisionsMd true",
       ]);
     });
   config
     .command("set")
     .argument("<key>")
     .argument("<value>")
-    .option("--apply", "write the previewed setting")
-    .action(async (key: string, value: string, options: ApplyOptions) => {
+    .option("--apply", "write the setting (retained for compatibility; now the default)")
+    .option("--dry-run", "preview the setting change without changing files")
+    .action(async (key: string, value: string, options: MutationOptions) => {
       const root = rootFor();
-      if (!options.apply) {
+      if (options.dryRun) {
         updateContextConfig(await readStoredContextConfig(root), key, value);
         writeCliLines(io, [
           formatHeading("CCR configuration change · preview", io.isColorEnabled === true),
           `Would set ${key} to ${value}.`,
-          "Run the same command with `--apply` to write it.",
+          `Run \`ccr config set ${key} ${value}\` to write it.`,
         ]);
         return;
       }
@@ -122,7 +128,7 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
           ? [
               updated.hooks.enabled
                 ? "Run `/ccr-hooks sync` in Claude Code to apply repository-native integration."
-                : "Run `/ccr-hooks remove` in Claude Code to remove repository-native integration. `ccr setup --apply` also removes legacy direct CCR blocks.",
+                : "Run `/ccr-hooks remove` in Claude Code to remove repository-native integration. `ccr setup` also removes legacy direct CCR blocks.",
             ]
           : []),
       ]);
@@ -133,10 +139,14 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
       "Set the initial context domain only while its generated default remains unchanged",
     )
     .argument("<domain>")
-    .option("--apply", "write the evidence-derived domain when the default is still present")
-    .action(async (domain: string, options: ApplyOptions) => {
+    .option(
+      "--apply",
+      "write the evidence-derived domain (retained for compatibility; now the default)",
+    )
+    .option("--dry-run", "preview the domain change without changing files")
+    .action(async (domain: string, options: MutationOptions) => {
       const root = rootFor();
-      if (!options.apply) {
+      if (options.dryRun) {
         const current = await readStoredContextConfig(root);
         const updated = setDomainIfUnspecified(current, domain);
         if (updated === current) {
@@ -146,7 +156,7 @@ export function registerConfigCommands(program: Command, io: CliIo): void {
         writeCliLines(io, [
           formatHeading("CCR initial domain · preview", io.isColorEnabled === true),
           `Would set the untouched domain default to ${updated.domain}.`,
-          "Run the same command with `--apply` to write it.",
+          `Run \`ccr config set-domain-if-unspecified ${domain}\` to write it.`,
         ]);
         return;
       }

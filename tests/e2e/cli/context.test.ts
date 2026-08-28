@@ -13,7 +13,7 @@ describe("context CLI", () => {
     expect(createCli().version()).toBe(packageJson.version);
   });
 
-  it("should preview, apply, and validate setup", async () => {
+  it("should apply setup by default, preview with dry-run, and validate context", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-"));
     roots.push(root);
     await runCommand("git", ["init", "--quiet"], { cwd: root });
@@ -25,7 +25,7 @@ describe("context CLI", () => {
       },
     };
 
-    await createCli(io).parseAsync(["node", "ccr", "setup"]);
+    await createCli(io).parseAsync(["node", "ccr", "setup", "--dry-run"]);
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
     expect(output).toContain("preview");
     expect(output).toContain("setup sends nothing");
@@ -34,7 +34,7 @@ describe("context CLI", () => {
     expect(output).toContain("executes no Claude command");
 
     output = "";
-    await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+    await createCli(io).parseAsync(["node", "ccr", "setup"]);
     const config = JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"));
     expect(config.hooks).toEqual({
       enabled: true,
@@ -77,9 +77,39 @@ describe("context CLI", () => {
     await expect(readFile(hookPath, "utf8")).rejects.toThrow();
 
     output = "";
-    await createCli(io).parseAsync(["node", "ccr", "uninstall", "--apply", "--remove-context"]);
+    await createCli(io).parseAsync(["node", "ccr", "uninstall", "--remove-context"]);
     expect(output).toContain("Shared context removed.");
   }, 15_000);
+
+  it("should apply uninstall by default while preserving shared context", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-uninstall-default-"));
+    roots.push(root);
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
+    let output = "";
+    const io = {
+      cwd: root,
+      write: (message: string) => {
+        output += message;
+      },
+    };
+
+    await createCli(io).parseAsync(["node", "ccr", "setup"]);
+    const projectPath = path.join(root, ".ccr/project.md");
+    const skillPath = path.join(root, ".claude/skills/ccr/SKILL.md");
+    expect(await readFile(projectPath, "utf8")).toContain("# Project");
+    expect(await readFile(skillPath, "utf8")).toContain("# CCR");
+
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "uninstall", "--dry-run"]);
+    expect(output).toContain("preview");
+    expect(await readFile(skillPath, "utf8")).toContain("# CCR");
+
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "uninstall"]);
+    expect(output).toContain("Shared context preserved.");
+    expect(await readFile(projectPath, "utf8")).toContain("# Project");
+    await expect(readFile(skillPath, "utf8")).rejects.toThrow();
+  });
 
   it("should never write setup when dry-run is combined with apply", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-dry-run-"));

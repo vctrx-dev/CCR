@@ -159,11 +159,13 @@ try {
       throw new Error(`Installed context help is missing ${command}.`);
     }
   }
-  const installedVersion = runInstalled(installedBin, ["--version"], consumer).trim();
-  if (installedVersion !== packageJson.version) {
-    throw new Error(
-      `Installed CLI version ${installedVersion} does not match package ${packageJson.version}.`,
-    );
+  for (const versionFlag of ["-v", "-version", "--version"]) {
+    const installedVersion = runInstalled(installedBin, [versionFlag], consumer).trim();
+    if (installedVersion !== packageJson.version) {
+      throw new Error(
+        `Installed CLI ${versionFlag} output ${installedVersion} does not match package ${packageJson.version}.`,
+      );
+    }
   }
   const esmSdkCheckPath = path.join(consumer, "verify-sdk.mjs");
   writeFileSync(
@@ -204,7 +206,7 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   execFileSync(process.execPath, [cjsSdkCheckPath], { cwd: consumer, windowsHide: true });
 
   execFileSync("git", ["init", "--quiet"], { cwd: consumer, windowsHide: true });
-  const preview = runInstalled(installedBin, ["setup"], consumer);
+  const preview = runInstalled(installedBin, ["setup", "--dry-run"], consumer);
   if (!preview.includes("CCR setup preview") || existsSync(path.join(consumer, ".ccr"))) {
     throw new Error("Installed CLI setup preview changed the clean consumer repository.");
   }
@@ -238,7 +240,7 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     throw new Error("Package installation changed the repository before setup.");
   }
 
-  runInstalled(installedBin, ["config", "init", "--apply"], scripted);
+  runInstalled(installedBin, ["config", "init"], scripted);
   const configManualPath = path.join(scripted, ".ccr", "config-manual.md");
   if (
     !existsSync(configManualPath) ||
@@ -248,7 +250,7 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   ) {
     throw new Error("config init did not create the configuration manual.");
   }
-  runInstalled(installedBin, ["setup", "--apply"], scripted);
+  runInstalled(installedBin, ["setup"], scripted);
   const decisionsPath = path.join(scripted, ".ccr", "decisions.md");
   const installedConfig = JSON.parse(
     readFileSync(path.join(scripted, ".ccr", "config.json"), "utf8"),
@@ -299,7 +301,7 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   writeFileSync(projectPath, "# Team-owned project context\n", "utf8");
   mkdirSync(path.dirname(journalPath), { recursive: true });
   writeFileSync(journalPath, "# Local continuity\n", "utf8");
-  const updateOutput = runInstalled(installedBin, ["update", "--apply"], scripted);
+  const updateOutput = runInstalled(installedBin, ["update"], scripted);
   if (
     !updateOutput.includes("CCR update is already current.") ||
     readFileSync(projectPath, "utf8") !== "# Team-owned project context\n" ||

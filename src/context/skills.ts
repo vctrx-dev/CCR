@@ -278,7 +278,7 @@ label of 1 to 80 characters, such as \`education-technology\` or \`civic-tech\`.
 product problem, not a repository name, framework, model name, organization, person, identifier,
 or data value. If the evidence does not establish a more specific domain, use \`general-software\`.
 
-Run exactly \`npx --no-install ccr config set-domain-if-unspecified <derived-domain> --apply\` once,
+Run exactly \`npx --no-install ccr config set-domain-if-unspecified <derived-domain>\` once,
 then run \`npx --no-install ccr config\` again and use its recorded value in the context. This is the
 only automatic configuration write. The command preserves any human-set domain and reports no
 change when another process already set it; retain that value without retrying. For every later

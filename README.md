@@ -20,15 +20,17 @@ the developer chooses which components to enable:
 
 | Component | Enable it | Optional? |
 |---|---|---|
-| Editable settings and configuration manual | `ccr config init --apply` | Yes |
-| Claude manual, context skill, and shared context | `ccr setup --apply` | Yes |
-| Unified review skill | `ccr setup --apply`, then `/ccr-review` | Yes |
+| Editable settings and configuration manual | `ccr config init` | Yes |
+| Claude manual, context skill, and shared context | `ccr setup` | Yes |
+| Unified review skill | `ccr setup`, then `/ccr-review` | Yes |
 | Advisory context hooks (pre-commit + post-commit) | `hooks.enabled: true` (default) plus `/ccr-context initialize` or `/ccr-hooks sync` | Yes |
 | `CLAUDE.md` or `AGENTS.md` pointer | Enable its config setting before setup | Yes |
 | Local continuity journal | Created by `/ccr-context` operations when needed | Yes |
 
-Setup previews changes unless `--apply` is supplied. Components can be removed independently with
-the matching uninstall command. The GitHub Action remains a later opt-in component.
+Setup and update apply safe managed changes by default; use `--dry-run` or `--json` for a
+non-mutating preview. Uninstall also applies by default while preserving shared context; add
+`--remove-context` only when those shared files should be deleted. The GitHub Action remains a later
+opt-in component.
 
 An uncommitted working journal is titled `CCR Journal` and contains no Branch, Commit, or changed-path
 metadata. New journal filenames use the UTC calendar date (`YYYY-MM-DD.md`); additional entries on
@@ -55,14 +57,15 @@ package scripts. Choose a global install when you want the `ccr` CLI available a
 npm install --save-dev @vctrx/ccr
 # or: pnpm add --save-dev @vctrx/ccr
 
-npx --no-install ccr config init --apply
-npx --no-install ccr setup --apply
+npx --no-install ccr config init
+npx --no-install ccr setup
 ```
 
 Run `npx --no-install ccr help` to see all terminal commands, Claude Code skills, review syntax, and
 currently configured dimension IDs. Use `npx --no-install ccr help <command>` or
 `npx --no-install ccr <group> --help` for command-specific arguments. A bare `ccr` command requires
-a global installation; project-local installs use the `npx --no-install` prefix.
+a global installation; project-local installs use the `npx --no-install` prefix. Use `ccr -v`,
+`ccr -version`, or `ccr --version` to print the installed package version.
 
 Hooks are controlled by the generated `.ccr/config.json`. Setup installs the repository-aware
 `/ccr-hooks` skill; `/ccr-context initialize` invokes it when `hooks.enabled` is true.
@@ -74,8 +77,8 @@ npm install --global @vctrx/ccr
 # or: pnpm add --global @vctrx/ccr
 
 cd /path/to/your/repository
-ccr config init --apply
-ccr setup --apply
+ccr config init
+ccr setup
 ```
 
 The global install provides the CLI. A project-local installation also exposes CCR's programmatic
@@ -125,16 +128,16 @@ Useful first commands:
 
 ```bash
 npx --no-install ccr config defaults
-npx --no-install ccr config init
+npx --no-install ccr config init --dry-run
 npx --no-install ccr setup
 npx --no-install ccr setup --json
 ```
 
-For an existing CCR installation, `ccr setup --apply` preserves `config.json`. Run
-`ccr config init` to preview a minimal configuration upgrade, then add `--apply` if the proposed
-settings are correct.
+For an existing CCR installation, `ccr setup` preserves `config.json`. Run
+`ccr config init --dry-run` to preview a minimal configuration upgrade, then run `ccr config init`
+if the proposed settings are correct.
 
-After updating `@vctrx/ccr`, run `npx --no-install ccr update --apply`. It refreshes only
+After updating `@vctrx/ccr`, run `npx --no-install ccr update`. It refreshes only
 package-managed CCR skills, resources, and marked instruction blocks; configuration, shared context,
 journals, private state, and user-owned files remain unchanged.
 
@@ -208,11 +211,11 @@ new consequential trace. It stops when every material claim is evidenced or expl
 Every operation's verifier receives the bounded draft/evidence packet and performs no repository
 search. Every operation asks the developer to review it.
 
-`ccr config init` is preview-only. Add `--apply` only after reviewing the proposed files; the flag
-is the explicit write confirmation. After it succeeds, `.ccr/config-manual.md` explains every key
-in the same order as `.ccr/config.json`. Edit `.ccr/config.json` directly or use
-`ccr config set <key> <value> --apply`, validate it, and then run setup. `ccr config init --apply`
-creates `.ccr/config.json` and `.ccr/config-manual.md`. `ccr setup --apply` then creates
+`ccr config init` creates or upgrades the configuration and manual. Use
+`ccr config init --dry-run` to review the proposed operation without writing. After it succeeds,
+`.ccr/config-manual.md` explains every key in the same order as `.ccr/config.json`. Edit
+`.ccr/config.json` directly or use `ccr config set <key> <value>`, validate it, and then run setup.
+The initialization creates `.ccr/config.json` and `.ccr/config-manual.md`. `ccr setup` then creates
 `.ccr/project.md`, `.ccr/stakeholders.md`, and an empty `.ccr/decisions.md` as shared context. The initial
 `/ccr-context initialize` prompt fills the context from repository evidence and, when `domain` is still
 the generated `"unspecified"` default, records one evidence-backed product-domain label. It is not the
@@ -222,7 +225,7 @@ config initialization/mutation, automatic context, and uninstall work share one 
 lifecycle lock. Planned writes and deletes recheck exact content under that lock; a human change
 observed before comparison is preserved and reported. CCR cooperating writers are serialized, but a
 direct editor can still win the narrow interval after comparison, so do not manually edit a managed
-target while an apply operation runs. Multi-file operations are idempotent, so an interrupted partial
+target while a write operation runs. Multi-file operations are idempotent, so an interrupted partial
 operation can be rerun safely. Uninstall also holds a global journal-mutation barrier while it
 rechecks local state, so a newly created journal cannot be left behind after its ignore rules are
 removed.
@@ -235,11 +238,11 @@ npx --no-install ccr context validate
 npx --no-install ccr context journal
 npx --no-install ccr context journals
 npx --no-install ccr hooks status
-npx --no-install ccr config set hooks.enabled false --apply
-npx --no-install ccr config set instructions.updateDecisionsMd true --apply
+npx --no-install ccr config set hooks.enabled false
+npx --no-install ccr config set instructions.updateDecisionsMd true
 npx --no-install ccr context append-decision "Keep reviews advisory."
-npx --no-install ccr setup --apply
-npx --no-install ccr update --apply
+npx --no-install ccr setup
+npx --no-install ccr update
 npx --no-install ccr uninstall
 ```
 

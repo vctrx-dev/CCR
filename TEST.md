@@ -23,6 +23,8 @@ In the disposable target repository:
 ```powershell
 cd D:\Code\your-test-repository
 npm install --save-dev $packagePath
+npx --no-install ccr -v
+npx --no-install ccr -version
 npx --no-install ccr --version
 ```
 
@@ -33,17 +35,17 @@ The version must match `package.json` in CCR.
 Preview before every managed lifecycle operation:
 
 ```powershell
+npx --no-install ccr config init --dry-run
 npx --no-install ccr config init
-npx --no-install ccr config init --apply
+npx --no-install ccr setup --dry-run
 npx --no-install ccr setup
-npx --no-install ccr setup --apply
-npx --no-install ccr setup --apply
+npx --no-install ccr setup
 npx --no-install ccr context validate
 ```
 
-The repeated apply must be idempotent. Existing human-owned configuration, project, stakeholder,
+The repeated write must be idempotent. Existing human-owned configuration, project, stakeholder,
 decision, journal, private, and unrelated instruction content must remain intact. After upgrading the
-package, run `ccr update` before `ccr update --apply`; only package-managed assets and marked blocks
+package, run `ccr update --dry-run` before `ccr update`; only package-managed assets and marked blocks
 may change.
 
 The automated lifecycle tests overlap setup, config initialization, config mutation, and uninstall
@@ -205,7 +207,7 @@ continuing.
 This section requires an installed and authenticated Claude Code CLI:
 
 ```powershell
-npx --no-install ccr config set hooks.autoUpdateContext true --apply
+npx --no-install ccr config set hooks.autoUpdateContext true
 ```
 
 Create a disposable commit containing additions, a deletion or rename, and a binary file. Confirm:
@@ -277,10 +279,10 @@ Remove hook integration first:
 Then preview and apply uninstall:
 
 ```powershell
+npx --no-install ccr uninstall --dry-run
 npx --no-install ccr uninstall
-npx --no-install ccr uninstall --apply
 # Disposable repository only:
-npx --no-install ccr uninstall --apply --remove-context
+npx --no-install ccr uninstall --remove-context
 ```
 
 Confirm CCR removes only package-managed artifacts and marked blocks, preserves unrelated and

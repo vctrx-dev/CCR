@@ -48,10 +48,10 @@ async function showSetup(
           postCommit: await readContextHookStatus(root, "post-commit"),
         };
   const actionLabel = operation === "update" ? "CCR update" : "CCR setup";
-  const nextCommand = operation === "update" ? "ccr update --apply" : "ccr setup --apply";
+  const nextCommand = operation === "update" ? "ccr update" : "ccr setup";
   const compatibility =
     "Requires Claude Code 2.1.0 or later; this operation executes no Claude command.";
-  if (!options.apply || options.dryRun) {
+  if (options.dryRun || options.json) {
     if (options.json) {
       io.write(
         `${JSON.stringify(
@@ -70,7 +70,7 @@ async function showSetup(
               action,
               path: relativePath,
             })),
-            rollback: "ccr uninstall --apply [--remove-context]",
+            rollback: "ccr uninstall [--remove-context]",
           },
           null,
           2,
@@ -122,7 +122,7 @@ async function showSetup(
         "warning",
         io.isColorEnabled === true,
       ),
-      "Rollback: `ccr uninstall --apply` (add `--remove-context` to remove shared context).",
+      "Rollback: `ccr uninstall` (add `--remove-context` to remove shared context).",
       formatTone(
         `Run \`${nextCommand}\` to apply these changes.`,
         "success",
@@ -158,7 +158,7 @@ async function showSetup(
     hookLine = isProvenanceInvalid
       ? "CCR hooks are enabled, but hook provenance is invalid. Run `/ccr-hooks status`; setup changed no hooks."
       : hasHookStatus("stale")
-        ? "CCR hooks have legacy marker blocks. Run `ccr hooks uninstall --apply`, then `/ccr-hooks sync` to install fresh provenance-managed hooks."
+        ? "CCR hooks have legacy marker blocks. Run `ccr hooks uninstall`, then `/ccr-hooks sync` to install fresh provenance-managed hooks."
         : `CCR hooks are enabled in config. ${operation === "update" ? "Update" : "Setup"} left hook design to \`/ccr-hooks sync\`, which inspects this repository before writing.`;
   } else if (isSkillManaged) {
     hookLine =
@@ -194,21 +194,21 @@ async function showSetup(
   ]);
 }
 
-/** Registers preview-first setup and package-upgrade commands using the managed-artifact lifecycle. */
+/** Registers apply-by-default setup and upgrade commands with explicit non-mutating previews. */
 export function registerSetupCommands(program: Command, io: CliIo): void {
   program
     .command("setup")
-    .description("Preview or apply the minimal Claude Code context setup")
-    .option("--apply", "write the previewed files")
-    .option("--dry-run", "preview only (the default)")
+    .description("Install or refresh the minimal Claude Code context setup")
+    .option("--apply", "apply changes (retained for backward compatibility; now the default)")
+    .option("--dry-run", "preview without writing files")
     .option("--json", "print a machine-readable preview")
     .action((options: SetupOptions) => showSetup(io, options));
 
   program
     .command("update")
-    .description("Preview or apply safe CCR upgrades after a package update")
-    .option("--apply", "write the previewed package-managed upgrades")
-    .option("--dry-run", "preview only (the default)")
+    .description("Apply safe CCR upgrades after a package update")
+    .option("--apply", "apply changes (retained for backward compatibility; now the default)")
+    .option("--dry-run", "preview without writing files")
     .option("--json", "print a machine-readable preview")
     .action((options: SetupOptions) => showSetup(io, options, "update"));
 }

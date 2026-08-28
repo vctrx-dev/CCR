@@ -41,7 +41,7 @@ installation. Do not install, upgrade, or alter PATH while answering a help ques
 
 <answer_contract>
 - Clearly distinguish terminal commands from Claude Code skills. Terminal commands run in the
-  shell; slash skills run inside Claude Code after \`ccr setup --apply\`.
+  shell; slash skills run inside Claude Code after \`ccr setup\`.
 - State defaults and accepted arguments exactly. For reviews, explain blank/all, comma-separated
   selection, and invalid-ID behavior only as supported by the current installed sources.
 - When an operation can write or remove files, state its preview/apply or approval boundary before

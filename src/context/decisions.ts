@@ -30,7 +30,7 @@ export async function readDecisionDocument(root: string): Promise<string> {
   const target = await assertSafeManagedPath(root, DECISIONS_PATH);
   const existing = await readBoundedUtf8TextIfExists(target, MAX_DECISIONS_DOCUMENT_CHARACTERS);
   if (existing === undefined) {
-    throw new Error("Decisions document is missing. Run `ccr setup --apply` first.");
+    throw new Error("Decisions document is missing. Run `ccr setup` first.");
   }
   if (existing.isBinary) throw new Error("Decisions document is not valid UTF-8 text.");
   if (existing.isTruncated) {
