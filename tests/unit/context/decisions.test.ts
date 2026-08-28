@@ -74,7 +74,7 @@ it("should keep an identical normalized decision idempotent", async () => {
 
 it("should preserve distinct decisions appended concurrently", async () => {
   const root = await makeContext(true);
-  const decisions = Array.from({ length: 12 }, (_, index) => `Concurrent decision ${index}.`);
+  const decisions = Array.from({ length: 64 }, (_, index) => `Concurrent decision ${index}.`);
 
   await Promise.all(decisions.map((decision) => appendDecision(root, decision)));
 

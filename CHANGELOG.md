@@ -13,6 +13,8 @@ contain incompatible changes when they are clearly documented.
 
 - Published CLI metadata now uses npm's portable relative `bin` target so global installs and
   `npm exec` retain the `ccr` executable mapping.
+- Concurrent decision updates now serialize through a repository-contained lock, preserving every
+  distinct append under load while treating transient Windows lock races as contention.
 
 ## 0.8.0 - 2026-08-27
 
