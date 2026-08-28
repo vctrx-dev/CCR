@@ -7,6 +7,13 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.8.1 - 2026-08-27
+
+### Fixed
+
+- Published CLI metadata now uses npm's portable relative `bin` target so global installs and
+  `npm exec` retain the `ccr` executable mapping.
+
 ## 0.8.0 - 2026-08-27
 
 ### Changed
