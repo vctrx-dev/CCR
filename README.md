@@ -156,6 +156,14 @@ Then open Claude Code:
 | `/ccr-context compact` | Compact only project context by at most the configured 20–30% |
 | `/ccr-review [scope] [all\|dimension,...]` | Review changes, the complete codebase, or `PR-<number>` without fixing them |
 
+Inside a loaded CCR skill, obvious minor misspellings of an operation, review scope, or configured
+dimension ID are normalized when exactly one valid choice is clearly intended. For example,
+`/ccr-context initailize`, `/ccr-hooks statsu`, and `/ccr-review codbase privcy` proceed as
+`initialize`, `status`, and `codebase privacy`. Ambiguous input asks one focused question instead of
+guessing or writing. CCR never fuzzy-corrects PR numbers, paths, config keys or values, flags,
+terminal commands, or free-form content. Claude Code resolves the slash-skill name itself before CCR
+receives its arguments.
+
 The review skill loads its taxonomy from the validated data-only
 `src/review/dimensions.json` registry. Current review dimensions: `fairness-evaluation`, `pedagogy`,
 `decision-fairness`, `inclusion`, `transparency`, `privacy`, `system-integrity`.

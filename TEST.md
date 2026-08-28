@@ -68,6 +68,14 @@ Open Claude Code and run:
 /ccr-context update
 ```
 
+Repeat representative operations with obvious unique spelling mistakes, such as
+`/ccr-context initailize`, `/ccr-context verfiy`, `/ccr-hooks statsu`, and
+`/ccr-review codbase privcy`. Each must normalize to the single intended installed choice and
+continue without asking for corrected spelling. Then try an unrelated or ambiguous token; it must
+show valid choices, ask at most one focused question, and make no review or repository write. Confirm
+that PR numbers, paths, config keys and values, flags, terminal commands, and free-form addition text
+are preserved exactly rather than fuzzy-corrected.
+
 Confirm these ownership rules:
 
 - `project.md` contains durable, evidence-backed repository context.
@@ -113,9 +121,9 @@ Run representative valid forms:
 /ccr-review PR-123 fairness-evaluation, privacy
 ```
 
-Also try unknown scopes, `PR-0`, duplicate IDs, empty comma items, `all` mixed with IDs, an unknown
-ID, and a third positional argument. Each invalid request must stop before worker dispatch or journal
-writes and show the valid scopes and installed IDs.
+Also try unrelated scopes and IDs that are not minor unique misspellings, `PR-0`, duplicate IDs,
+empty comma items, `all` mixed with IDs, and a third positional argument. Each invalid request must
+stop before worker dispatch or journal writes and show the valid scopes and installed IDs.
 
 Every non-empty review creates exactly one worker per selected dimension. Each worker must assess
 every criterion in that dimension, test concrete success/failure/retry/concurrency/replacement/

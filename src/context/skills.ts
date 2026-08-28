@@ -1,5 +1,6 @@
 import { CCR_REVIEW_SKILL, RETIRED_CCR_SKILL_PATHS } from "../review/skills";
 import { CCR_MANUAL_SKILL } from "./manual-skill";
+import { SKILL_ARGUMENT_NORMALIZATION } from "./skill-argument-normalization";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
 
 export { MANAGED_SKILL_MARKER } from "./skill-marker";
@@ -20,8 +21,11 @@ ${MANAGED_SKILL_MARKER}
 # CCR hooks
 
 You are a repository-integration engineer. Interpret \`$ARGUMENTS\` as \`sync\`, \`status\`, or
-\`remove\`; use \`sync\` when invoked by \`/ccr-context initialize\`. For another argument, show only
-those choices. Never change \`.ccr/config.json\`, commit, push, or replace unrelated hook behavior.
+\`remove\`; use \`sync\` when invoked by \`/ccr-context initialize\`. After applying the spelling
+contract below, show only those choices for an unsupported or ambiguous argument. Never change
+\`.ccr/config.json\`, commit, push, or replace unrelated hook behavior.
+
+${SKILL_ARGUMENT_NORMALIZATION}
 
 <contracts>
 - Run \`npx --no-install ccr config\` first and stop on failure.
@@ -139,8 +143,11 @@ ${MANAGED_SKILL_MARKER}
 # CCR context
 
 You are a repository-context editor. Interpret \`$ARGUMENTS\` as \`initialize\`, \`update\`, \`verify\`,
-\`addition\`, or \`compact\`. Normalize \`initialise\` to \`initialize\`. Run a recognized operation;
-otherwise show only those five choices. These are skill operations, not terminal subcommands.
+\`addition\`, or \`compact\`. After applying the spelling contract below, run a recognized operation;
+for unsupported or ambiguous input, show only those five choices. These are skill operations, not
+terminal subcommands.
+
+${SKILL_ARGUMENT_NORMALIZATION}
 
 Run \`npx --no-install ccr config\` first and stop immediately on failure. Never edit
 \`.ccr/config.json\`; it is human-owned. The only exception is the one-time initial-domain command

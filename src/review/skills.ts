@@ -1,3 +1,4 @@
+import { SKILL_ARGUMENT_NORMALIZATION } from "../context/skill-argument-normalization";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
 import { REVIEW_DIMENSIONS } from "./dimensions";
 
@@ -11,18 +12,20 @@ const REVIEW_SCOPE_SELECTION = `<scope_selection>
 Interpret \`$ARGUMENTS\` as a review scope followed by an optional dimension selector.
 
 1. With blank arguments, use scope \`changes\` and selector \`all\`.
-2. If the first token is \`changes\` or \`codebase\`, use it as the scope and parse the
+2. Before validation, apply \`<argument_spelling>\` to the first scope token and each
+   comma-separated selector item against the installed valid choices.
+3. If the normalized first token is \`changes\` or \`codebase\`, use it as the scope and parse the
    remaining text as the selector. If the first token matches \`PR-[1-9][0-9]*\`
    case-insensitively, use \`pr\` as the scope and that number as the pull request.
-3. For backward compatibility, if the first token is \`all\` or a dimension selector, use the
-   entire argument as the selector with scope \`changes\`. This keeps \`/ccr-review all\` and
-   \`/ccr-review ${EXAMPLE_DIMENSION_SELECTION}\` valid.
-4. A blank selector or \`all\` selects every dimension in registry order. Otherwise, split the
+4. For backward compatibility, if the normalized first token is \`all\` or a dimension selector,
+   use the entire argument as the selector with scope \`changes\`. This keeps \`/ccr-review all\`
+   and \`/ccr-review ${EXAMPLE_DIMENSION_SELECTION}\` valid.
+5. A blank selector or \`all\` selects every dimension in registry order. Otherwise, split the
    comma-separated selector, trim whitespace, and match dimension IDs case-insensitively.
-5. Reject an empty item, duplicate selection, \`all\` mixed with IDs, an unknown dimension ID,
-   an invalid scope, or a PR token that is not \`PR-[1-9][0-9]*\`. Show the valid scopes and
-   dimension IDs, then stop without reviewing or writing the journal.
-6. If the registry has no dimensions, follow its empty-registry instruction and stop.
+6. After spelling normalization, reject an empty item, duplicate selection, \`all\` mixed with IDs,
+   an unknown dimension ID, an invalid scope, or a PR token that is not \`PR-[1-9][0-9]*\`. Show the
+   valid scopes and dimension IDs, then stop without reviewing or writing the journal.
+7. If the registry has no dimensions, follow its empty-registry instruction and stop.
 
 The supported forms are \`/ccr-review\`, \`/ccr-review [all|dimension,...]\`,
 \`/ccr-review [changes|codebase] [all|dimension,...]\`, and
@@ -257,6 +260,8 @@ artifacts, branches, or worktrees. A source fix requires explicit approval after
 journal update, the strictly bounded context correction, and the opt-in decision append described
 below are the only writes authorized by this skill.
 
+${SKILL_ARGUMENT_NORMALIZATION}
+
 ${REVIEW_SCOPE_SELECTION}
 
 ${SHARED_REVIEW_CONTEXT}
@@ -324,8 +329,9 @@ current overlays for only those dimensions.
 metadata, patch, and relevant head content; it does not checkout or mutate the repository.
 </example>
 <example>
-\`/ccr-review privacy\` remains a changes review for backward compatibility. An unknown ID or
-malformed scope is reported with valid choices and stops without reviewing or changing continuity.
+\`/ccr-review privacy\` remains a changes review for backward compatibility. An ID or scope that is
+not a unique obvious misspelling of a valid choice is reported with valid choices and stops without
+reviewing or changing continuity.
 </example>
 </examples>
 `;

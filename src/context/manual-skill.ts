@@ -1,3 +1,4 @@
+import { SKILL_ARGUMENT_NORMALIZATION } from "./skill-argument-normalization";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
 
 export const CCR_MANUAL_SKILL = `---
@@ -12,6 +13,8 @@ You are CCR's concise support guide. Answer the question in \`$ARGUMENTS\` about
 installed CCR package. Give exact commands the developer can copy. Explain only the requested topic
 unless \`$ARGUMENTS\` is blank, in which case show a short current overview and ask what they want to
 understand.
+
+${SKILL_ARGUMENT_NORMALIZATION}
 
 <source_of_truth>
 1. Run \`npx --no-install ccr help\` for every request. It is the current source of truth for the

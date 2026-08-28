@@ -307,9 +307,9 @@ contains an excluded path or exceeds a limit, review reports a blocker and stops
 
 The general form is `/ccr-review [changes|codebase|PR-<number>] [all|dimension,...]`. A missing scope
 defaults to `changes`, and a selector without a scope remains a changes review for compatibility.
-Invalid scopes, PR numbers, duplicate IDs, mixed `all` selections, and unknown dimension IDs stop
-before review or journal writes. PR review requires an authenticated `gh` CLI and never uses the
-current working tree as PR evidence.
+After unique obvious misspellings are normalized, unrelated scopes or dimension IDs, invalid PR
+numbers, duplicate IDs, and mixed `all` selections stop before review or journal writes. PR review
+requires an authenticated `gh` CLI and never uses the current working tree as PR evidence.
 
 Each selected dimension gets exactly one subagent. That worker assesses every criterion, forms
 multiple concrete failure hypotheses, and traces relevant success, failure, retry, concurrency,
@@ -410,6 +410,15 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 | `ccr context record-review-state <journal> <code-fingerprint> <context-fingerprint>` | Validate and bind the latest completed local review run |
 | `ccr context review-pr PR-<number>` | Read bounded privacy-filtered PR metadata and patch |
 | `ccr context review-pr-head PR-<number> <files...>` | Read up to eight approved PR head files |
+
+Once a CCR skill is loaded, its operation, review scope, and configured dimension selector accept an
+obvious minor misspelling when exactly one valid choice is clearly intended. CCR normalizes the value
+and continues without asking for perfect spelling. Examples include `initailize` → `initialize`,
+`statsu` → `status`, and `codbase privcy` → `codebase privacy`. If the input is ambiguous or not
+reasonably close, CCR shows the valid choices and asks one focused question before any review or
+write. PR numbers, paths, config keys and values, flags, terminal commands, and free-form content are
+never fuzzy-corrected. Claude Code still resolves the slash-skill name before CCR receives its
+arguments.
 
 Review `.ccr` changes after every operation.
 
