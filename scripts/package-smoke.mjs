@@ -24,6 +24,14 @@ if (
   throw new Error("Review dimension registry has an invalid shape.");
 }
 const reviewDimensionIds = reviewRegistry.dimensions.map((dimension) => dimension.id);
+const configManualSource = readFileSync(
+  path.join(root, "src", "context", "config-manual.ts"),
+  "utf8",
+);
+const configManualHeading = /CONFIG_MANUAL = `(# [^\n]+)/u.exec(configManualSource)?.[1];
+if (configManualHeading === undefined) {
+  throw new Error("Configuration manual source is missing its heading.");
+}
 const binPath = path.join(root, packageJson.bin.ccr);
 const bin = readFileSync(binPath, "utf8");
 if (!bin.startsWith("#!/usr/bin/env node\n")) throw new Error("Packed CLI is missing its shebang.");
@@ -279,7 +287,7 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   const configManualPath = path.join(scripted, ".ccr", "config-manual.md");
   if (
     !existsSync(configManualPath) ||
-    !readFileSync(configManualPath, "utf8").includes("# CCR configuration manual") ||
+    !readFileSync(configManualPath, "utf8").includes(configManualHeading) ||
     !readFileSync(configManualPath, "utf8").includes("hooks.autoUpdateContext") ||
     !readFileSync(configManualPath, "utf8").includes("instructions.updateDecisionsMd")
   ) {

@@ -27,21 +27,29 @@ export const CONTEXT_FILES: Readonly<Record<string, string>> = {
   ".ccr/project.md": `${managedHeader}
 # Project
 
-This is a living, evidence-backed account of the product's consequential behavior—not an
-architecture summary. Begin with the human situation the product intervenes in: its purpose, the
-people who use or experience it, and the decisions or actions it shapes. Explain the code-backed
-rules, defaults, automations, permissions, or constraints that determine what those people can see,
-do, understand, contest, or be affected by.
+## Purpose
 
-Connect technical details only when they make that causal product behavior legible. Capture durable
-assumptions, unequal burdens, missing feedback or recovery paths, and safety boundaries when
-evidence supports them. Name unknowns rather than inventing a human impact. Avoid a file-by-file
-inventory, framework summary, or a generic-bug catalogue.
+Explain, in plain language, the human situation this product addresses: who it is for, what it helps
+them do, and why that outcome matters. This is a living, evidence-backed account of consequential
+product behavior—not an architecture summary.
+
+Then tell the story of how people experience the product: the actions they take, the decisions or
+rules that shape their path, and what they can see, do, understand, challenge, or be affected by.
+Connect technical details only when they make that human story clearer.
+
+Capture durable assumptions, unequal burdens, missing feedback or recovery paths, and safety
+boundaries when evidence supports them. Name unknowns rather than inventing impact. Avoid a
+file-by-file inventory, framework summary, or generic-bug catalogue.
 
 Make the narrative visually scannable: use a few descriptive headings, short paragraphs, focused
-bullets, compact decision tables when comparison matters, and plain-text causal flows such as
-\`learner → submits work → scoring rule → feedback\`. Prefer one precise, evidence-backed detail over
-several vague sentences. Do not force a fixed outline or use decorative diagrams.
+bullets, compact decision tables when comparison matters, and plain-text causal flows. Add a small
+Mermaid flowchart or sequence diagram when it makes a consequential relationship clearer than prose;
+keep it evidence-backed, simple, and optional—not decorative.
+
+Use a short causal flow such as
+\`learner → submits work → scoring rule → feedback\` when that is clearer than a diagram. Prefer one
+precise, evidence-backed detail over
+several vague sentences. Let the product determine the remaining headings.
 
 ## Evidence
 

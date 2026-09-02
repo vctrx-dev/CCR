@@ -1,4 +1,5 @@
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -81,6 +82,20 @@ it("should hold an exclusive managed lock and permit release more than once", as
   await expect(tryAcquireManagedLock(root, ".ccr/private/test.lock")).resolves.toBeUndefined();
   await release?.();
   await expect(release?.()).resolves.toBeUndefined();
+});
+
+it("should remove an empty managed write-lock group after release", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-managed-write-lock-files-"));
+  roots.push(root);
+  const release = await tryAcquireManagedLock(
+    root,
+    ".ccr/private/managed-write-locks/example.lock",
+  );
+  if (release === undefined) throw new Error("Expected managed write lock acquisition.");
+
+  await release();
+
+  await expect(lstat(path.join(root, ".ccr/private/managed-write-locks"))).rejects.toThrow();
 });
 
 it("should preserve a replacement lock when an earlier owner releases", async () => {
@@ -238,6 +253,7 @@ it("should compare and replace managed text while serializing cooperating writer
   ]);
   expect(results.filter(Boolean)).toHaveLength(1);
   expect(["first\n", "second\n"]).toContain(await readFile(path.join(root, relativePath), "utf8"));
+  await expect(lstat(path.join(root, ".ccr/private/managed-write-locks"))).rejects.toThrow();
 });
 
 it("should delete managed text only while its observed content is unchanged", async () => {

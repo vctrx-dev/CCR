@@ -250,9 +250,11 @@ the repository has no more specific product signal). A conditional updater preve
 step from overwriting a human-set domain. After initialization, CCR always reads `stakeholders.md`
 but never updates it automatically; stakeholder changes are human-owned.
 
-Claude uses repository evidence plus supplied plans or specifications. It scales discovery to the
-repository, verifies material claims, preserves uncertainty and exceptions, and stops when important
-evidence gaps close. Drafts stay in memory; temporary files use ignored `.ccr/tmp/` and are removed.
+Claude can use its normal repository tools—Read, Grep, Glob, Bash, Git, tests, and documentation—plus
+supplied plans or specifications. It chooses the investigation needed to verify material claims and
+preserve uncertainty. `project.md` is deliberately human-readable: it begins with plain-language
+purpose and may use headings, short bullets, comparison tables, causal flows, or a small Mermaid
+diagram when that makes consequential behavior clearer.
 
 Claims cite paths and concrete symbols, tests, commands, or contracts. Plans remain intent unless
 implementation evidence confirms them. Review the resulting `.ccr` changes. Validation inspects
@@ -354,18 +356,17 @@ stakeholder harm pathway, rather than simply because a generic flaw exists.
 `/ccr-review codebase` checks the complete safe Git index plus live changes. `/ccr-review PR-123`
 uses read-only GitHub CLI metadata, the pull-request patch, and relevant head content; it does not
 checkout or mutate branches. Before dispatching review workers, every scope reads current
-`project.md`, `stakeholders.md`, and `decisions.md`, then reads every bounded journal returned within
+`project.md`, `stakeholders.md`, and `decisions.md`, then reads every journal returned within
 the configured `context.recentJournalEntries` count. CCR selects those entries repository-wide by
 validated `Updated` metadata, regardless of branch or pull-request directory. Stable paths and
 branch/PR metadata identify continuity; they do not determine recency. Equal `Updated` values sort by
 `Started` newest-first, then stable repository path. A legacy entry's single valid `Timestamp` serves
 as its activity time until reuse migrates it to `Started` and `Updated`. These files remain advisory
-context; code, tests, and schemas remain authoritative. The shared-context
-reader accepts only `.ccr/project.md`, `.ccr/stakeholders.md`, and `.ccr/decisions.md`.
-PR evidence is bounded to 64 KiB of metadata, 200 changed paths, a 512 KiB patch, 128 KiB per head
-file, and 2 MiB total. The internal `ccr context review-pr` and `review-pr-head` commands enforce
-those limits and configured privacy exclusions before evidence reaches review workers. If a PR
-contains an excluded path or exceeds a limit, review reports a blocker and stops before dispatch.
+context; code, tests, and schemas remain authoritative. CCR helpers provide continuity and reviewed
+state, but they do not restrict a reviewer to a special reader. Workers may use normal repository
+tools while respecting configured privacy exclusions. For pull requests, `ccr context review-pr`
+establishes the immutable base/head identity; workers may then use normal read-only GitHub,
+repository, and documentation tools without mutating Git or remote state.
 
 The general form is `/ccr-review [changes|codebase|PR-<number>] [all|dimension,...]`. A missing scope
 defaults to `changes`, and a selector without a scope is a supported changes-review shorthand.
@@ -378,8 +379,8 @@ multiple concrete stakeholder-impact hypotheses, and traces relevant product dec
 feedback, and correction paths before returning evidence-backed findings. It uses implementation
 details to prove or disprove an impact pathway, rather than scanning for generic defects. Its prompt
 preserves the complete dimension definition and criteria but omits duplicated repository summaries and
-master-only workflow instructions; non-taxonomy instructions are capped at 250 words, and the worker
-reads approved context through CCR's broker. The master agent collects, deduplicates, verifies, and
+master-only workflow instructions. Each worker can use normal research tools while treating CCR
+context as advisory continuity. The master agent collects, deduplicates, verifies, and
 validates the findings before reporting them. One root cause is reported once with every applicable
 selected dimension. Each finding includes:
 
@@ -417,8 +418,8 @@ context-freshness rule alongside immutable base/head refs. The recorder rejects 
 old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurrently modified
 journals. If code or context changes afterward, pre-commit warns before approval and post-commit
 marks the prior review stale; both hooks remain advisory. Journals do not duplicate Git's path
-inventory. `project.md` uses descriptive headings, short sections, and useful bullets for
-readability. It is a causal product-and-people narrative, not a technical architecture summary;
+inventory. `project.md` uses descriptive headings, short sections, useful bullets, and optional small
+Mermaid diagrams for readability. It is a causal product-and-people narrative, not a technical architecture summary;
 CCR records technical facts only when they make a consequential product rule, constraint, or
 uncertainty understandable. It changes only for a
 verified major feature, architecture, public workflow, product constraint, stakeholder impact, or

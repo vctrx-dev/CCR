@@ -198,12 +198,13 @@ and illustrative examples.
 Reviews fan out exactly one subagent per selected dimension. Each worker receives the complete
 criteria for its dimension, starts with the stakeholder roles and consequential product behavior, and
 then tests concrete impact hypotheses against cross-layer evidence. Worker prompts keep the dimension
-and criteria unchanged but avoid duplicating repository summaries and master-only instructions;
-workers load shared context through CCR's broker. Non-taxonomy worker instructions are capped at 250
-words. The master then collects, deduplicates, verifies, and reports only supported findings. Each
+and criteria unchanged but avoid duplicating repository summaries and master-only instructions.
+Workers can use normal repository tools—Read, Grep, Glob, Bash, Git, tests, and documentation—while
+using CCR context as continuity. The master then collects, deduplicates, verifies, and reports only
+supported findings. Each
 finding identifies the stakeholder impact, product behavior or assumption, evidence, realistic case,
-and applicable dimensions; source code is never changed without later approval. The privacy broker
-exposes staged, unstaged, and untracked evidence without exposing excluded paths.
+and applicable dimensions; source code is never changed without later approval. CCR's privacy-aware
+helpers remain available for scoped state and continuity, but do not replace ordinary research.
 
 The dimensions are stakeholder-impact lenses, not buckets for ordinary engineering defects. They
 examine, for example, whether the product treats one perspective as neutral authority, rewards
@@ -229,27 +230,19 @@ One state transition
 causes a complete reload and review restart; a second transition stops as unstable instead of
 claiming a current result. Recording refuses a PR, old-branch, old-HEAD, placeholder, incomplete, or
 concurrently modified journal.
-PR evidence is bounded to 64 KiB of metadata, 200 changed paths, a 512 KiB patch, 128 KiB per head
-file, and 2 MiB total. CCR's `context review-pr` and `context review-pr-head` boundaries enforce
-those limits and configured privacy exclusions before evidence reaches review workers. An excluded
-path or oversized response stops the PR review instead of continuing with incomplete evidence.
+For pull requests, `context review-pr` establishes the immutable base/head identity; an optional
+`context review-pr-head` call supplies approved surrounding head content. Both respect configured
+privacy exclusions, and neither mutates remote or local Git state.
 
-Initialization maps independent end-to-end evidence traces, then uses an adaptive parallel discovery
-wave: one agent for a small cohesive repository and more agents for multi-language, multi-surface, or
-very large repositories, up to the harness's useful concurrency. A separate subagent verifies the
-synthesis before one bounded correction pass. `project.md` is one connected, evidence-backed
+Initialization maps the end-to-end evidence traces a repository needs. `project.md` is one connected, evidence-backed
 account of the product in the world: its purpose, the people affected, consequential rules or
 defaults, and the resulting behavior or uncertainty. Technical details appear only when they explain
 that causal path; it is not a framework summary, directory inventory, or generic-bug catalogue.
 It uses descriptive headings, short sections, and useful bullets rather than fixed technical
-categories. Initialization also populates `stakeholders.md`;
-after that, CCR treats stakeholder context as human-owned and read-only. Focused later operations use no discovery agent
-for one evidence trace and normally use one parallel wave only when traces are independent. Agent,
-read, and time budgets are starting guidance rather than hard ceilings: Claude chooses the smallest
-sufficient evidence plan and expands it only for a named unsupported, contradictory, truncated, or
-new consequential trace. It stops when every material claim is evidenced or explicitly unknown.
-Every operation's verifier receives the bounded draft/evidence packet and performs no repository
-search. Every operation asks the developer to review it.
+categories. A small Mermaid diagram may explain a consequential flow when it is clearer than prose.
+Initialization also populates `stakeholders.md`; after that, CCR treats stakeholder context as
+human-owned and read-only. The skill chooses the research depth and tools needed to substantiate
+material claims, then asks the developer to review the resulting context.
 
 `ccr config init` creates or upgrades the configuration and manual. Use
 `ccr config init --dry-run` to review the proposed operation without writing. After it succeeds,

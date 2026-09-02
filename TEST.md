@@ -92,7 +92,8 @@ are preserved exactly rather than fuzzy-corrected.
 Confirm these ownership rules:
 
 - `project.md` contains durable, evidence-backed product-to-people context: consequential behavior,
-  rules, constraints, and uncertainty rather than a technical inventory.
+  rules, constraints, and uncertainty rather than a technical inventory. Confirm it starts with a
+  plain-language purpose and uses a Mermaid diagram only when it clarifies a real product flow.
 - `stakeholders.md` is populated during initialization and read-only to later automatic operations.
 - `decisions.md` remains human-owned and changes only through the explicit configuration opt-in.
 - local journals are branch- or PR-specific and remain under ignored `.ccr/journal/`.
@@ -179,7 +180,8 @@ it as a standalone technical/UI defect rather than relabel it as inclusion or sy
 ## 5. Validate every review scope
 
 For `changes`, create staged, unstaged, untracked, deleted, binary, and privacy-excluded cases. The
-review may use only the broker-approved live overlay and must not inspect excluded content.
+review may use normal repository tools to understand the changed behavior and its surrounding flow,
+but must not inspect excluded content.
 
 For `codebase`, run:
 
@@ -190,10 +192,12 @@ For `codebase`, run:
 It must page through the safe Git index, trace complete behaviors, and overlay current approved live
 changes. It must not fall back to a changed-lines-only review.
 
-For a disposable pull request, run `/ccr-review PR-<number> all`. It must use immutable GitHub
-base/head evidence without checkout, fetch, branch mutation, or local-worktree substitution. A PR
-over any metadata, 200-path, 512-KiB patch, 128-KiB per-head-file, eight-head-file, or 2-MiB combined
-limit must stop with an evidence blocker before workers run.
+For a disposable pull request, run `/ccr-review PR-<number> all`. It must establish immutable GitHub
+base/head evidence without checkout, fetch, branch mutation, or local-worktree substitution. It may
+use normal read-only GitHub and repository research to understand the PR's surrounding product flow.
+A PR over any metadata, 200-path, 512-KiB patch, 128-KiB per-head-file, eight-head-file, or 2-MiB combined
+limit should report the helper's bounded-packet condition; confirm the review can still use appropriate
+read-only evidence rather than silently treating the partial packet as complete.
 
 Every confirmed finding includes these qualities:
 
