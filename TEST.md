@@ -91,7 +91,8 @@ are preserved exactly rather than fuzzy-corrected.
 
 Confirm these ownership rules:
 
-- `project.md` contains durable, evidence-backed repository context.
+- `project.md` contains durable, evidence-backed product-to-people context: consequential behavior,
+  rules, constraints, and uncertainty rather than a technical inventory.
 - `stakeholders.md` is populated during initialization and read-only to later automatic operations.
 - `decisions.md` remains human-owned and changes only through the explicit configuration opt-in.
 - local journals are branch- or PR-specific and remain under ignored `.ccr/journal/`.

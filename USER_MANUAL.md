@@ -240,8 +240,11 @@ Open Claude Code:
 /ccr-context initialize
 ```
 
-Run this after setup. It populates `project.md` and `stakeholders.md`, leaves `decisions.md` empty,
-and syncs hooks when enabled. If `domain` is still the generated `"unspecified"` default, it also
+Run this after setup. It populates `project.md` as an evidence-backed account of how the product
+affects people: its purpose, consequential rules or defaults, affected roles, and the resulting
+behavior or uncertainty. It includes technical details only when they explain that causal path; it
+also populates `stakeholders.md`, leaves `decisions.md` empty, and syncs hooks when enabled. If
+`domain` is still the generated `"unspecified"` default, it also
 records one concise product-domain label supported by repository evidence (or `general-software` when
 the repository has no more specific product signal). A conditional updater prevents this one-time
 step from overwriting a human-set domain. After initialization, CCR always reads `stakeholders.md`
@@ -415,7 +418,9 @@ old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurr
 journals. If code or context changes afterward, pre-commit warns before approval and post-commit
 marks the prior review stale; both hooks remain advisory. Journals do not duplicate Git's path
 inventory. `project.md` uses descriptive headings, short sections, and useful bullets for
-readability. It changes only for a
+readability. It is a causal product-and-people narrative, not a technical architecture summary;
+CCR records technical facts only when they make a consequential product rule, constraint, or
+uncertainty understandable. It changes only for a
 verified major feature, architecture, public workflow, product constraint, stakeholder impact, or
 plan change; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
 after initialization.

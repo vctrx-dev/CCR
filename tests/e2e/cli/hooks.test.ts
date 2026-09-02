@@ -252,7 +252,6 @@ describe("hooks CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toContain("started local journal entry");
     expect(output()).toContain("Use the ccr-context skill");
-    expect(output()).toContain("change .ccr/project.md only for durable high-level context");
   });
 
   it("should run one headless update instead of printing a prompt when opted in", async () => {

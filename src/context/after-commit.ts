@@ -34,7 +34,7 @@ export interface AfterCommitResult {
 
 /** Copy-paste instruction the post-commit hook emits for a developer to run in Claude Code. */
 export const AFTER_COMMIT_PROMPT =
-  "Use the ccr-context skill to update context for the last commit of this branch. Read project.md, stakeholders.md, decisions.md, and the configured repository-wide recent journals first; complete the same journal entry for this commit; change .ccr/project.md only for durable high-level context, keep .ccr/stakeholders.md read-only, and append a rare decision only through the configured opt-in.";
+  "Use the ccr-context skill to update context for the last commit of this branch. Read project.md, stakeholders.md, decisions.md, and the configured repository-wide recent journals first; complete the same journal entry for this commit; change .ccr/project.md only for durable, evidence-backed product-to-people behavior or constraints—not a technical summary or generic defect—keep .ccr/stakeholders.md read-only, and append a rare decision only through the configured opt-in.";
 
 /** Ensures a journal entry exists for the current commit and reports whether shared context is stale. */
 export async function runAfterCommitCheck(root: string): Promise<AfterCommitResult> {

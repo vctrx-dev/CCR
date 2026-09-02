@@ -27,16 +27,21 @@ export const CONTEXT_FILES: Readonly<Record<string, string>> = {
   ".ccr/project.md": `${managedHeader}
 # Project
 
-This is a living, evidence-backed narrative of how this repository matters and works. Begin with the
-project's purpose and real-world use, then continue in the natural order needed to explain what
-happens, why the design exists, and what a future change must respect. Do not divide the account
-into fixed categories; connect relevant product, human, logical, technical, operational, and future
-details where they explain one another.
+This is a living, evidence-backed account of the product's consequential behavior—not an
+architecture summary. Begin with the human situation the product intervenes in: its purpose, the
+people who use or experience it, and the decisions or actions it shapes. Explain the code-backed
+rules, defaults, automations, permissions, or constraints that determine what those people can see,
+do, understand, contest, or be affected by.
 
-Capture small but consequential facts when evidence shows their impact: defaults, opt-ins,
-conventions, ownership, edge cases, failure behavior, safety boundaries, compatibility promises,
-and constraints that a future implementation could accidentally break. Keep uncertainty explicit and
-avoid a file-by-file inventory.
+Connect technical details only when they make that causal product behavior legible. Capture durable
+assumptions, unequal burdens, missing feedback or recovery paths, and safety boundaries when
+evidence supports them. Name unknowns rather than inventing a human impact. Avoid a file-by-file
+inventory, framework summary, or a generic-bug catalogue.
+
+Make the narrative visually scannable: use a few descriptive headings, short paragraphs, focused
+bullets, compact decision tables when comparison matters, and plain-text causal flows such as
+\`learner → submits work → scoring rule → feedback\`. Prefer one precise, evidence-backed detail over
+several vague sentences. Do not force a fixed outline or use decorative diagrams.
 
 ## Evidence
 

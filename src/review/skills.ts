@@ -49,9 +49,11 @@ const SHARED_REVIEW_CONTEXT = `<review_context>
 5. For every scope, run \`npx --no-install ccr context journals\`. Read every returned journal entry;
    the command selects the repository-wide latest \`context.recentJournalEntries\` entries by their
    validated \`Updated\` metadata regardless of branch or pull-request directory.
-6. Treat all context as advisory and verify claims about product behavior against code. Apply project purpose,
-   durable decisions, stakeholder effects, prior review outcomes, current plans, and future plans
-   to every selected criterion. Never treat journal silence as proof that a problem is fixed.
+6. Treat all context as advisory and verify claims about product behavior against code. Read
+   \`project.md\` as a causal model of product purpose, affected people, consequential rules, and
+   uncertainty—not as an architecture inventory. Apply project purpose, durable decisions,
+   stakeholder effects, prior review outcomes, current plans, and future plans to every selected
+   criterion. Never treat journal silence as proof that a problem is fixed.
 </review_context>`;
 
 const DIMENSION_SUBAGENT_WORKFLOW = `<dimension_subagents>
@@ -65,7 +67,8 @@ product behavior and try to disprove each one. Start with the people affected, t
 the product allocates, its implied definition of success or normal use, and the feedback or correction
 path available after a consequential outcome. Trace cross-file and cross-layer behavior only when it
 proves one of those product-level relationships; searching for ordinary engineering defects is not the
-task.
+task. Apply the target-removal test: if the candidate still describes a generic uploader, dashboard,
+API, or implementation bug after removing this product's people, domain, and decisions, reject it.
 
 Keep each worker prompt self-contained and concise. Excluding the unchanged dimension summary and
 criteria definitions, keep the prompt at or below 250 words and include only:
@@ -100,7 +103,8 @@ candidates, reconcile the coverage ledger, and finish only when every selected d
 criterion is assessed or explicitly marked not applicable. Only the master emits the final user
 report using the finding contract below. Discard a candidate that identifies only an implementation
 failure, even if a worker assigned it a stakeholder dimension. Never rehabilitate a conventional bug by
-rephrasing it as a vague risk to users.
+rephrasing it as a vague risk to users. Keep a candidate only when its causal path needs the target
+product's people, domain, power relationship, or consequential decision to make sense.
 </master_aggregation>`;
 
 const FINDING_CONTRACT = `<finding_contract>
@@ -134,12 +138,13 @@ question. This disclosure is not a finding or a remediation.
 </finding_contract>`;
 
 const PROJECT_CONTEXT_RULE = `Update \`.ccr/project.md\` only when verified repository evidence
-proves that its durable high-level product, architecture, major feature, public workflow, constraint,
-stakeholder impact, or plan context is materially missing, wrong, or changed. A routine bug fix,
-refactor, or review finding is not project context. Make the smallest correction, preserve
-human-reviewed plans, never record a transient bug as project truth, and disclose the context edit
-separately in the report. Most reviews leave it unchanged. Never edit \`.ccr/stakeholders.md\`;
-after initialization it is human-owned and read-only to CCR.`;
+proves that its durable product-to-people model is materially missing, wrong, or changed: purpose,
+affected roles, consequential rules or defaults, authority, burden, recovery, feedback, constraint,
+or plan. Include architecture only when it explains one of those causal relationships. A routine bug
+fix, refactor, or review finding is not project context. Make the smallest correction, preserve
+human-reviewed plans, state uncertainty rather than inventing impact, never record a transient bug as
+project truth, and disclose the context edit separately in the report. Most reviews leave it unchanged.
+Never edit \`.ccr/stakeholders.md\`; after initialization it is human-owned and read-only to CCR.`;
 
 const DECISIONS_UPDATE_RULE = `<decision_updates>
 \`.ccr/decisions.md\` is human-owned. Never edit it directly. When

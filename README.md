@@ -238,8 +238,11 @@ Initialization maps independent end-to-end evidence traces, then uses an adaptiv
 wave: one agent for a small cohesive repository and more agents for multi-language, multi-surface, or
 very large repositories, up to the harness's useful concurrency. A separate subagent verifies the
 synthesis before one bounded correction pass. `project.md` is one connected, evidence-backed
-narrative, formatted with descriptive headings, short sections, and useful bullets rather than fixed
-technical categories. Initialization also populates `stakeholders.md`;
+account of the product in the world: its purpose, the people affected, consequential rules or
+defaults, and the resulting behavior or uncertainty. Technical details appear only when they explain
+that causal path; it is not a framework summary, directory inventory, or generic-bug catalogue.
+It uses descriptive headings, short sections, and useful bullets rather than fixed technical
+categories. Initialization also populates `stakeholders.md`;
 after that, CCR treats stakeholder context as human-owned and read-only. Focused later operations use no discovery agent
 for one evidence trace and normally use one parallel wave only when traces are independent. Agent,
 read, and time budgets are starting guidance rather than hard ceilings: Claude chooses the smallest
