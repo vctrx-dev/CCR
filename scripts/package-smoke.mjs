@@ -28,7 +28,7 @@ const configManualSource = readFileSync(
   path.join(root, "src", "context", "config-manual.ts"),
   "utf8",
 );
-const configManualHeading = /CONFIG_MANUAL = `(# [^\n]+)/u.exec(configManualSource)?.[1];
+const configManualHeading = /CONFIG_MANUAL = `(# [^\r\n]+)/u.exec(configManualSource)?.[1];
 if (configManualHeading === undefined) {
   throw new Error("Configuration manual source is missing its heading.");
 }

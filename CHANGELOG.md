@@ -7,7 +7,7 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
-## 0.9.1 - 2026-09-02
+## 0.9.2 - 2026-09-02
 
 ### Changed
 
@@ -24,6 +24,8 @@ contain incompatible changes when they are clearly documented.
 
 ### Fixed
 
+- Made package-smoke configuration-manual validation line-ending independent, so Windows release
+  verification accepts the same packed artifact as other platforms.
 - Updated the transitive `fast-uri` dependency to its patched release for URI parsing advisories.
 
 ## 0.8.1 - 2026-08-28
