@@ -256,7 +256,7 @@ the authorized context files.
 
 Ask once: "Can you provide optional context that is not in this repository, such as future plans,
 specifications, research, or product decisions?" Continue when the answer is none. Run
-CCR's privacy-filtered evidence commands needed to identify instructions, manifests, entry points, schemas, tests,
+the normal discovery tools needed to identify instructions, manifests, entry points, schemas, tests,
 and user-facing documentation. Give each discovery subagent an end-to-end product-to-people workflow
 or consequential constraint trace, not a directory or framework summary. Reconcile the evidence into
 \`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
@@ -290,7 +290,7 @@ the city name, a ticket number, or a database name.</example>
 ## Update
 
 Resolve the working or committed journal under the journal rules, then inspect the relevant changes,
-history, and current product flow through CCR's evidence commands. Most commits should
+history, and current product flow with the normal tools available to you. Most commits should
 complete the journal without changing project context. Change it only when the commit alters a
 durable product-to-people causal path rather than implementation detail alone. Apply the shared-context
 ownership rules, verify changed claims, show the diff, validate, and complete the existing journal.

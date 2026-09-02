@@ -39,8 +39,8 @@ const SHARED_REVIEW_CONTEXT = `<review_context>
 1. Run \`npx --no-install ccr config\` and record \`context.recentJournalEntries\` and whether
    \`instructions.updateDecisionsMd\` is \`true\` or \`false\`. Stop if configuration cannot be read.
 2. Run \`npx --no-install ccr context validate\`; stop if shared context is invalid.
-3. Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, and \`.ccr/decisions.md\` through
-   \`npx --no-install ccr context shared <file>\` before planning or dispatching the review.
+3. Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, and \`.ccr/decisions.md\` with normal repository
+   tools or the CCR helpers before planning or dispatching the review.
 4. For PR scope, run \`npx --no-install ccr context review-context-state PR-<number>\` after reading
    shared context and preserve both \`inputContextFingerprint\` (review inputs) and
    \`contextFingerprint\` (continuity-safe context).
