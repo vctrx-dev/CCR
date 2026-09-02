@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
 import dimensionData from "./dimensions.json";
+import { STAKEHOLDER_IMPACT_REFERENCE } from "./impact-review-guidance";
 
 /**
  * Shared data-driven review taxonomy. Add or revise dimensions in `dimensions.json` and validate
@@ -76,9 +77,13 @@ ${MANAGED_SKILL_MARKER}
 
 ${emptyNotice}
 
+${STAKEHOLDER_IMPACT_REFERENCE}
+
 The array order is the canonical order for selection, coverage ledgers, and reports. Each dimension
-owns its fixed criteria; treat each criterion's details as binding review guidance. Apply criteria
-within their parent dimension and never remove a selected dimension from coverage.
+owns its fixed criteria; treat each criterion's name and details as binding review guidance. Criterion
+IDs are stable selectors and can retain historical names, so never infer their intended meaning from an
+ID alone. Apply criteria within their parent dimension and never remove a selected dimension from
+coverage.
 
 \`\`\`json
 ${JSON.stringify(registry, null, 2)}

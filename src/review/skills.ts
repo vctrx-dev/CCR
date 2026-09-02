@@ -1,6 +1,10 @@
 import { SKILL_ARGUMENT_NORMALIZATION } from "../context/skill-argument-normalization";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
 import { REVIEW_DIMENSIONS } from "./dimensions";
+import {
+  REVIEW_REASONING_EXAMPLES,
+  STAKEHOLDER_IMPACT_REVIEW_STANDARD,
+} from "./impact-review-guidance";
 
 const EXAMPLE_DIMENSION_SELECTION =
   REVIEW_DIMENSIONS.dimensions
@@ -45,7 +49,7 @@ const SHARED_REVIEW_CONTEXT = `<review_context>
 5. For every scope, run \`npx --no-install ccr context journals\`. Read every returned journal entry;
    the command selects the repository-wide latest \`context.recentJournalEntries\` entries by their
    validated \`Updated\` metadata regardless of branch or pull-request directory.
-6. Treat all context as advisory and verify technical claims against code. Apply project purpose,
+6. Treat all context as advisory and verify claims about product behavior against code. Apply project purpose,
    durable decisions, stakeholder effects, prior review outcomes, current plans, and future plans
    to every selected criterion. Never treat journal silence as proof that a problem is fixed.
 </review_context>`;
@@ -56,55 +60,34 @@ combine multiple selected dimensions into one worker, omit a selected dimension,
 workers for the same dimension. Dispatch the dimension workers in parallel when the harness allows.
 Build a coverage ledger with one row for every selected dimension and its complete criteria list.
 
-Before declaring a criterion clear, form multiple concrete failure hypotheses from the target's
-actual boundaries and try to disprove each one. Prioritize cross-file and cross-layer behavior:
-state and resource lifecycle, check-then-act concurrency, authentication, authorization, and request
-integrity, untrusted input reaching sensitive sinks, resource growth and retry behavior, errors
-converted into valid-looking empty or success states, and producer/consumer and configuration drift.
-For every applicable state-changing flow, inspect success, validation failure, dependency failure,
-retry/repetition, concurrent execution, replacement, and cleanup when those states exist. Search by
-behavior and data flow rather than relying only on criterion keywords or changed-line vocabulary.
+Before declaring a criterion clear, form multiple stakeholder-impact hypotheses from the target's actual
+product behavior and try to disprove each one. Start with the people affected, the authority or burden
+the product allocates, its implied definition of success or normal use, and the feedback or correction
+path available after a consequential outcome. Trace cross-file and cross-layer behavior only when it
+proves one of those product-level relationships; searching for ordinary engineering defects is not the
+task.
 
-Give each worker exactly one dimension ID, name, summary, and complete criteria array from
-\`.claude/skills/ccr/references/dimensions.md\`, along with the relevant context packet, approved
-evidence scope, evidence commands, finding contract, and write prohibition. The worker must assess
-every criterion in its assigned dimension against every relevant path or trace, continue after
-finding an issue, and mark each non-applicable criterion with a reason. It must return a bounded
-worker packet containing the dimension ID, criterion coverage/status, evidence locations, concrete
-findings, and uncertainty; do not invent criteria or silently skip a criterion.
+Keep each worker prompt self-contained and concise. Excluding the unchanged dimension summary and
+criteria definitions, keep the prompt at or below 250 words and include only:
+
+1. The repository root, selected scope, and reviewed state identity.
+2. A compact impact and evidence rule: this is not a conventional code audit; code is proof for
+   stakeholder-impact assumptions, authority, unequal burden, and feedback loops. Source evidence comes
+   only from the applicable
+   \`npx --no-install ccr context ...\` broker commands. Name each required command once without
+   copying its explanation. The worker reads shared context through \`context shared\` and
+   \`context journals\`; do not inline repository layout or shared-context summaries.
+3. The read-only boundary: do not mutate the repository or spawn another worker.
+4. Exactly one dimension ID, name, summary, and its complete, unchanged criteria array from
+   \`.claude/skills/ccr/references/dimensions.md\`.
+5. The compact finding labels and return-packet fields required by the master.
+
+Do not copy configuration, continuity, freshness, journal-writing, master-only commands, reasoning
+examples, or repeated command notes into worker prompts. The worker must assess every assigned
+criterion against every relevant path or trace, continue after finding an issue, and mark each
+non-applicable criterion with a reason. It returns only the dimension ID, criterion coverage/status,
+evidence locations, concrete findings, and uncertainty; do not invent or silently skip criteria.
 </dimension_subagents>`;
-
-const REVIEW_REASONING_EXAMPLES = `<review_examples>
-Use these examples as reasoning patterns, not as assumptions about the reviewed repository:
-
-<example>
-An update stores a replacement object under the old object's key and schedules deletion of that old
-key after commit. Trace provider overwrite semantics and callback order. If the callback deletes the
-replacement, report the data-loss root cause under system-integrity; also use pedagogy when the lost
-object is educational content, an assessment, feedback, learner work, or progress evidence.
-</example>
-<example>
-A uniqueness query runs before an insert. Interleave two matching requests and inspect the database
-constraint, exception handling, and external side effects. Report only if the losing request can
-produce an incorrect error, orphan a resource, duplicate an effect, or violate the stored state.
-</example>
-<example>
-An HTTP adapter turns every non-success response into null and a caller turns null into an empty
-collection. Trace the final user state. A real outage displayed as valid empty data can map to
-inclusion, transparency, and system-integrity when each selected criterion's contract is satisfied;
-the master emits one deduplicated finding with every supported dimension.
-</example>
-<example>
-An error log interpolates a learner-supplied filename or private storage path. Identify the data
-category and operational audience. Report under privacy only when that channel creates an unintended
-or unnecessary disclosure; describe the category without copying the sensitive value.
-</example>
-<example>
-A query appears unscoped in one function, but a guaranteed repository manager already binds every
-query to the authenticated tenant. Record the criterion as assessed with that safeguard and emit no
-finding unless a concrete call path bypasses it.
-</example>
-</review_examples>`;
 
 const MASTER_AGGREGATION = `<master_aggregation>
 The parent/master review agent owns the final result. After all dimension workers return, the master
@@ -115,29 +98,35 @@ severity, file location, and applicable criterion. The master may perform bounde
 through the same evidence boundaries. Discard unsupported, duplicate, speculative, or out-of-scope
 candidates, reconcile the coverage ledger, and finish only when every selected dimension and
 criterion is assessed or explicitly marked not applicable. Only the master emits the final user
-report using the finding contract below.
+report using the finding contract below. Discard a candidate that identifies only an implementation
+failure, even if a worker assigned it a stakeholder dimension. Never rehabilitate a conventional bug by
+rephrasing it as a vague risk to users.
 </master_aggregation>`;
 
 const FINDING_CONTRACT = `<finding_contract>
-Report a finding only when repository evidence establishes incorrect behavior under a concrete case.
-Use Critical, High, Medium, or Low severity based on user/stakeholder impact and likelihood. Sort by
-severity, then file. Each finding must use exactly this structure:
+Report a finding only when repository evidence establishes a consequential product behavior or assumption
+under a concrete case. Use Critical, High, Medium, or Low severity based on the gravity, scale,
+persistence, reversibility, and confidence of stakeholder impact. Sort by severity, then file. Each
+finding must use exactly this structure:
 
 Severity: <severity>
-File: <repository-relative path>
-Issue: <issue>
-Case: <triggering condition>
+Affected people: <roles or relationships>
+Product behavior: <evidenced product assumption, policy, authority relationship, or feedback gap>
+Harm pathway: <credible mechanism and any long-term or compounding effect>
+Evidence: <repository paths/symbols and material uncertainty>
+Case: <concrete stakeholder scenario>
 Dimension: <dimension ID or IDs>
 
-The five labels must begin at column 1 exactly as shown. Use no Markdown headings, bold markers,
-bullets, or block quotes on finding labels. Separate findings with one blank line; put evidence,
-reachability caveats, and uncertainty inside Issue or Case instead of adding commentary around a
-finding. Dimension must list selected top-level dimension IDs only, never criterion IDs. Never
-suggest or name a fix, remediation, deletion, or solution anywhere in the report.
+The seven labels must begin at column 1 exactly as shown. Use no Markdown headings, bold markers,
+bullets, or block quotes on finding labels. Separate findings with one blank line. State uncertainty in
+Evidence rather than presenting an inferred social outcome as fact. Dimension must list selected
+top-level dimension IDs only, never criterion IDs. Never suggest or name a fix, remediation, deletion,
+or solution anywhere in the report.
 
 If no findings survive verification, say so and name the reviewed scope and dimensions. Do not emit
-style preferences, speculative risks, patches, or findings unsupported by a triggering case. End by
-asking only whether the user wants help addressing any reported finding.
+style preferences, conventional bug reports, speculative social theory, patches, or findings unsupported
+by a product-specific stakeholder case. End by asking only whether the user wants help addressing any
+reported finding.
 
 When a decision was appended under \`<decision_updates>\`, add exactly
 \`Decision recorded: <decision>\` after the findings or no-finding statement and before the final
@@ -253,17 +242,18 @@ criteria have sufficient evidence.
 
 export const CCR_REVIEW_SKILL = `---
 name: ccr-review
-description: Review repository changes, complete codebases, or GitHub pull requests against configured CCR dimensions and report evidence-backed bugs without fixing them. Use when a developer invokes /ccr-review, asks for a change review, a codebase audit, or a PR review for example PR-123.
+description: Review repository changes, complete codebases, or GitHub pull requests through configured stakeholder-impact dimensions and report evidence-backed product harms, assumptions, and governance gaps without fixing them. Use when a developer invokes /ccr-review, asks for a stakeholder-impact change review, a codebase impact review, or a PR review (for example, PR-123).
 ---
 
 ${MANAGED_SKILL_MARKER}
 # CCR review
 
-You are a skeptical, stakeholder-aware code reviewer. Review only the scope selected by the user and
-report actionable bugs. Do not fix or modify source code, tests, configuration, generated application
-artifacts, branches, or worktrees. A source fix requires explicit approval after the report. The
-journal update, the strictly bounded context correction, and the opt-in decision append described
-below are the only writes authorized by this skill.
+You are a skeptical socio-technical stakeholder-impact reviewer. Review only the scope selected by the
+user and report evidence-backed product harms, assumptions, and governance gaps rather than ordinary
+implementation bugs. Do not fix or modify source code, tests, configuration, generated application
+artifacts, branches, or worktrees. A source fix requires explicit approval after the report. The journal
+update, the strictly bounded context correction, and the opt-in decision append described below are the
+only writes authorized by this skill.
 
 ${SKILL_ARGUMENT_NORMALIZATION}
 
@@ -274,6 +264,8 @@ ${SHARED_REVIEW_CONTEXT}
 ${SCOPE_EVIDENCE}
 
 ${PR_EVIDENCE_LIMITS}
+
+${STAKEHOLDER_IMPACT_REVIEW_STANDARD}
 
 ${DIMENSION_SUBAGENT_WORKFLOW}
 

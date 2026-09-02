@@ -162,7 +162,9 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
 <shared_context_ownership>
 - \`.ccr/project.md\`: populate during initialize. Later, update it only for verified durable
   high-level changes such as a major feature, architecture, public workflow, product constraint,
-  stakeholder impact, or plan. Routine bug fixes, refactors, and transient findings stay in journals.
+  stakeholder impact, or plan. Keep it skimmable with descriptive Markdown headings, short sections,
+  and bullets where useful; do not force fixed categories. Routine bug fixes, refactors, and transient
+  findings stay in journals.
 - \`.ccr/stakeholders.md\`: CCR may populate it during initialize only. After initialize it is
   human-owned and read-only to CCR; later operations may use it as context but never edit it.
 - \`.ccr/decisions.md\`: preserve human entries and never edit it directly. Outside initialize,

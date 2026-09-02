@@ -1,6 +1,6 @@
 {
   "name": "@vctrx/ccr",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": false,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.32.0",
@@ -68,7 +68,8 @@
   },
   "pnpm": {
     "overrides": {
-      "esbuild": "0.28.1"
+      "esbuild": "0.28.1",
+      "fast-uri": "3.1.6"
     },
     "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "husky"]
   },

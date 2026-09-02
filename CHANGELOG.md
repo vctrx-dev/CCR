@@ -7,6 +7,25 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.9.0 - 2026-09-02
+
+### Changed
+
+- Reoriented `/ccr-review` toward socio-technical, stakeholder-impact findings. Review workers now
+  examine product assumptions, power, consequential decisions, feedback loops, and longer-term
+  outcomes rather than reporting ordinary implementation, security, or interface defects by
+  default.
+- Findings now explain affected people, product behavior, harm pathway, grounded evidence, and a
+  realistic case so reviewers can distinguish behavioral product risks from generic code defects.
+- Updated the packaged review taxonomy and user documentation with examples of the intended
+  stakeholder-centered review lens.
+- Package smoke testing now inspects a locally packed artifact, so release verification remains
+  reliable after a version has already been published to npm.
+
+### Fixed
+
+- Updated the transitive `fast-uri` dependency to its patched release for URI parsing advisories.
+
 ## 0.8.1 - 2026-08-28
 
 ### Changed

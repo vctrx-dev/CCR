@@ -19,6 +19,7 @@ describe("CLI help", () => {
     });
 
     expect(output).toContain("Terminal commands:");
+    expect(output).toContain("Context-aware, stakeholder-impact product review for Claude Code");
     expect(output).toContain("ccr setup [--dry-run] [--json]");
     expect(output).toContain("ccr update [--dry-run] [--json]");
     expect(output).toContain("ccr uninstall [--dry-run] [--remove-context]");

@@ -48,7 +48,7 @@ class CcrCommand extends Command {
 export function createCli(io: CliIo = defaultIo()): Command {
   const program = new CcrCommand()
     .name("ccr")
-    .description("Context-aware, stakeholder-aware code review for Claude Code")
+    .description("Context-aware, stakeholder-impact product review for Claude Code")
     .version(packageJson.version, "-v, --version")
     .addHelpText("after", renderProductHelp());
   registerContextCommands(program, io);
