@@ -6,7 +6,7 @@ context as plain Markdown and JSON.
 
 The complete product combines:
 
-- compact repository context management;
+- compact product-impact context management;
 - research-backed Claude Code reviewer skills;
 - branch-local continuity;
 
@@ -151,8 +151,8 @@ Then open Claude Code:
 | `/ccr-hooks sync` | Choose and apply the repository's native hook integration |
 | `/ccr-hooks status` | Explain the active hook strategy and CCR checks |
 | `/ccr-hooks remove` | Remove only CCR-managed hook integration |
-| `/ccr-context initialize` | Set the untouched default domain once, populate project and stakeholder context, then verify |
-| `/ccr-context update` | Complete the current journal and update only durable context |
+| `/ccr-context initialize` | Set the untouched default domain once, populate product-impact and stakeholder context, then verify |
+| `/ccr-context update` | Complete the current journal and update only durable product-impact context |
 | `/ccr-context verify` | Check all context against the current index and latest five local commits |
 | `/ccr-context addition` | Add human-provided plans, specifications, or other context |
 | `/ccr-context compact` | Compact only project context by at most the configured 20–30% |

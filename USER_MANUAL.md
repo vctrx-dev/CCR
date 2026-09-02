@@ -468,8 +468,8 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 | `/ccr-hooks sync` | Install or update hooks |
 | `/ccr-hooks status` | Show hook status |
 | `/ccr-hooks remove` | Remove CCR hooks |
-| `/ccr-context initialize` | Set the untouched default domain once and populate project and stakeholder context |
-| `/ccr-context update` | Complete the current journal and update durable context |
+| `/ccr-context initialize` | Set the untouched default domain once and populate product-impact and stakeholder context |
+| `/ccr-context update` | Complete the current journal and update durable product-impact context |
 | `/ccr-context verify` | Verify context |
 | `/ccr-context addition` | Add plans or knowledge |
 | `/ccr-context compact` | Compact project context only |

@@ -57,7 +57,9 @@ Example: \`ccr config set hooks.checkBeforeCommit false\`
   changes need continuity work. CCR places bounded, privacy-approved exact-commit evidence in a
   temporary ignored \`.ccr/private/\` packet. Headless Claude can read only approved \`.ccr\` inputs
   and edit only the exact commit journal and \`.ccr/project.md\`, plus \`.ccr/decisions.md\` when its
-  separate opt-in is true. It receives no shell or raw repository access. Successful commits are
+  separate opt-in is true. Any \`project.md\` edit is limited to durable, evidence-backed
+  product-to-people behavior or constraints, not a technical summary. It receives no shell or raw
+  repository access. Successful commits are
   recorded locally so one commit is not processed twice. Automation never stages, commits, amends,
   resets, or pushes; failures clean the packet, remain non-blocking, and leave the manual fallback.
   Effect when \`false\`: hooks remain advisory.

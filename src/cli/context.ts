@@ -91,7 +91,7 @@ export function registerContextCommands(program: Command, io: CliIo): void {
 
   const context = program
     .command("context")
-    .description("Inspect CCR context and manage opt-in decisions");
+    .description("Inspect product-impact context and manage opt-in decisions");
   context.command("validate").action(async () => {
     const result = await validateContext(findCliRepositoryRoot(io));
     writeCliLines(

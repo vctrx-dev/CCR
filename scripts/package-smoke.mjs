@@ -161,7 +161,7 @@ try {
   );
   const installedHelp = runInstalled(installedBin, ["--help"], consumer);
   if (
-    !installedHelp.includes("Context-aware, stakeholder-impact product review for Claude Code") ||
+    !installedHelp.includes(packageJson.description) ||
     !installedHelp.includes("Claude Code skills (run inside Claude Code after setup):") ||
     !installedHelp.includes(`Configured dimension IDs: ${reviewDimensionIds.join(", ") || "none"}`)
   ) {

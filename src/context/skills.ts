@@ -136,7 +136,7 @@ the markers. Offer explicit marker-only CLI cleanup followed by a fresh sync.
 
 export const CCR_CONTEXT_SKILL = `---
 name: ccr-context
-description: Initialize, update, verify, add supplied knowledge to, or compact evidence-backed CCR repository context. Use when a developer runs a CCR context operation, finishes a durable change, or needs concise project continuity.
+description: Initialize, update, verify, add supplied knowledge to, or compact evidence-backed CCR product-impact context. Use when a developer runs a CCR context operation, finishes a durable change, or needs concise project continuity.
 ---
 
 ${MANAGED_SKILL_MARKER}

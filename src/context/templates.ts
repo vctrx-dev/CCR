@@ -86,7 +86,7 @@ export const CLAUDE_BLOCK = `<!-- ccr:start -->
 ## CCR context
 
 Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, and relevant entries in \`.ccr/decisions.md\`
-when repository context is useful.
+when product purpose, affected people, or consequential decision context is useful.
 Use \`/ccr-context initialize\` for first discovery and \`/ccr-context update\` after durable
 changes. CCR context is advisory; source, tests, and schemas have priority.
 <!-- ccr:end -->`;
