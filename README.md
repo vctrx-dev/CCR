@@ -6,7 +6,7 @@ context as plain Markdown and JSON.
 
 The complete product combines:
 
-- compact repository context management;
+- compact product-impact context management;
 - research-backed Claude Code reviewer skills;
 - branch-local continuity;
 
@@ -151,8 +151,8 @@ Then open Claude Code:
 | `/ccr-hooks sync` | Choose and apply the repository's native hook integration |
 | `/ccr-hooks status` | Explain the active hook strategy and CCR checks |
 | `/ccr-hooks remove` | Remove only CCR-managed hook integration |
-| `/ccr-context initialize` | Set the untouched default domain once, populate project and stakeholder context, then verify |
-| `/ccr-context update` | Complete the current journal and update only durable context |
+| `/ccr-context initialize` | Set the untouched default domain once, populate product-impact and stakeholder context, then verify |
+| `/ccr-context update` | Complete the current journal and update only durable product-impact context |
 | `/ccr-context verify` | Check all context against the current index and latest five local commits |
 | `/ccr-context addition` | Add human-provided plans, specifications, or other context |
 | `/ccr-context compact` | Compact only project context by at most the configured 20–30% |
@@ -238,8 +238,11 @@ Initialization maps independent end-to-end evidence traces, then uses an adaptiv
 wave: one agent for a small cohesive repository and more agents for multi-language, multi-surface, or
 very large repositories, up to the harness's useful concurrency. A separate subagent verifies the
 synthesis before one bounded correction pass. `project.md` is one connected, evidence-backed
-narrative, formatted with descriptive headings, short sections, and useful bullets rather than fixed
-technical categories. Initialization also populates `stakeholders.md`;
+account of the product in the world: its purpose, the people affected, consequential rules or
+defaults, and the resulting behavior or uncertainty. Technical details appear only when they explain
+that causal path; it is not a framework summary, directory inventory, or generic-bug catalogue.
+It uses descriptive headings, short sections, and useful bullets rather than fixed technical
+categories. Initialization also populates `stakeholders.md`;
 after that, CCR treats stakeholder context as human-owned and read-only. Focused later operations use no discovery agent
 for one evidence trace and normally use one parallel wave only when traces are independent. Agent,
 read, and time budgets are starting guidance rather than hard ceilings: Claude chooses the smallest

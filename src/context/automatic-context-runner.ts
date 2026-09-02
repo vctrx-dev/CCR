@@ -101,7 +101,9 @@ export async function runHeadlessClaudeContextUpdate(
     `HEAD journal at ${journal}. Do not run ccr context journal and do not create,`,
     "read, complete, or modify any other journal. Preserve the journal's Started timestamp and set",
     "Updated to the current",
-    "UTC time in YYYY-MM-DDTHH:MM:SSZ form. Update project.md only for durable high-level context.",
+    "UTC time in YYYY-MM-DDTHH:MM:SSZ form. Update project.md only for a durable, evidence-backed",
+    "product-to-people causal change: explain a consequential product rule or constraint, not a",
+    "technical summary or generic defect. Keep uncertainty explicit.",
     "Keep stakeholders.md unchanged.",
     validatedOptions.data.shouldUpdateDecisions
       ? "Append a decision only when the strict durable-decision rule allows it.</workflow>"

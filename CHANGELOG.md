@@ -7,7 +7,7 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
-## 0.9.0 - 2026-09-02
+## 0.9.1 - 2026-09-02
 
 ### Changed
 

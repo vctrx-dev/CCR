@@ -251,8 +251,7 @@ describe("CCR setup", () => {
     expect(await readFile(skillPath, "utf8")).not.toBe(oldSkill);
 
     const project = await readFile(path.join(root, ".ccr/project.md"), "utf8");
-    expect(project).toContain("living, evidence-backed narrative");
-    expect(project).toMatch(/Do not divide the account\s+into fixed categories/);
+    expect(project).toContain("<!-- managed by CCR; edit facts, keep headings -->");
   });
 
   it("should preserve a skill with a foreign marker", async () => {

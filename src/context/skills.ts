@@ -136,7 +136,7 @@ the markers. Offer explicit marker-only CLI cleanup followed by a fresh sync.
 
 export const CCR_CONTEXT_SKILL = `---
 name: ccr-context
-description: Initialize, update, verify, add supplied knowledge to, or compact evidence-backed CCR repository context. Use when a developer runs a CCR context operation, finishes a durable change, or needs concise project continuity.
+description: Initialize, update, verify, add supplied knowledge to, or compact evidence-backed CCR product-impact context. Use when a developer runs a CCR context operation, finishes a durable change, or needs concise project continuity.
 ---
 
 ${MANAGED_SKILL_MARKER}
@@ -162,9 +162,11 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
 <shared_context_ownership>
 - \`.ccr/project.md\`: populate during initialize. Later, update it only for verified durable
   high-level changes such as a major feature, architecture, public workflow, product constraint,
-  stakeholder impact, or plan. Keep it skimmable with descriptive Markdown headings, short sections,
-  and bullets where useful; do not force fixed categories. Routine bug fixes, refactors, and transient
-  findings stay in journals.
+  stakeholder impact, or plan. It is a causal account of how the product affects people, not an
+  architecture note: include technical facts only when they explain a consequential product rule or
+  constraint. Keep it skimmable with descriptive Markdown headings, short sections, and bullets where
+  useful; do not force fixed categories. Routine bug fixes, refactors, and transient findings stay in
+  journals.
 - \`.ccr/stakeholders.md\`: CCR may populate it during initialize only. After initialize it is
   human-owned and read-only to CCR; later operations may use it as context but never edit it.
 - \`.ccr/decisions.md\`: preserve human entries and never edit it directly. Outside initialize,
@@ -173,6 +175,40 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
   human confirmation establishes an important durable rule for future work. A code change, bug fix,
   finding, or recommendation alone is not a decision. When the setting is \`false\`, never write it.
 </shared_context_ownership>
+
+<project_context_lens>
+Build \`.ccr/project.md\` as a durable model of the product in the world. For each material flow,
+explain the purpose, the people who act or are affected, the product decision that shapes their
+experience, and the evidence-backed consequence or uncertainty. Look especially for defaults,
+thresholds, classifications, permissions, automation, source assumptions, recovery paths, feedback,
+and routes to explanation or challenge. Technical structure belongs only where it establishes that
+causal chain.
+
+Make the resulting narrative detailed without becoming dense. Use evidence-chosen headings, short
+sections, focused bullets, compact tables for meaningful rule comparisons, and plain-text causal
+flows (for example, \`applicant → eligibility rule → service access → review path\`) when they make a
+human consequence easier to see. Prefer precise, connected facts over long paragraphs, a framework
+inventory, or decorative diagrams.
+
+Do not turn ordinary implementation defects into human-impact claims. Code can prove behavior and
+constraints; it rarely proves lived impact or group-level outcomes by itself. Record the supported
+behavior, state a bounded concern or open question where appropriate, and do not invent affected
+groups, motives, demographics, or harms.
+
+<examples>
+<example>A question generator takes uploaded course material and produces graded questions. Record
+that uploaded material becomes an assessment authority, whether an educator can review or contest
+the generated output, and the evidence-backed limit on that oversight. Do not summarize its React
+components or storage adapter unless they explain those rules.</example>
+<example>An eligibility workflow applies an automated threshold before a caseworker sees an
+application. Record the threshold's role in access to the service, who can review or override it,
+and any evidenced explanation or appeal path. Do not call every timeout or validation error an
+equity impact.</example>
+<example>A reusable logging library has no repository evidence of an end-user product. Describe its
+published contract, operators or integrators who rely on it, and the boundary of what is unknown;
+do not manufacture claims about vulnerable populations or social outcomes.</example>
+</examples>
+</project_context_lens>
 
 <evidence_rules>
 - Read repository evidence only with \`context files [prefix]\`, \`context read <file>\`,
@@ -209,7 +245,8 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
   otherwise omit the absence and record only the supplied intent or uncertainty.
 - Mark plans and specifications as intent. Preserve contradictions and uncertainty as questions.
 - Capture small but consequential defaults, precedence, ownership, failure behavior, compatibility,
-  and edge cases only when they change how a future developer should reason.
+  and edge cases only when they change a person's product experience, opportunity, agency, or a
+  responsible role's ability to understand and correct an outcome.
 </evidence_rules>
 
 <work_budget>
@@ -263,7 +300,10 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
 - During initialize, keep \`.ccr/stakeholders.md\` at or below 2,500 characters. Later operations
   leave it unchanged.
 - Write a single, connected project narrative with at most four evidence-chosen headings, not fixed
-  category sections or a directory inventory.
+  category sections, a directory inventory, or a technical architecture summary. It must explain at
+  least one evidence-backed product-to-people causal path when the repository establishes one; when
+  it does not, state that boundary instead of inventing one. Use compact visual Markdown—headings,
+  focused bullets, flows, or a small comparison table—when it improves human comprehension.
 - Show the exact shared-context diff, apply once, run \`context validate\`, and complete exactly one
   current-branch journal under 1,200 characters. Never stage the journal, commit, or push.
 - End with: "Please review the resulting \`.ccr\` context changes once before relying on them."
@@ -274,8 +314,9 @@ Before every operation, run \`npx --no-install ccr context validate\`; read \`.c
 Ask once: "Can you provide optional context that is not in this repository, such as future plans,
 specifications, research, or product decisions?" Continue when the answer is none. Run
 \`context files\`; identify instructions, manifests, entry points, schemas, tests, and user-facing
-documentation. Give each discovery subagent an end-to-end workflow or constraint trace. Reconcile
-the parallel evidence wave into \`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
+documentation. Give each discovery subagent an end-to-end product-to-people workflow or consequential
+constraint trace, not a directory or framework summary. Reconcile the parallel evidence wave into
+\`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
 \`.ccr/decisions.md\` unchanged, run the verification subagent, correct once, validate, and create
 or complete one journal.
 
@@ -309,7 +350,8 @@ the city name, a ticket number, or a database name.</example>
 Resolve the working or committed journal under the journal rules, then run \`context changes\` and each relevant staged diff. With no staged files,
 use \`context recent\` and read only relevant current index files. Use an adaptive parallel wave only
 when changes span independent traces. Most commits should complete the journal without changing
-project context. Apply the shared-context ownership rules, verify changed claims, show the diff,
+project context. Change it only when the commit alters a durable product-to-people causal path rather
+than implementation detail alone. Apply the shared-context ownership rules, verify changed claims, show the diff,
 validate, and complete the existing journal for that uncommitted change or commit.
 
 ## Verify

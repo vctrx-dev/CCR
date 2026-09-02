@@ -13,7 +13,7 @@ Terminal commands:
   ccr setup [--dry-run] [--json]                    Install or refresh CCR assets
   ccr update [--dry-run] [--json]                   Safely refresh package-managed CCR assets
   ccr uninstall [--dry-run] [--remove-context]      Remove integration; preserve context by default
-  ccr context <command>                          Inspect context and review-safe evidence
+  ccr context <command>                          Inspect human-impact context and review-safe evidence
   ccr context append-decision <decision>         Append one config-authorized decision
   ccr context journals [PR-<number>]             Read repository-wide recent journals; PR is ignored
   ccr context review-pr PR-<number>              Read bounded privacy-filtered PR evidence
@@ -29,7 +29,7 @@ Terminal commands:
 Claude Code skills (run inside Claude Code after setup):
   /ccr [question]                                  Answer CCR usage questions
   /ccr-context <initialize|update|verify|addition|compact>
-                                                   Manage repository context
+                                                   Manage evidence-backed product context
   /ccr-hooks <sync|status|remove>                  Manage repository-native hooks
   /ccr-review [changes|codebase|PR-<number>]       Review stakeholder impact in changes, codebase, or a PR
              [all|dimension,...]
