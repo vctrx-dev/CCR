@@ -68,7 +68,8 @@
   },
   "pnpm": {
     "overrides": {
-      "esbuild": "0.28.1"
+      "esbuild": "0.28.1",
+      "fast-uri": "3.1.6"
     },
     "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "husky"]
   },

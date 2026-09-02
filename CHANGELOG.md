@@ -22,6 +22,10 @@ contain incompatible changes when they are clearly documented.
 - Package smoke testing now inspects a locally packed artifact, so release verification remains
   reliable after a version has already been published to npm.
 
+### Fixed
+
+- Updated the transitive `fast-uri` dependency to its patched release for URI parsing advisories.
+
 ## 0.8.1 - 2026-08-28
 
 ### Changed
