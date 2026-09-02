@@ -10,10 +10,9 @@ and is a reference for humans. Re-running that command may refresh this manual. 
 is human-owned: CCR, Claude, and other AI coding agents must not change it without your explicit
 approval of the exact setting and value, except for the one-time initial-domain classification below.
 
-Keep the keys in this order. After a human edits a setting, run \`ccr config validate\`, then run
-\`ccr setup\` to refresh skills and instruction files. The first-run conditional domain write
-does not need a second setup. Run \`/ccr-hooks sync\` in Claude Code after changing an enabled hook
-policy.
+Keep the keys in this order and run \`ccr config validate\` after editing. Most settings take effect
+immediately. Run \`ccr setup\` only for an \`instructions.updateClaudeMd\` or
+\`instructions.updateAgentsMd\` change. Hook installation is managed separately as described below.
 
 ## \`domain\`
 
@@ -33,10 +32,10 @@ Example: \`ccr config set domain civic-tech\`
 
 - Default: \`true\`
 - Values: \`true\` or \`false\`.
-- Effect when \`true\`: \`/ccr-context initialize\` invokes \`/ccr-hooks sync\`. The skill inspects
-  repository hook conventions before choosing how to install advisory \`pre-commit\` and
-  \`post-commit\` checks. Effect when \`false\`: initialization skips hook sync and setup removes
-  legacy CCR-managed hook blocks. Package installation never installs hooks by itself.
+- Effect when \`true\`: run \`/ccr-hooks sync\` to install or refresh repository-native advisory
+  \`pre-commit\` and \`post-commit\` integration; initialization does this once automatically.
+- Effect when \`false\`: run \`/ccr-hooks remove\` to remove repository-native integration. Setup
+  removes only legacy direct CCR hook blocks. Package installation never installs hooks by itself.
 
 Example: \`ccr config set hooks.enabled false\`
 
@@ -115,10 +114,12 @@ Example: \`ccr config set instructions.updateAgentsMd true\`
 
 - Default: \`false\`.
 - Values: \`true\` or \`false\`.
-- Effect when \`true\`: CCR review or context update may record at most one human-confirmed, durable
-  decision through \`ccr context append-decision\`. A finding alone is not a decision. Effect when
-  \`false\`: that command rejects every write and CCR leaves \`.ccr/decisions.md\` untouched. CCR
-  never replaces or removes human entries.
+- Effect when \`true\`: an interactive review or context operation may append at most one bounded,
+  non-duplicate durable decision through \`ccr context append-decision\`. A headless post-commit
+  update has no shell, so it may make the same single append directly; CCR validates that edit as
+  append-only. A finding alone is not a decision.
+- Effect when \`false\`: interactive and headless decision writes are rejected. CCR never replaces
+  or removes existing entries.
 
 Example: \`ccr config set instructions.updateDecisionsMd true\`
 
@@ -126,8 +127,11 @@ Example: \`ccr config set instructions.updateDecisionsMd true\`
 
 1. Edit \`.ccr/config.json\` or use \`ccr config set <key> <value>\`.
 2. Run \`ccr config validate\`.
-3. Run \`ccr setup\` so setup refreshes skills and instruction files.
-4. If an enabled hook setting changed, run \`/ccr-hooks sync\` in Claude Code.
+3. For \`instructions.updateClaudeMd\` or \`instructions.updateAgentsMd\`, run \`ccr setup\`.
+4. After enabling hooks, run \`/ccr-hooks sync\`; after disabling them, run \`/ccr-hooks remove\`.
+
+All other settings apply immediately. Existing hook integration reads
+\`hooks.checkBeforeCommit\` and \`hooks.autoUpdateContext\` at runtime.
 
 Runtime privacy exclusions are fixed safety defaults, not editable keys in this file.
 `;

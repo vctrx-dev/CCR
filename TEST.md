@@ -147,9 +147,33 @@ empty comma items, `all` mixed with IDs, and a third positional argument. Each i
 stop before worker dispatch or journal writes and show the valid scopes and installed IDs.
 
 Every non-empty review creates exactly one worker per selected dimension. Each worker must assess
-every criterion in that dimension, test concrete success/failure/retry/concurrency/replacement/
-cleanup hypotheses where applicable, and return bounded evidence. The master deduplicates root
-causes and verifies candidates before reporting.
+every criterion in that dimension, form concrete stakeholder-impact hypotheses, and use bounded
+evidence to prove or reject them. A worker must not turn a routine implementation, security, or UI
+defect into a finding merely by assigning it a dimension. The master deduplicates root causes and
+verifies candidates before reporting.
+
+### Qualitatively evaluate stakeholder-impact review
+
+Use a target product and supplied context that support the relevant premise. The review should surface
+or explicitly assess these product-level concerns when repository evidence supports them:
+
+1. A source's worldview becomes assessment authority because uploaded material is treated as neutral
+   ground truth without a way to identify perspective, contested claims, or omitted viewpoints.
+2. Automated question generation optimizes for answerability rather than defensible learning because
+   it never establishes a learning objective, reasoning level, or evidence of understanding.
+3. Unequal outcomes can persist because responsible people have no feedback loop to discover patterns
+   of confusion, misrepresentation, or disadvantage across learner contexts or cohorts.
+4. Learners carry the whole burden of contesting consequential automated assessment because they have
+   no route to understand, challenge, or correct an answer's authority.
+
+For each supported positive case, expect a report that names affected roles and power relationship,
+the relevant product assumption or decision, a credible harm pathway, repository evidence, and what
+remains uncertain. The report should remain meaningful if every endpoint, screen, and job technically
+works.
+
+Use this negative control: a CSV-download filename sanitizer permits Windows reserved names such as
+`CON.csv`. Unless the target evidence shows a specific product-level stakeholder harm, CCR must reject
+it as a standalone technical/UI defect rather than relabel it as inclusion or system-integrity.
 
 ## 5. Validate every review scope
 
@@ -170,13 +194,15 @@ base/head evidence without checkout, fetch, branch mutation, or local-worktree s
 over any metadata, 200-path, 512-KiB patch, 128-KiB per-head-file, eight-head-file, or 2-MiB combined
 limit must stop with an evidence blocker before workers run.
 
-Every confirmed finding has exactly these labels:
+Every confirmed finding includes these qualities:
 
 ```text
 Severity: Critical | High | Medium | Low
-File: repository/relative/path
-Issue: evidence-backed incorrect behavior
-Case: concrete triggering condition
+Affected people: roles and relevant power relationship
+Product behavior: evidence-backed assumption, decision, or incentive
+Harm pathway: why the behavior can negatively affect people
+Evidence: repository/relative/path and supporting behavior
+Case: realistic condition in which the impact occurs
 Dimension: selected dimension ID or IDs
 ```
 

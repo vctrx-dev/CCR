@@ -282,14 +282,70 @@ Current review dimensions: `fairness-evaluation`, `pedagogy`, `decision-fairness
 `transparency`, `privacy`, `system-integrity`. Run
 `npx --no-install ccr help` to see the IDs bundled in the installed version.
 
-The six domain dimensions keep their educational and responsible-AI focus. They now include deeper
-checks for fairness-pipeline correctness, instructional-content integrity, decision-policy
-consistency, recoverable supported flows, accurate status/error communication, unauthorized data
-access, disclosure through outputs and logs, and retention lifecycle behavior. `system-integrity`
-covers general defects that should not be forced into a domain criterion: broken execution/build/test
-paths, state or external-resource corruption, concurrency and idempotency races, authentication and
-request-integrity failures, unsafe untrusted-input boundaries, resource exhaustion, masked errors,
-and producer/consumer or configuration drift.
+### Stakeholder-impact review
+
+CCR is designed to find consequential product behaviors and unknown long-term effects, not to
+restate an ordinary technical, security, or UI code review. It asks how the target product's
+assumptions, authority structures, decision logic, incentives, and feedback loops may harm, exclude,
+mislead, or systematically disadvantage the people who use it or live with its decisions.
+
+Everything can technically work and still produce a valid CCR finding. Conversely, a broken endpoint,
+missing security control, edge-case filename, loading state, or rendering failure is not a CCR finding
+merely because it can be assigned a dimension. Technical behavior is relevant only when it proves a
+specific, evidence-backed pathway to product-level stakeholder harm. If the same finding would fit a
+generic file uploader, banking app, or dashboard without understanding the target product's people,
+domain, and decisions, reject it.
+
+A credible finding must establish all of the following:
+
+- affected people or roles and the relevant power relationship;
+- the product behavior, policy, assumption, or incentive—not only its implementation detail;
+- a plausible harm pathway, including how it could persist, compound, or evade correction;
+- repository evidence for the behavior and a clear boundary around what remains uncertain.
+
+Do not invent demographic effects, policy requirements, or harms the repository cannot support. Code,
+tests, configuration, product context, and stakeholder context should substantiate the claim; they
+must not be used to dress up a routine defect as a socio-technical finding.
+
+#### Illustrative findings
+
+These examples guide the reviewer's reasoning. They are not preloaded claims about every product.
+
+**A source's worldview may become assessment authority without a visible choice.** A question
+generation workflow can function perfectly while treating uploaded material as neutral ground truth.
+If the product provides no deliberate way to identify perspective, contested claims, historical
+framing, or omitted viewpoints, students may be assessed against one institutional, cultural, or
+political framing without educators or learners being able to see that choice. This is a product
+assumption about what counts as knowledge, not an upload or rendering defect. Relevant dimensions may
+include pedagogy, decision-fairness, transparency, and inclusion.
+
+**Automation may optimize for answerability rather than defensible learning.** If generation uses
+source material and requested counts or types without asking for learning objectives, reasoning level,
+or evidence of understanding, the product's default incentive can favor facts that are easiest to
+derive and score. Over time, recall and source-phrase matching may displace interpretation, transfer,
+uncertainty, or critical thinking. The concern is not whether a question renders; it is whether the
+product quietly defines learning as what is easiest to automate. Relevant dimensions may include
+pedagogy, fairness-evaluation, and transparency.
+
+**Unequal outcomes may persist because nobody can discover the pattern.** A product can include human
+review yet offer no feedback loop showing whether some generated questions repeatedly confuse,
+misrepresent, or disadvantage learners in particular contexts, language backgrounds, or accessibility
+needs. Individual decisions can look reasonable while harmful patterns repeat across classes or
+cohorts. This is a governance question about whether responsible people can detect and correct
+unequal outcomes, not a request to profile people unnecessarily. Relevant dimensions may include
+fairness-evaluation, inclusion, transparency, and system-integrity.
+
+**The person with least power may carry the whole burden of contesting a decision.** When automated
+assessment becomes consequential but learners cannot understand why an answer is accepted, identify
+ambiguity, or seek correction, the product creates one-way authority even if approval workflows work
+as designed. That burden is especially consequential where language, cultural context, disability
+accommodations, or legitimate alternative interpretations affect what counts as correct. Relevant
+dimensions may include decision-fairness, transparency, inclusion, and pedagogy.
+
+The dimensions are lenses for these kinds of impact patterns. They are not buckets for generic
+reliability, security, accessibility, performance, or interface defects. `privacy` and
+`system-integrity` apply when a system's information or operational behavior establishes a concrete
+stakeholder harm pathway, rather than simply because a generic flaw exists.
 
 `/ccr-review` and `/ccr-review changes` check staged, unstaged, and approved untracked changes.
 `/ccr-review codebase` checks the complete safe Git index plus live changes. `/ccr-review PR-123`
@@ -315,16 +371,22 @@ numbers, duplicate IDs, and mixed `all` selections stop before review or journal
 requires an authenticated `gh` CLI and never uses the current working tree as PR evidence.
 
 Each selected dimension gets exactly one subagent. That worker assesses every criterion, forms
-multiple concrete failure hypotheses, and traces relevant success, failure, retry, concurrency,
-replacement, and cleanup behavior before returning evidence-backed findings. The master agent
-collects, deduplicates, verifies, and validates the findings before reporting them. One root cause is
-reported once with every applicable selected dimension. Each bug includes:
+multiple concrete stakeholder-impact hypotheses, and traces relevant product decisions, authority,
+feedback, and correction paths before returning evidence-backed findings. It uses implementation
+details to prove or disprove an impact pathway, rather than scanning for generic defects. Its prompt
+preserves the complete dimension definition and criteria but omits duplicated repository summaries and
+master-only workflow instructions; non-taxonomy instructions are capped at 250 words, and the worker
+reads approved context through CCR's broker. The master agent collects, deduplicates, verifies, and
+validates the findings before reporting them. One root cause is reported once with every applicable
+selected dimension. Each finding includes:
 
 ```text
 Severity: Critical | High | Medium | Low
-File: repository/relative/path
-Issue: evidence-backed incorrect behavior
-Case: condition that triggers the bug
+Affected people: roles and relevant power relationship
+Product behavior: evidence-backed assumption, decision, or incentive
+Harm pathway: why the behavior can negatively affect people
+Evidence: repository/relative/path and supporting behavior
+Case: realistic condition in which the impact occurs
 Dimension: selected dimension ID or IDs
 ```
 
@@ -352,8 +414,8 @@ context-freshness rule alongside immutable base/head refs. The recorder rejects 
 old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurrently modified
 journals. If code or context changes afterward, pre-commit warns before approval and post-commit
 marks the prior review stale; both hooks remain advisory. Journals do not duplicate Git's path
-inventory. `project.md`
-changes only for a
+inventory. `project.md` uses descriptive headings, short sections, and useful bullets for
+readability. It changes only for a
 verified major feature, architecture, public workflow, product constraint, stakeholder impact, or
 plan change; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
 after initialization.

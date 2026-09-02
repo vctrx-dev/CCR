@@ -179,20 +179,39 @@ To add, delete, reorder, or revise dimensions, change the registry first; also u
 and user-manual references, then run package smoke to verify the shipped help and documentation
 remain aligned.
 
-Reviews fan out exactly one subagent per selected dimension. Each worker receives the complete
-criteria for its dimension, forms and tests concrete cross-layer failure hypotheses, and reports
-criterion coverage plus evidence-backed findings. The master agent then collects, deduplicates,
-verifies, and reports only validated findings. Each verified finding contains severity, file, issue,
-triggering case, and dimension; source code is never changed without later approval. The privacy
-broker exposes staged, unstaged, and untracked evidence without exposing excluded paths.
+## Stakeholder-impact review
 
-The original educational and responsible-AI dimensions retain their focus while covering more
-implementation failure modes. `privacy` includes unauthorized access, disclosure through outputs and
-logs, and retention lifecycle defects in addition to consent. `system-integrity` is the correctness
-backstop for execution/build failures, state and resource corruption, concurrency and idempotency,
-authentication and request integrity, unsafe input boundaries, resource exhaustion, masked errors,
-and cross-layer contract or configuration drift. The master reports one root cause with every
-supported dimension instead of duplicating overlapping findings.
+CCR is a socio-technical, stakeholder-impact review—not a conventional defect scan. It examines how
+a product's assumptions, allocation of authority, decision rules, and feedback loops can harm,
+exclude, mislead, or systematically disadvantage people even when every feature technically works.
+Code, configuration, tests, and UI behavior are evidence for an impact pathway; a technical detail is
+not a finding by itself.
+
+A valid finding must depend on the target product's people and consequences: who is affected, what
+product behavior or assumption creates the effect, how that effect can persist or compound, and what
+repository evidence supports the claim. CCR does not report routine correctness, security,
+performance, accessibility, or UI defects merely relabeled with a dimension. Such defects matter only
+when evidence establishes a specific product-level stakeholder harm. See the
+[stakeholder-impact review guidance](USER_MANUAL.md#stakeholder-impact-review) for the reporting bar
+and illustrative examples.
+
+Reviews fan out exactly one subagent per selected dimension. Each worker receives the complete
+criteria for its dimension, starts with the stakeholder roles and consequential product behavior, and
+then tests concrete impact hypotheses against cross-layer evidence. Worker prompts keep the dimension
+and criteria unchanged but avoid duplicating repository summaries and master-only instructions;
+workers load shared context through CCR's broker. Non-taxonomy worker instructions are capped at 250
+words. The master then collects, deduplicates, verifies, and reports only supported findings. Each
+finding identifies the stakeholder impact, product behavior or assumption, evidence, realistic case,
+and applicable dimensions; source code is never changed without later approval. The privacy broker
+exposes staged, unstaged, and untracked evidence without exposing excluded paths.
+
+The dimensions are stakeholder-impact lenses, not buckets for ordinary engineering defects. They
+examine, for example, whether the product treats one perspective as neutral authority, rewards
+automation-friendly answers over defensible learning, makes unequal outcomes hard to discover, or
+puts the burden of contesting consequential decisions on people with the least power. `privacy` and
+`system-integrity` apply when a system's information or operational behavior creates a concrete harm
+pathway for people—not merely because a generic security or reliability flaw exists. The master
+reports one evidence-backed root cause with every applicable dimension instead of duplicating it.
 Before any worker is dispatched, every review reads bounded `project.md`, `stakeholders.md`, and
 `decisions.md` plus every journal returned within `context.recentJournalEntries`. CCR enumerates the
 local repository journal history, validates each entry's activity metadata, and selects the newest
@@ -219,7 +238,8 @@ Initialization maps independent end-to-end evidence traces, then uses an adaptiv
 wave: one agent for a small cohesive repository and more agents for multi-language, multi-surface, or
 very large repositories, up to the harness's useful concurrency. A separate subagent verifies the
 synthesis before one bounded correction pass. `project.md` is one connected, evidence-backed
-narrative rather than fixed technical categories. Initialization also populates `stakeholders.md`;
+narrative, formatted with descriptive headings, short sections, and useful bullets rather than fixed
+technical categories. Initialization also populates `stakeholders.md`;
 after that, CCR treats stakeholder context as human-owned and read-only. Focused later operations use no discovery agent
 for one evidence trace and normally use one parallel wave only when traces are independent. Agent,
 read, and time budgets are starting guidance rather than hard ceilings: Claude chooses the smallest

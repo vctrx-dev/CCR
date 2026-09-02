@@ -98,14 +98,14 @@ try {
   // Keep npm's mutable cache inside this smoke run so concurrent Windows checks cannot lock a
   // workspace-shared cache. The finally block removes it with the consumer fixtures.
   const cache = path.join(temporaryRoot, "npm-cache");
-  const publishInspection = inspectNpm(
-    ["publish", "--dry-run", "--json", "--ignore-scripts", "--cache", cache],
+  const packageInspection = inspectNpm(
+    ["pack", "--dry-run", "--json", "--ignore-scripts", "--cache", cache],
     root,
   );
-  if (publishInspection.stderr.includes("npm auto-corrected some errors")) {
-    throw new Error("npm publish would remove or rewrite package metadata.");
+  if (packageInspection.stderr.includes("npm auto-corrected some errors")) {
+    throw new Error("npm pack would remove or rewrite package metadata.");
   }
-  JSON.parse(publishInspection.stdout);
+  JSON.parse(packageInspection.stdout);
   const pack = JSON.parse(
     runNpm(
       ["pack", "--json", "--ignore-scripts", "--pack-destination", temporaryRoot, "--cache", cache],
@@ -161,7 +161,7 @@ try {
   );
   const installedHelp = runInstalled(installedBin, ["--help"], consumer);
   if (
-    !installedHelp.includes("Context-aware, stakeholder-aware code review for Claude Code") ||
+    !installedHelp.includes("Context-aware, stakeholder-impact product review for Claude Code") ||
     !installedHelp.includes("Claude Code skills (run inside Claude Code after setup):") ||
     !installedHelp.includes(`Configured dimension IDs: ${reviewDimensionIds.join(", ") || "none"}`)
   ) {
@@ -321,6 +321,15 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   );
   if (!existsSync(reviewSkillPath) || !existsSync(dimensionsPath)) {
     throw new Error("setup did not install the data-driven review skill and dimensions.");
+  }
+  const dimensionsReference = readFileSync(dimensionsPath, "utf8");
+  const dimensionsMatch = /```json\r?\n([\s\S]*?)\r?\n```/u.exec(dimensionsReference);
+  if (!dimensionsMatch?.[1]) {
+    throw new Error("Installed dimensions reference does not contain a JSON registry.");
+  }
+  const installedDimensions = JSON.parse(dimensionsMatch[1]);
+  if (JSON.stringify(installedDimensions) !== JSON.stringify(reviewRegistry)) {
+    throw new Error("Installed dimensions reference does not match the packaged registry.");
   }
   if (existsSync(path.join(scripted, ".claude", "skills", "ccr-codebase"))) {
     throw new Error("setup installed the retired ccr-codebase skill.");

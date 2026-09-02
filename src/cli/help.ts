@@ -31,7 +31,7 @@ Claude Code skills (run inside Claude Code after setup):
   /ccr-context <initialize|update|verify|addition|compact>
                                                    Manage repository context
   /ccr-hooks <sync|status|remove>                  Manage repository-native hooks
-  /ccr-review [changes|codebase|PR-<number>]       Review changes, codebase, or a PR; report only
+  /ccr-review [changes|codebase|PR-<number>]       Review stakeholder impact in changes, codebase, or a PR
              [all|dimension,...]
 
 Configured dimension IDs: ${configuredDimensions}
