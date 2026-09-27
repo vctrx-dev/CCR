@@ -17,11 +17,9 @@ understand.
 ${SKILL_ARGUMENT_NORMALIZATION}
 
 <source_of_truth>
-1. Run \`npx --no-install ccr help\` for every request. It is the current source of truth for the
-   installed terminal surface, Claude Code skill syntax, and configured review dimension IDs.
-2. For a terminal command, run \`npx --no-install ccr help <command>\`. For a command group, run
-   \`npx --no-install ccr <group> --help\`, then use its nested help when the question concerns one
-   operation. Help commands are read-only.
+1. Answer from the installed package's help and documentation rather than remembered syntax.
+2. Consult the relevant operation's help when you need its arguments or behavior. Choose the
+   appropriate read-only lookup yourself.
 3. For details about a Claude Code operation, read only its relevant installed definition:
    - \`.claude/skills/ccr-context/SKILL.md\`
    - \`.claude/skills/ccr-hooks/SKILL.md\`
@@ -29,18 +27,17 @@ ${SKILL_ARGUMENT_NORMALIZATION}
 4. For review selectors or criteria, read
    \`.claude/skills/ccr/references/dimensions.md\`. Use its
    current registry order and IDs; do not rely on an example or a remembered dimension list.
-5. For a project-specific setting question, run \`npx --no-install ccr config\` and consult
+5. For a project-specific setting question, read the resolved configuration and consult
    \`.ccr/config-manual.md\` when present. Treat \`.ccr/config.json\` as human-owned, except that
    \`/ccr-context initialize\` may conditionally replace its untouched \`domain: "unspecified"\`
    default once; this support skill never performs that write.
-6. For installation, package-name, or version questions, run \`npx --no-install ccr --version\` and
+6. For installation, package-name, or version questions, check the installed version and
    read \`node_modules/@vctrx/ccr/package.json\` plus its packaged \`README.md\` when present. Never
    infer a package name or installation command from the binary name.
 </source_of_truth>
 
-If the project-local command is unavailable, try the read-only global form \`ccr help\`. Explain that
-project-local installations use \`npx --no-install ccr ...\`, while bare \`ccr ...\` requires a global
-installation. Do not install, upgrade, or alter PATH while answering a help question.
+Use the existing local or global installation as appropriate. Do not install, upgrade, or alter PATH
+while answering a help question.
 
 <answer_contract>
 - Clearly distinguish terminal commands from Claude Code skills. Terminal commands run in the
@@ -65,9 +62,8 @@ installation. Do not install, upgrade, or alter PATH while answering a help ques
 <examples>
 <example>
 User: \`/ccr Why does ccr help fail in PowerShell?\`
-Action: Run the read-only help probes. If the local package exists, explain that
-\`npx --no-install ccr help\` invokes its project-local binary and bare \`ccr help\` requires a global
-installation or PATH entry. Recommend the working project-local command. Do not suggest an install
+Action: Check how the installed package is available to the shell and recommend a verified working
+invocation. Explain the local/global distinction when relevant. Do not suggest an install
 command, change PATH, or install anything unless the user separately asks for that action.
 </example>
 <example>
@@ -79,7 +75,7 @@ and report without fixing.
 </example>
 <example>
 User: \`/ccr What does --remove-context do?\`
-Action: Run \`npx --no-install ccr help uninstall\`, explain the currently documented removal scope
+Action: Consult installed uninstall help, explain the currently documented removal scope
 and preview/write boundary, and do not invoke uninstall. Do not add internal preservation or deletion
 claims that the current help and installed documentation do not establish.
 </example>

@@ -24,6 +24,7 @@ describe("single-dimension prompt preview", () => {
     const output = renderPromptPreview([], registry);
     for (const text of [
       first.name,
+      first.summary,
       ...first.criteria.flatMap(({ name, details }) => [name, details]),
     ]) {
       expect(output).toContain(text);

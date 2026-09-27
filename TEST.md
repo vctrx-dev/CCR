@@ -91,10 +91,15 @@ are preserved exactly rather than fuzzy-corrected.
 
 Confirm these ownership rules:
 
-- `project.md` contains durable, evidence-backed product-to-people context: consequential behavior,
-  rules, constraints, and uncertainty rather than a technical inventory. Confirm it starts with a
-  plain-language purpose and uses a Mermaid diagram only when it clarifies a real product flow.
-- `stakeholders.md` is populated during initialization and read-only to later automatic operations.
+- `project.md` explains purpose, people's activities, rules affecting them, and known limits in plain
+  language. Source references support claims without turning the document into a technical inventory.
+- `stakeholders.md` explains roles, goals, activities, access needs, effects, and who can challenge
+  decisions, including people without accounts. It is populated during initialization and read-only later.
+- Try a teacher-only tool whose outputs reach learners, a service with a documented appeal process,
+  and a library with no known downstream audience. Check for indirect stakeholders, existing safeguards,
+  and honest unknowns respectively. Reject invented populations, harms, or architecture summaries.
+- Repeat after a technical-only refactor: shared context should stay unchanged. A later change to
+  who can correct a decision should update the relevant project explanation with source evidence.
 - `decisions.md` remains human-owned and changes only through the explicit configuration opt-in.
 - local journals are branch- or PR-specific and remain under ignored `.ccr/journal/`.
 - `ccr context journals` returns the configured repository-wide count ordered by validated
@@ -146,13 +151,13 @@ Run representative valid forms:
 
 Also try unrelated scopes and IDs that are not minor unique misspellings, `PR-0`, duplicate IDs,
 empty comma items, `all` mixed with IDs, and a third positional argument. Each invalid request must
-stop before worker dispatch or journal writes and show the valid scopes and installed IDs.
+stop before investigation or journal writes and show the valid scopes and installed IDs.
 
-Every non-empty review creates exactly one worker per selected dimension. Each worker must assess
-every criterion in that dimension, form concrete stakeholder-impact hypotheses, and use bounded
-evidence to prove or reject them. A worker must not turn a routine implementation, security, or UI
-defect into a finding merely by assigning it a dimension. The master deduplicates root causes and
-verifies candidates before reporting.
+Every review runs in one agent without subagents or delegation. It assesses every selected dimension
+and criterion, forms concrete ethical-impact hypotheses, and checks evidence and counterevidence.
+It must not turn routine engineering faults into findings merely by assigning a dimension. Verify
+that accessibility barriers include an access need, blocked action, concrete scenario, and a check
+for equivalent routes. The same agent deduplicates and verifies candidates before reporting.
 
 ### Qualitatively evaluate stakeholder-impact review
 
@@ -213,8 +218,9 @@ conversation in the target repository. The review requests read-only work withou
 Edit `src/review/impact-review-guidance.ts` for the discovery method, or
 `src/review/dimension-worker-prompt.ts` for the shared structure/output. Edit
 `src/review/dimensions.json` for dimension summaries and criteria. Rerun the command after each edit; it loads source directly,
-never stale `dist`. The skill uses the same worker instruction block. Its master aggregation and
-continuity workflow remain separate and are not exercised by this experiment.
+never stale `dist`. The skill uses the same single-agent guidance. Its scope selection and continuity
+workflow remain separate and are not exercised by this experiment. For all dimensions, paste
+`dimension-prompts.md` into the target repository's fresh conversation; it performs no writes.
 
 For clean clipboard output on PowerShell: `pnpm --silent test:prompt | Set-Clipboard`.
 Generation calls no LLM; only pasting the result into Claude Code consumes model usage.
@@ -231,6 +237,11 @@ Use these contrasts without supplying the expected outcome to the reviewer:
 - An allocation rule rewards prior participation: test whether prior access becomes future entitlement.
   Include an alternative where participation is demonstrably relevant to the stated allocation purpose.
 - Syntax failures, upload races, and rendering defects alone: expect no assumption finding.
+- A required action is unavailable to a keyboard-only user with a disability: expect an inclusion
+  finding with the blocked task and evidence. Add a working equivalent route and check that the
+  blanket exclusion claim disappears. Cosmetic differences alone should produce no finding.
+- User-facing terminology depicts people as subordinate or stereotyped: examine audience and meaning.
+  Contrast an isolated internal identifier; reject keyword-only claims or invented community reactions.
 - A local appeal control is absent but a documented downstream review exists: reject a blanket absence
   claim. When downstream authority is unknown, expect an open question rather than a confirmed defect.
 

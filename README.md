@@ -159,7 +159,7 @@ accessibility failures. Findings include the premise,
 counterexample, evidence, and counterevidence. Material unknowns appear as open questions. Novelty and
 complete discovery cannot be guaranteed; an empty result does not establish ethical safety.
 
-Every dimension uses the same short worker prompt: identify the specific rule, who could be affected
+Every dimension uses the same single-agent review method: identify the specific rule, who could be affected
 and when, how it changes their participation, opportunity, representation, or treatment, and which
 safeguards or human correction exist. Reviews stay conservative: incomplete evidence becomes a question,
 and finding no inclusivity bugs is a valid result.
@@ -227,21 +227,28 @@ when evidence establishes a specific product-level stakeholder harm. See the
 [stakeholder-impact review guidance](USER_MANUAL.md#stakeholder-impact-review) for the reporting bar
 and illustrative examples.
 
-`/ccr-review` uses a short master prompt. It picks the scope, starts one subagent per selected
-dimension in parallel, and sends each the ready-made prompt included in the skill. Subagents work read-only and read `.ccr/project.md`
-and `.ccr/stakeholders.md` for product context. The master then merges, checks each finding against
-the code, saves the review with `ccr context save-review`, and reports. Source code is never changed without later approval.
+`/ccr-review` works alone, without subagents or delegation. The same agent investigates every selected
+dimension, using its summary and questions as discovery lenses rather than an exhaustive checklist.
+It reads source, README, documentation, and `.ccr/project.md` and `.ccr/stakeholders.md` when present,
+verifies candidates, merges duplicates, saves through CCR's review support, and reports.
+Skill prompts describe goals and ownership rules in plain language. Claude chooses its tools and
+consults installed help when needed, rather than following a prescribed terminal-command sequence.
+Accessibility findings must identify the access need, blocked action, evidence, and equivalent-route
+check, even when the cause is an implementation defect. User-facing terminology is examined in
+context, not by keyword alone. Ordinary technical faults remain excluded. Source code is never changed
+without later approval. `dimension-prompts.md` is the standalone, read-only whole-codebase test prompt.
 
-Reports contain `Finding [severity]` / `Scenario` / `Evidence` entries and `Question` / `Context`
-pairs. Coverage, file inventories, and progress narration are omitted. When several dimensions are
-selected, severity reads `[severity; dimension-id]`. "No supported inclusivity bugs found." is a valid result. Actual skill context changes or failed continuity still receive a brief disclosure.
+Reports contain `Finding [severity; dimension-id]` / `Scenario` / `Evidence` entries and `Question` /
+`Context` pairs. Coverage, file inventories, and progress narration are omitted. Findings are sorted
+most severe first. "No supported inclusivity bugs found." is a valid result. Actual skill context
+changes or failed continuity still receive a brief disclosure.
 
 The dimensions are stakeholder-impact lenses, not buckets for ordinary engineering defects. They
 examine, for example, whether the product treats one perspective as neutral authority, rewards
 automation-friendly answers over defensible learning, makes unequal outcomes hard to discover, or
 puts the burden of contesting consequential decisions on people with the least power. `privacy` and
 `system-integrity` apply when a system's information or operational behavior creates a concrete harm
-pathway for people—not merely because a generic security or reliability flaw exists. The master
+pathway for people—not merely because a generic security or reliability flaw exists. The reviewer
 reports one evidence-backed root cause with every applicable dimension instead of duplicating it.
 Changes and codebase reviews record their code and context fingerprints in the review journal with
 `context record-review-state`; if anything changed, the review is reported as stale. Recording refuses
@@ -250,15 +257,18 @@ For pull requests, `context review-pr` establishes the immutable base/head ident
 `context review-pr-head` call supplies approved surrounding head content. Both respect configured
 privacy exclusions, and neither mutates remote or local Git state.
 
-Initialization maps the end-to-end evidence traces a repository needs. `project.md` is one connected, evidence-backed
-account of the product in the world: its purpose, the people affected, consequential rules or
-defaults, and the resulting behavior or uncertainty. Technical details appear only when they explain
-that causal path; it is not a framework summary, directory inventory, or generic-bug catalogue.
-It uses descriptive headings, short sections, and useful bullets rather than fixed technical
-categories. A small Mermaid diagram may explain a consequential flow when it is clearer than prose.
-Initialization also populates `stakeholders.md`; after that, CCR treats stakeholder context as
-human-owned and read-only. The skill chooses the research depth and tools needed to substantiate
-material claims, then asks the developer to review the resulting context.
+Initialization works in one agent and writes plain-language background for an ethical review.
+`project.md` explains the purpose, how people use the software, who its results affect, and the rules
+and assumptions shaping their choices, access, learning, privacy, and opportunities. Implementation
+details, paths, commands, and technical citations stay out of all generated context prose, including
+stakeholders, decisions, and journals. Facts are verified against sources before writing; the account
+is for a non-technical ethical reviewer. Package-managed continuity metadata is preserved.
+`stakeholders.md` describes each supported role's goals, activities, circumstances, possible effects,
+and ability to understand or challenge decisions, including people who never use the software directly.
+Both files keep existing safeguards, unknowns, and future plans clear. They may be short or detailed
+as needed; neither is a bug list or a claim that the product is fair.
+After initialization, stakeholder context remains human-owned and read-only to CCR. Interactive and
+automatic project updates follow the same writing guidance. Review the resulting context before use.
 
 `ccr config init` creates or upgrades the configuration and manual. Use
 `ccr config init --dry-run` to review the proposed operation without writing. After it succeeds,

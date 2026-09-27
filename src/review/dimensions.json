@@ -89,12 +89,12 @@
     {
       "id": "inclusion",
       "name": "Inclusion — Whose Circumstances the Product Treats as Normal",
-      "summary": "Examine whose identity, language, abilities, and circumstances the product treats as normal. Include technical constraints, such as name validation or inaccessible controls, when they block legitimate participation or force someone to misrepresent themselves.",
+      "summary": "Examine whose identity, language, abilities, and circumstances the product treats as normal, and how user-facing language represents people. Include name validation and accessibility barriers when evidence identifies the person, access need, blocked action, and lack of an equivalent route; intent is not required. Exclude cosmetic preferences and generic UX inconvenience.",
       "criteria": [
         {
           "id": "culturally-narrow-representations-and-validation",
           "name": "Is one cultural framing treated as universal?",
-          "details": "Do learning content, examples, categories, or correctness rules assume one cultural context or reduce people to a fixed group identity? Could that change what counts as correct, relevant, or normal for some students?"
+          "details": "Do learning content, examples, categories, or correctness rules assume one cultural context or reduce people to a fixed group identity? Could that change what counts as correct, relevant, or normal for some students? Do user-facing labels, names, or directory structures demean, stereotype, or imply exclusion? Establish who encounters the wording and its meaning in context rather than flagging isolated keywords."
         },
         {
           "id": "exclusionary-language-in-code-and-ui",
@@ -104,12 +104,12 @@
         {
           "id": "excluding-access-assumptions",
           "name": "Can people with access needs complete the task?",
-          "details": "Can someone using a keyboard, screen reader, alternative format, or accommodation complete a consequential task, such as submitting work, taking an assessment, or reviewing feedback? Is an equivalent route available?"
+          "details": "Can someone using a keyboard, screen reader, alternative format, or accommodation complete a consequential task, such as submitting work, taking an assessment, or reviewing feedback? Identify the person's access need, the specific action blocked, and the code behavior causing it. Is an equivalent route available? A verified accessibility barrier qualifies even when caused by an implementation defect."
         },
         {
           "id": "misleading-or-unrecoverable-supported-flows",
           "name": "Who can recover when things go wrong?",
-          "details": "After someone is rejected, misunderstood, delayed, or given unsuitable output, who can realistically recover? Does correction depend on time, expertise, or authority that some people lack?"
+          "details": "After a consequential rejection, misunderstanding, or unsuitable judgment, who can realistically obtain correction? Do appeal rules or institutional handoffs depend on time, expertise, or authority that some people lack? Examine unequal access to correction, not generic retry or error-handling defects."
         }
       ]
     },
@@ -210,7 +210,7 @@
         {
           "id": "resource-exhaustion-and-performance-boundaries",
           "name": "Who loses out when capacity is limited?",
-          "details": "When access, time, processing, or support is limited, who waits, loses access, or receives lower-quality output, and is that allocation justified?"
+          "details": "When access, time, processing, or support is limited, what policy decides who waits, loses access, or receives lower-quality output? Does that allocation unjustifiably disadvantage people in particular circumstances? Examine the allocation rule and its justification, not ordinary slowness, timeouts, or resource-exhaustion defects."
         },
         {
           "id": "masked-errors-and-unrecoverable-failure-handling",

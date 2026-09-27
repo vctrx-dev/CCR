@@ -61,7 +61,7 @@ export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionReg
   return registry;
 }
 
-/** Renders one ready-to-send subagent prompt per dimension; `##` headings are the selector IDs. */
+/** Renders standalone single-agent dimension prompts; `##` headings are the selector IDs. */
 export function renderReviewDimensionReference(input: unknown): string {
   const registry = parseReviewDimensionRegistry(input);
   const prompts = registry.dimensions.map((dimension) => {
@@ -73,11 +73,11 @@ export function renderReviewDimensionReference(input: unknown): string {
     : "No review dimensions are configured. Stop and ask the maintainer to populate `src/review/dimensions.json`.";
   return `---
 name: ccr-review-dimensions
-description: Reference copy of the CCR review subagent prompts for people; skills do not load it.
+description: Reference copy of the CCR single-agent dimension prompts for people; skills do not load it.
 ---
 
 ${MANAGED_SKILL_MARKER}
-# CCR subagent prompts
+# CCR dimension prompts
 
 ${body}
 `;

@@ -1,5 +1,5 @@
 /**
- * Shared subagent prompt template for installed dimension prompts and test:prompt previews.
+ * Shared single-agent prompt template for installed reviews and standalone previews.
  * Edit structure here; never keep a second copy of the prompt in skills.
  */
 import type { ReviewDimensionRegistry } from "./dimensions";
@@ -7,14 +7,18 @@ import { STAKEHOLDER_IMPACT_REVIEW_STANDARD } from "./impact-review-guidance";
 
 type ReviewDimension = ReviewDimensionRegistry["dimensions"][number];
 
-/** Output format; the master report points subagents and itself at this section. */
-const REVIEW_REPORT_FORMAT = `### Output
+/** Shared reporting contract; evidence and uncertainty stay separate from supported findings. */
+export const REVIEW_REPORT_FORMAT = `### Output
 
 For supported bugs:
 
-**Finding [severity]:** in plain, non-technical language, who is treated unfairly and how
-**Scenario:** one realistic or hypothetical example
+**Finding [severity; dimension-id]:** in plain language, who is treated unfairly or excluded and how
+**Scenario:** a realistic example of how this affects someone; say if it is hypothetical
 **Evidence:** relevant file/path, function, rule, or code behavior
+
+Use Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
+and combine duplicates. For accessibility, explain the person's access need and the action they
+cannot complete. Check that each finding meets the rules above before reporting it.
 
 For uncertain issues:
 
@@ -31,8 +35,9 @@ Do not propose fixes unless asked.`;
  * Product-agnostic audience paragraph. Target repositories describe their actual product and
  * affected people in `.ccr/project.md` and `.ccr/stakeholders.md`.
  */
-export const PRODUCT_AUDIENCE_CONTEXT = `This software is used in education. Learn what it does and who uses it from \`.ccr/project.md\`,
-\`.ccr/stakeholders.md\`, source, and documentation. Consider not only the people using the system
+export const PRODUCT_AUDIENCE_CONTEXT = `Learn what this software does and who uses it from the README, source, documentation, and
+\`.ccr/project.md\` and \`.ccr/stakeholders.md\` when present. Check what those documents say against the code.
+For educational software, consider not only the people using the system
 directly, but also the **students and other learners who may ultimately be affected by its outputs,
 decisions, and evaluation choices**.`;
 
@@ -44,21 +49,27 @@ ${PRODUCT_AUDIENCE_CONTEXT}
 ${STAKEHOLDER_IMPACT_REVIEW_STANDARD}`;
 }
 
-/** Renders one dimension as numbered criterion questions; summaries and IDs stay out of the prompt. */
-function renderDimensionSection(dimension: ReviewDimension): string {
+/** Includes each dimension's scope boundary; criterion IDs are metadata, not review instructions. */
+export function renderDimensionSection(dimension: ReviewDimension): string {
   const questions = dimension.criteria
     .map(({ name, details }, index) => `${index + 1}. **${name}**\n   ${details}`)
     .join("\n\n");
   return `### Dimension: ${dimension.name}
+
+${dimension.summary}
 
 Review the code through these questions:
 
 ${questions}`;
 }
 
-/** Renders the complete standalone worker prompt for one dimension and a plain-language scope. */
+/** Renders a read-only, single-agent review of one dimension for contributor previews. */
 export function renderDimensionWorkerPrompt(dimension: ReviewDimension, scope: string): string {
-  return `${workerInstructions(scope)}
+  return `Do not change any files.
+
+${workerInstructions(scope)}
+
+Dimension ID: ${dimension.id}
 
 ${renderDimensionSection(dimension)}
 
