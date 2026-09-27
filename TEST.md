@@ -156,6 +156,93 @@ verifies candidates before reporting.
 
 ### Qualitatively evaluate stakeholder-impact review
 
+See [review calibration](docs/review-calibration.md) in the source checkout for the saved-session
+diagnosis, accepted/excluded contrasts, and a tool-restricted Claude test command. The normal
+`test:prompt` command still prints only the first dimension and starts no model call.
+
+#### Quick prompt iteration
+
+Check cross-item consistency: a finding cannot assert that nobody can act on feedback while an open
+question asks whether an external process acts on it. The whole unsupported claim becomes a question.
+Evidence should establish both the rule and its consequential use; a status label or absence of an
+endpoint alone is insufficient. Internal verification notes must not appear in the compact response.
+
+Dimension 1 targets evaluation of benefit. Check that the reviewer traces actual reliance on a signal,
+not simply a quality label; identifies a rule excluding experience, not merely missing student accounts;
+and considers human correction without requiring model retraining. Test a selection rule that excludes
+unsuccessful participants from a benefit claim, paired with a version that includes their experience.
+The concern should narrow or disappear when the selection mechanism is removed. Keep this evaluation
+case outside the prompt used in the target repository.
+
+For each trial, keep the target commit and local changes fixed and use a fresh ordinary conversation.
+Record the prompt used separately so instruction changes can be compared. Look for product rules
+that confuse operational success with human benefit, discount affected perspectives, reward a signal
+at people's expense, or prevent contrary evidence from changing practice. Retain the documented cases
+below as evaluation material, not examples to paste into the test prompt.
+
+For a contrast, use a synthetic rule that treats compliance as benefit even when declining is penalized.
+Check whether the reviewer finds the evidence problem, then narrows or withdraws the claim when an
+alternative allows refusal without penalty and lets affected people challenge the judgment. In a second
+case, provide only a file allowlist and recorded failure statuses: expect no fairness finding without
+an additional supported behavioral mechanism. Do not count silence alone as successful discovery.
+
+Reject impossible scenarios: five requested items of each of three types cannot yield twelve items
+that are almost all of one type through deletion alone. Missing type-level diagnostics plus unknown
+generation skew is an investigation lead, not a severity-rated finding. Check stored question types
+and human review before accepting claims that a requested-versus-delivered mix is unknowable.
+
+Check discovery breadth: the reviewer should map distinct consequential decisions before selecting
+findings, rather than repeatedly inspect answer storage alone. Uninspected material-selection workflows
+remain unknown, not inapplicable. Behavioral investigation leads must identify an evidenced rule, a
+missing fact, and a neutral question; they must not fabricate testimony or become technical bug lists.
+
+Regression from the ReQUESTA experiment: a partial-generation count with log-only failure reasons
+must not become a fairness finding without an evidenced harmful decision pattern. A single stored
+answer is insufficient to establish unfair grading when downstream scoring is unknown. Export-only
+products still affect learners; lack of student accounts does not make downstream impact inapplicable.
+Require the requested finding fields and top-level dimension ID rather than generic inline bug cards.
+The response should contain only compact findings/scenarios/evidence and useful questions/context.
+Check that removing the coverage report does not remove criterion assessment or hide material unknowns.
+If the host shows tool activity automatically, distinguish that interface output from model-authored prose.
+
+Run `pnpm test:prompt` (or `npm run test:prompt`) in the CCR source checkout. It prints a standalone
+codebase review prompt using only the first dimension in `src/review/dimensions.json`, with all its
+criteria rendered as numbered questions. Copy the whole output into a fresh Claude Code
+conversation in the target repository. The review requests read-only work without skills or journals.
+
+Edit `src/review/impact-review-guidance.ts` for the discovery method, or
+`src/review/dimension-worker-prompt.ts` for the shared structure/output. Edit
+`src/review/dimensions.json` for dimension summaries and criteria. Rerun the command after each edit; it loads source directly,
+never stale `dist`. The skill uses the same worker instruction block. Its master aggregation and
+continuity workflow remain separate and are not exercised by this experiment.
+
+For clean clipboard output on PowerShell: `pnpm --silent test:prompt | Set-Clipboard`.
+Generation calls no LLM; only pasting the result into Claude Code consumes model usage.
+
+Evaluate the installed skill in fresh sessions against small product cases, not prose assertions.
+Record model, package version, loaded skill, evidence scope, and outputs; repeat to expose variation.
+Use these contrasts without supplying the expected outcome to the reviewer:
+
+- A functioning assessment accepts source agreement as the sole correctness rule: seek the premise
+  equating source fidelity with understanding, a defensible counterexample, and evidence anchors.
+- An adaptive path restricts tasks after early low scores and cannot gather disconfirming evidence:
+  seek the self-reinforcing placement mechanism. Add periodic reassessment in a paired case and check
+  that the same claim is withdrawn or narrowed.
+- An allocation rule rewards prior participation: test whether prior access becomes future entitlement.
+  Include an alternative where participation is demonstrably relevant to the stated allocation purpose.
+- Syntax failures, upload races, and rendering defects alone: expect no assumption finding.
+- A local appeal control is absent but a documented downstream review exists: reject a blanket absence
+  claim. When downstream authority is unknown, expect an open question rather than a confirmed defect.
+
+Score supported assumption discovery, technical false positives, invented consequences, counterevidence
+handling, and honest unknowns. Package tests establish installation integrity, not review quality.
+
+Also test a dialect-sensitive answer rule with equal subject understanding. Contrast subject assessment
+with an explicitly justified language-conventions assessment. Check that the reviewer distinguishes
+these purposes, avoids equating race with dialect, and never invents measured racial disparities.
+Use intersecting circumstances (such as shared-device access and evening work), not demographic labels
+alone. A correct report explains the product mechanism rather than attributing traits to a group.
+
 Use a target product and supplied context that support the relevant premise. The review should surface
 or explicitly assess these product-level concerns when repository evidence supports them:
 
@@ -169,9 +256,9 @@ or explicitly assess these product-level concerns when repository evidence suppo
    no route to understand, challenge, or correct an answer's authority.
 
 For each supported positive case, expect a report that names affected roles and power relationship,
-the relevant product assumption or decision, a credible harm pathway, repository evidence, and what
-remains uncertain. The report should remain meaningful if every endpoint, screen, and job technically
-works.
+the relevant behavior, a credible harm pathway, repository evidence, and what remains uncertain.
+Include technical constraints that block participation; do not reject a valid exclusion finding just
+because fixing the implementation would remove it.
 
 Use this negative control: a CSV-download filename sanitizer permits Windows reserved names such as
 `CON.csv`. Unless the target evidence shows a specific product-level stakeholder harm, CCR must reject
@@ -202,14 +289,14 @@ read-only evidence rather than silently treating the partial packet as complete.
 Every confirmed finding includes these qualities:
 
 ```text
-Severity: Critical | High | Medium | Low
-Affected people: roles and relevant power relationship
-Product behavior: evidence-backed assumption, decision, or incentive
-Harm pathway: why the behavior can negatively affect people
-Evidence: repository/relative/path and supporting behavior
-Case: realistic condition in which the impact occurs
-Dimension: selected dimension ID or IDs
+**Finding [severity]:** concise description of the inclusivity bug and who may be affected
+**Scenario:** one realistic or hypothetical example
+**Evidence:** relevant file/path, function, rule, or code behavior
 ```
+
+Questions use only `**Question:**` and `**Context:**`, without severity. No intros, coverage tables, inspected-file lists, rejected candidates, or closing offers.
+An absent acknowledgement checkbox alone does not prove generation certifies correctness; missing local
+student records alone do not prove the absence of instructor-mediated recourse. Verify these distinctions.
 
 The review reports no fix or remediation and changes no source, tests, configuration, branches, or
 worktrees. Only its bounded continuity writes are allowed.
@@ -236,11 +323,10 @@ Then test each freshness transition:
    active journal returned to the reviewer: the input-context fingerprint changes even when code is
    unchanged. The continuity fingerprint alone excludes the active target so CCR's own later write
    remains valid.
-3. Change code or context during review: the skill reloads and restarts once.
-4. Change it again during the restarted review: the skill stops as unstable.
-5. Try recording a PR, older branch, older `HEAD`, placeholder, incomplete, malformed, duplicate-
+3. Change code or context during review: recording fails and the skill reports the review as stale.
+4. Try recording a PR, older branch, older `HEAD`, placeholder, incomplete, malformed, duplicate-
    metadata, oversized, or concurrently edited journal: recording must fail without overwriting it.
-6. Add a second review-run section: only the latest section is recorded or marked stale.
+5. Add a second review-run section: only the latest section is recorded or marked stale.
 
 ## 7. Validate advisory hooks
 

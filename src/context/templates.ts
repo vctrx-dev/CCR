@@ -8,19 +8,6 @@ import { CONFIG_MANUAL } from "./config-manual";
 
 const managedHeader = "<!-- managed by CCR; edit facts, keep headings -->";
 
-export const RETIRED_CONTEXT_FILES: Readonly<Record<string, string>> = {
-  ".ccr/index.md": `${managedHeader}
-# CCR Context Index
-
-Read only the pages relevant to the current task:
-
-- Product purpose, behavior, and technical context: [project.md](project.md)
-- People affected by the software: [stakeholders.md](stakeholders.md)
-
-Source, tests, and schemas outrank generated context.
-`,
-};
-
 export const CONTEXT_FILES: Readonly<Record<string, string>> = {
   ".ccr/config.json": serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
   ".ccr/config-manual.md": CONFIG_MANUAL,

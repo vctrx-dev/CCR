@@ -2,225 +2,225 @@
   "dimensions": [
     {
       "id": "fairness-evaluation",
-      "name": "Fairness Evaluation — Discovering Unequal Outcomes",
-      "summary": "<scope>\nReview whether the product can notice, interpret, and act on unequal outcomes from its own decisions. Focus on whose experience counts as evidence, what aggregate claims can hide, and whether people responsible for outcomes can learn from persistent disparities. This is not a review of isolated data-processing or metric defects.\n</scope>",
+      "name": "Fairness Evaluation — Whose Benefit Counts",
+      "summary": "Examine whether the evidence used to judge this product's benefit fairly represents affected people. Trace evidence selection, interpretation, comparison, and revision to a consequential judgment. Content and workflow choices can shape whose experience counts without categorizing people directly. Derive concerns from this dimension and the target's actual rules, not illustrative harms from another dimension.",
       "criteria": [
         {
           "id": "unrepresentative-dataset-coverage",
-          "name": "Whose Experience Counts in Evidence",
-          "details": "<review_goal>\nIdentify product choices that make some people, settings, sources, or ways of participating absent from the evidence used to evaluate learner- or stakeholder-affecting outcomes.\n</review_goal>\n<inspect>\nExamine how the product defines its population, selects sources or cases, treats unknowns, and decides what evidence is worthy of evaluation. Ask whose experience becomes invisible or exceptional when these defaults operate as intended.\n</inspect>\n<verification>\nReport only when repository evidence connects the choice to a consequential claim or decision. Do not infer demographics or demand collection of sensitive attributes without an established product purpose.\n</verification>"
+          "name": "What counts as benefit?",
+          "details": "What evidence or signals are used to decide that the system's content, recommendations, assessments, or other outputs are successful, suitable, or beneficial? Could that signal look successful while some students lose out?"
         },
         {
           "id": "undefined-fairness-evaluation-attributes",
-          "name": "Categories That Flatten Meaningful Difference",
-          "details": "<review_goal>\nFind product categories or representations that flatten meaningful differences between people, contexts, or experiences before the product evaluates or acts on them.\n</review_goal>\n<inspect>\nTrace how the product names, groups, normalizes, or treats unknown context. Look for a default summary that replaces relevant variation with a single authoritative answer.\n</inspect>\n<verification>\nRequire evidence that the omitted distinction changes how people can judge or govern a consequential outcome; a missing schema field or metric alone is not a finding.\n</verification>"
+          "name": "Whose experience counts?",
+          "details": "Whose experiences or feedback influence evaluation, and are any affected students systematically filtered out, represented by others, or given less weight?"
         },
         {
           "id": "missing-group-wise-fairness-targets",
-          "name": "Unequal Outcomes Without a Learning Loop",
-          "details": "<review_goal>\nDetermine whether repeated use can create unequal effects that responsible people have no product-supported way to discover, investigate, or correct.\n</review_goal>\n<inspect>\nFollow automated outputs and human approvals over time. Look for missing outcome feedback, inability to compare relevant contexts, or a workflow that records completion while leaving recurring harm invisible.\n</inspect>\n<verification>\nA valid finding needs an evidenced decision or workflow and a credible persistent blind spot. Do not request surveillance, profiling, or universal demographic tracking merely to create a metric.\n</verification>"
+          "name": "Can better averages hide worse opportunities?",
+          "details": "Could aggregated success measures or comparisons hide meaningfully worse outcomes for students in particular circumstances?"
         },
         {
           "id": "fairness-evaluation-pipeline-integrity",
-          "name": "Fairness Evidence That Cannot Inform Action",
-          "details": "<review_goal>\nIdentify fairness-related evidence that the product creates or relies on but does not make meaningful to the people accountable for a consequential decision.\n</review_goal>\n<inspect>\nReview who can see evidence, how it is contextualized, whether it reaches the role able to act, and whether uncertainty, exceptions, or affected perspectives are erased on the way.\n</inspect>\n<verification>\nReport a governance gap only when the repository establishes a real decision and a concrete disconnect between evidence and accountable action.\n</verification>"
+          "name": "Can contrary evidence change practice?",
+          "details": "If students, instructors, or others provide credible evidence that something is not working fairly, is there a meaningful way for that evidence to affect how the system or its outputs are judged or used?"
         }
       ]
     },
     {
       "id": "pedagogy",
       "name": "Pedagogy — Defensible Learning Rather Than Convenient Automation",
-      "summary": "<scope>\nReview how the product defines, represents, and judges learning. Seek assumptions that turn a source, measurable output, or automated default into the authoritative definition of understanding, especially when that choice can persist across learners or classrooms. Do not report ordinary rendering, storage, or workflow defects.\n</scope>",
+      "summary": "Examine how the product defines and judges learning. Look for rules or defaults that let a source, an easily scored output, or an automated result stand in for what students actually understand.",
       "criteria": [
         {
           "id": "unvalidated-early-warning-thresholds",
-          "name": "Source Material Treated as Neutral Authority",
-          "details": "<review_goal>\nDetermine whether the product turns a source into assessment or learning authority without a way to recognize perspective, provenance, contestation, or material omissions when those properties matter to the product's domain.\n</review_goal>\n<inspect>\nTrace how sources become questions, recommendations, feedback, or judgments. Look for a design that treats supplied content as neutral ground truth rather than a situated input to a consequential learning decision.\n</inspect>\n<verification>\nGround the concern in repository evidence of conversion into a learning outcome. Do not presume every source needs multiple viewpoints or that a particular worldview is wrong.\n</verification>"
+          "name": "Is source material treated as neutral truth?",
+          "details": "When source material becomes lessons, assessments, answer keys, or feedback, is it treated as unquestionable? Could a perspective, omission, or contested claim in the source become the standard students are judged against?"
         },
         {
           "id": "persistent-negative-state",
-          "name": "Automation Optimized for Answerability Over Learning",
-          "details": "<review_goal>\nFind product defaults that optimize for content easiest to generate, score, compare, or operationalize instead of the learning objective or defensible evidence of understanding the product claims to support.\n</review_goal>\n<inspect>\nInspect what users must specify before generation or judgment, which signals rank outputs, and what the workflow calls success. Consider whether recall, literal matching, or standardization quietly substitutes for reasoning, transfer, uncertainty, or interpretation.\n</inspect>\n<verification>\nA finding requires an evidenced optimization or required workflow that shapes learning judgment. Do not impose a preferred pedagogy that the product context does not support.\n</verification>"
+          "name": "Is answerability favored over learning?",
+          "details": "Do defaults favor content or tasks that are easiest to produce, score, or compare over the intended learning goal? Could recall or literal matching quietly replace reasoning, application, or interpretation?"
         },
         {
           "id": "hidden-learning-path-requirements",
-          "name": "Learner Understanding Reduced to One Expression",
-          "details": "<review_goal>\nDetermine whether the product equates understanding with a single answer form, language register, pace, interaction style, or culturally narrow expression despite evidence that its learning decision has broader meaning.\n</review_goal>\n<inspect>\nReview answer interpretation, feedback, scoring, task design, and permitted alternatives. Ask whether a default representation becomes the only credible way for a learner to demonstrate knowledge.\n</inspect>\n<verification>\nReport only when the repository shows the representation affects a consequential learning judgment. Do not infer disability, language, or cultural needs that are not evidenced.\n</verification>"
+          "name": "Is understanding reduced to one form of expression?",
+          "details": "Does the system accept only one answer form, wording, language register, or interaction style as evidence of understanding? Could a student who understands the material be marked wrong for expressing it differently?"
         },
         {
           "id": "pedagogically-unconstrained-adaptation",
-          "name": "Learning Judgments Without Meaningful Revision",
-          "details": "<review_goal>\nIdentify learning or assessment judgments that can become durable without a meaningful route to understand, revisit, or improve the evidence on which they rest.\n</review_goal>\n<inspect>\nTrace feedback, explanations, educator review, learner response, corrections, and later reuse of a judgment. Look for a workflow that treats a generated or automated result as final before affected people can learn from or challenge it.\n</inspect>\n<verification>\nRequire evidence that the judgment materially shapes learning, progression, or assessment. A missing convenience feature or transient status display is not enough.\n</verification>"
+          "name": "Can learning judgments be revisited?",
+          "details": "Can generated content, a grade, feedback, or another learning judgment become final before instructors or students can understand, question, or correct it?"
         },
         {
           "id": "instructional-content-integrity-and-availability",
-          "name": "Instructional Authority Without Situated Context",
-          "details": "<review_goal>\nFind durable instructional artifacts that are reused as authoritative content without preserving the learning goal, source context, human judgment, or limitations necessary to interpret them responsibly.\n</review_goal>\n<inspect>\nFollow generated content, assessments, feedback, and progress evidence across creation, approval, revision, reuse, and later review. Ask whether the product turns situated material into universal instructional authority.\n</inspect>\n<verification>\nA valid finding needs a consequential educational reuse path; loss, corruption, or availability defects alone belong to a conventional engineering review.\n</verification>"
+          "name": "Does reused content keep its context?",
+          "details": "When generated content is saved and reused, does it keep the learning goal, source, limitations, and human review needed to use it responsibly in a different course or setting?"
         }
       ]
     },
     {
       "id": "decision-fairness",
       "name": "Decision Fairness — Justified and Contestable Allocation of Burden",
-      "summary": "<scope>\nReview consequential product decisions for assumptions that distribute opportunities, restrictions, credibility, or burdens unfairly. Focus on the product's policy and authority relationships, not generic authorization or validation flaws.\n</scope>",
+      "summary": "Examine consequential decisions the product makes or supports: who receives opportunities, restrictions, credibility, or burdens, and on what basis. Focus on decision rules and authority, not generic authorization or validation flaws.",
       "criteria": [
         {
           "id": "protected-and-proxy-based-differential-treatment",
-          "name": "Consequential Decisions With Unexamined Proxies",
-          "details": "<review_goal>\nIdentify decision logic that uses a proxy, default category, prior outcome, or convenience signal as if it were justified evidence about a person or situation.\n</review_goal>\n<inspect>\nTrace which inputs influence eligibility, priority, restriction, recommendation, scoring, or access. Consider whether the product silently converts circumstance, access pattern, history, or institutional category into a judgment of merit, risk, or need.\n</inspect>\n<verification>\nA finding needs an evidenced consequential decision and a credible mismatch between what the signal represents and what the decision claims to decide. Do not label every correlation or category as unfair.\n</verification>"
+          "name": "Do decisions rely on unexamined proxies?",
+          "details": "Does any rule about eligibility, placement, priority, scoring, or access treat a proxy, default category, or past outcome as evidence about a student? Could circumstance or history be mistaken for ability, risk, or need?"
         },
         {
           "id": "unvalidated-fairness-mitigations",
-          "name": "Policy Defaults That Distribute Burden Unequally",
-          "details": "<review_goal>\nFind product defaults that place the work, delay, risk, or proof burden of a consequential outcome on one role or circumstance without making that allocation deliberate or visible.\n</review_goal>\n<inspect>\nReview defaults, escalation rules, deadlines, eligibility gates, opt-outs, manual overrides, and recovery routes. Ask who must notice a problem, supply extra evidence, or absorb an automated decision's cost.\n</inspect>\n<verification>\nReport only where repository evidence establishes both the default allocation and a material product consequence; unequal effort in an ordinary interface flow is insufficient.\n</verification>"
+          "name": "Who carries the burden by default?",
+          "details": "When something goes wrong, who must notice it, supply extra proof, wait, or absorb the cost? Do defaults, deadlines, or recovery routes place that burden unequally on students or instructors in particular circumstances?"
         },
         {
           "id": "unenforced-protected-attribute-separation",
-          "name": "One-Way Authority Over Consequential Outcomes",
-          "details": "<review_goal>\nDetermine whether the product grants an institution, administrator, educator, model, or other powerful role consequential decision authority while denying affected people a meaningful explanation, correction, or contestation path.\n</review_goal>\n<inspect>\nTrace who creates, approves, receives, challenges, and can alter outcomes. Look for an authority structure in which the affected person can only comply with a judgment they cannot inspect or question.\n</inspect>\n<verification>\nGround the claim in an actual product decision and its stated consequences. Do not require an appeal for non-consequential recommendations or purely informational output.\n</verification>"
+          "name": "Can affected people question the outcome?",
+          "details": "Can the system, an instructor, or an administrator decide an outcome that affects students while those students have no way to see, question, or correct it?"
         },
         {
           "id": "decision-policy-and-outcome-integrity",
-          "name": "Fairness Claims Without Contestable Governance",
-          "details": "<review_goal>\nIdentify product claims of fairness, neutrality, mitigation, or responsible automation that cannot be examined or contested by the people accountable for applying them.\n</review_goal>\n<inspect>\nReview policy configuration, human oversight, exceptions, decision records, and statements that frame an outcome as fair or objective. Ask whether the claim becomes authority without a way to inspect its basis or limits.\n</inspect>\n<verification>\nA valid finding requires a repository-supported fairness claim or governance promise; do not require formal policy machinery where the product makes no such decision.\n</verification>"
+          "name": "Can fairness claims be examined?",
+          "details": "Where the system presents an outcome as fair, neutral, objective, or validated, can the people applying or affected by it examine the basis and limits of that claim?"
         }
       ]
     },
     {
       "id": "inclusion",
       "name": "Inclusion — Whose Circumstances the Product Treats as Normal",
-      "summary": "<scope>\nReview the product's implicit model of a normal user, setting, language, body, culture, resource level, and path to participation. Seek durable exclusion created by defaults and authority—not isolated accessibility, wording, browser, or UI defects.\n</scope>",
+      "summary": "Examine whose identity, language, abilities, and circumstances the product treats as normal. Include technical constraints, such as name validation or inaccessible controls, when they block legitimate participation or force someone to misrepresent themselves.",
       "criteria": [
         {
           "id": "culturally-narrow-representations-and-validation",
-          "name": "Culturally Narrow or Essentializing Product Models",
-          "details": "<review_goal>\nIdentify product representations, categories, examples, or decision rules that treat one cultural framing as universal or reduce people to a fixed group identity in a consequential context.\n</review_goal>\n<inspect>\nExamine semantic models, generated content constraints, supported interpretations, classification categories, and product language when they govern what counts as correct, safe, capable, or normal.\n</inspect>\n<verification>\nRequire a concrete product effect beyond an awkward label or isolated text. Do not infer intent or cultural meaning that repository evidence cannot support.\n</verification>"
+          "name": "Is one cultural framing treated as universal?",
+          "details": "Do learning content, examples, categories, or correctness rules assume one cultural context or reduce people to a fixed group identity? Could that change what counts as correct, relevant, or normal for some students?"
         },
         {
           "id": "exclusionary-language-in-code-and-ui",
-          "name": "Default User Assumptions That Exclude",
-          "details": "<review_goal>\nDetermine whether a consequential workflow assumes a particular level of time, money, technology, connectivity, institutional support, literacy, or prior familiarity as the normal condition for participation.\n</review_goal>\n<inspect>\nFollow what the product requires before someone can benefit, recover, give input, or remain eligible. Consider defaults that treat intermittent access, constrained time, or different support structures as failure rather than a legitimate circumstance.\n</inspect>\n<verification>\nReport a finding only when the assumption materially affects access, credibility, opportunity, or burden in an evidenced product flow.\n</verification>"
+          "name": "Who does participation assume?",
+          "details": "Does using the system or its outputs require a particular name format, language, schedule, device, connectivity, or resource level that a legitimate instructor or student may not have?"
         },
         {
           "id": "excluding-access-assumptions",
-          "name": "Access Needs Treated as Exceptions",
-          "details": "<review_goal>\nFind a product policy that makes a reasonable way of perceiving, communicating, interacting, or demonstrating understanding an exceptional workaround rather than a supported path when it affects a consequential outcome.\n</review_goal>\n<inspect>\nReview how accommodations, alternative modalities, language choices, assistive workflows, and human support interact with the core decision process. Ask whether the product's central path dismisses or devalues an evidenced alternative.\n</inspect>\n<verification>\nA valid finding needs a domain-relevant product decision and evidence of durable exclusion; a routine visual or control accessibility defect alone is out of scope.\n</verification>"
+          "name": "Can people with access needs complete the task?",
+          "details": "Can someone using a keyboard, screen reader, alternative format, or accommodation complete a consequential task, such as submitting work, taking an assessment, or reviewing feedback? Is an equivalent route available?"
         },
         {
           "id": "misleading-or-unrecoverable-supported-flows",
-          "name": "Unequally Recoverable Participation",
-          "details": "<review_goal>\nDetermine whether the product makes participation or recovery from an adverse outcome realistically available only to people with greater time, expertise, authority, or institutional resources.\n</review_goal>\n<inspect>\nTrace what happens after a person is rejected, misunderstood, delayed, or given an unsuitable output. Focus on who bears the work of correction and whether that burden can repeatedly compound.\n</inspect>\n<verification>\nReport a structural participation concern only where the repository links recovery to a consequential opportunity or judgment, not a merely inconvenient workflow.\n</verification>"
+          "name": "Who can recover when things go wrong?",
+          "details": "After someone is rejected, misunderstood, delayed, or given unsuitable output, who can realistically recover? Does correction depend on time, expertise, or authority that some people lack?"
         }
       ]
     },
     {
       "id": "transparency",
       "name": "Transparency — Understandable and Accountable Product Authority",
-      "summary": "<scope>\nReview whether people can understand what a consequential product output means, why it was produced, what it cannot establish, and how it may be challenged or corrected. Focus on information asymmetry and decision authority, not generic status, error, or loading-state defects.\n</scope>",
+      "summary": "Examine whether people can understand what a consequential output means, why it was produced, what it cannot establish, and how to challenge it. Focus on information gaps between roles, not generic status, error, or loading messages.",
       "criteria": [
         {
           "id": "opaque-ai-decision-outputs",
-          "name": "Consequential Logic Hidden From Affected People",
-          "details": "<review_goal>\nIdentify product decisions that materially affect people while the basis, governing rule, relevant source, or decision-maker remains inaccessible to the people who need to understand it.\n</review_goal>\n<inspect>\nTrace decision inputs, policy, generated output, human approval, and the information each role receives. Ask whether the product's authority depends on a rationale that only an institution or system can see.\n</inspect>\n<verification>\nA finding requires a consequential output and a repository-grounded information asymmetry. Do not require disclosure of secrets, security controls, or irrelevant implementation detail.\n</verification>"
+          "name": "Is consequential logic hidden?",
+          "details": "Do grades, recommendations, generated content, or other evaluations rely on rules, sources, or decisions that the instructors or students affected by them cannot see?"
         },
         {
           "id": "causal-overclaiming-in-analytics",
-          "name": "Claims That Overstate What the System Knows",
-          "details": "<review_goal>\nDetermine whether product language, labels, scores, or workflow states present inference, automation, incomplete evidence, or a contested judgment as settled fact or certainty.\n</review_goal>\n<inspect>\nReview what the product calls correct, complete, fair, safe, ready, predicted, or recommended and compare that claim with the evidence, uncertainty, and role of human judgment represented in the repository.\n</inspect>\n<verification>\nReport only when overstatement shapes a consequential decision or trust relationship; a minor imprecise label is not enough.\n</verification>"
+          "name": "Does the system overstate what it knows?",
+          "details": "Does the system present generated content or evaluations as correct, complete, fair, or ready when they are really inferences, automated guesses, or contested judgments?"
         },
         {
           "id": "mismatched-prediction-validation-and-use",
-          "name": "Automated Judgments Without Responsible Human Context",
-          "details": "<review_goal>\nFind automated recommendations, classifications, rankings, or judgments that influence a consequential choice without enough contextual explanation for the receiving role to apply responsible human judgment.\n</review_goal>\n<inspect>\nTrace whether the product communicates relevant evidence, limits, alternatives, and uncertainty at the moment someone must act. Consider whether apparent human review is meaningful or merely rubber-stamps an opaque output.\n</inspect>\n<verification>\nRequire an evidenced automation-to-decision pathway. Do not require explanatory content for outputs that cannot materially affect a person.\n</verification>"
+          "name": "Do people have enough context to judge automated output?",
+          "details": "When an instructor must act on an automated score, flag, or recommendation, do they receive the evidence, limits, and uncertainty needed to judge it responsibly?"
         },
         {
           "id": "unidirectional-algorithmic-decisions-without-educator-contestability",
-          "name": "Decision Authority Without Recourse",
-          "details": "<review_goal>\nDetermine whether an automated or institutional decision can shape a person's opportunity, learning, standing, or treatment while the affected person has no meaningful route to understand, contest, or contextualize it.\n</review_goal>\n<inspect>\nMap creation, approval, receipt, explanation, exception, correction, and appeal across roles. Look for a workflow that makes compliance the only available response to an authoritative output.\n</inspect>\n<verification>\nGround the concern in a real consequential decision; do not demand recourse for informational suggestions or low-stakes automation.\n</verification>"
+          "name": "Is there recourse for affected people?",
+          "details": "Can an automated or instructor-applied judgment shape a student's learning, grade, or opportunity while the student has no way to understand, contest, or add context to it?"
         },
         {
           "id": "automation-without-review-safeguards",
-          "name": "Human Review That Cannot Exercise Judgment",
-          "details": "<review_goal>\nIdentify a nominal human review step that lacks the evidence, time, authority, alternatives, or correction power needed to be meaningful before a consequential automated outcome is used.\n</review_goal>\n<inspect>\nTrace what the reviewer sees, can change, must approve, and learns later. Ask whether review functions as a safeguard or merely shifts responsibility onto a person without decision authority.\n</inspect>\n<verification>\nReport only when the review is tied to a consequential outcome and repository evidence establishes the gap in meaningful judgment.\n</verification>"
+          "name": "Can human review actually change the outcome?",
+          "details": "Does a human review step have the information, time, and authority to change an output before it is used, or does it only rubber-stamp it?"
         },
         {
           "id": "misleading-status-error-and-state-communication",
-          "name": "Missing Provenance and Decision History",
-          "details": "<review_goal>\nDetermine whether consequential output can be reused, relied on, or challenged without a meaningful record of its source, revision, human involvement, or governing context.\n</review_goal>\n<inspect>\nFollow content, recommendations, and decisions across creation, approval, revision, reuse, and later review. Look for product behavior that converts situated work into an authoritative artifact without preserving the context needed to interpret it.\n</inspect>\n<verification>\nA valid finding needs durable reuse or accountability consequences; lack of an internal audit field or a status message alone is not enough.\n</verification>"
+          "name": "Is provenance kept for later use?",
+          "details": "Can content or decisions be reused, relied on, or challenged later without a record of its source, revisions, and human involvement?"
         }
       ]
     },
     {
       "id": "privacy",
       "name": "Privacy — Purpose, Agency, and Durable Control Over Personal Context",
-      "summary": "<scope>\nReview how the product uses personal, learner, family, behavioral, or sensitive context as a source of institutional power. Focus on purpose, expectation, role asymmetry, secondary use, and durable control—not generic exposure, logging, authentication, or retention bugs.\n</scope>",
+      "summary": "Examine how personal, learner, or sensitive information is used and who holds power over it. Focus on purpose, reasonable expectations, secondary use, and lasting control, not generic exposure, logging, authentication, or retention bugs.",
       "criteria": [
         {
           "id": "missing-consent-checks-for-learner-data",
-          "name": "Collection Without a Stakeholder Purpose",
-          "details": "<review_goal>\nIdentify data collection or derived personal context that is not meaningfully connected to the product purpose communicated to the people whose information is involved.\n</review_goal>\n<inspect>\nTrace which personal signals become inputs to features or decisions, why they are needed, and whether the product treats availability as permission to use them. Consider inferred data as well as directly supplied data.\n</inspect>\n<verification>\nReport only when code or product context establishes a real use beyond a defensible purpose; do not treat every stored field as unjustified.\n</verification>"
+          "name": "Is personal information collected for a clear purpose?",
+          "details": "Is personal, student, or inferred information collected or used without a clear connection to the purpose communicated to the people it describes?"
         },
         {
           "id": "unauthorized-or-overbroad-data-access",
-          "name": "Data Use Beyond Reasonable Expectation",
-          "details": "<review_goal>\nDetermine whether a product repurposes personal context into a new recommendation, evaluation, ranking, disclosure, or institutional decision that a contributing person has no reasonable way to anticipate or influence.\n</review_goal>\n<inspect>\nFollow data from collection through transformations, joins, model or rule inputs, sharing, and decision outputs. Look for a workflow that changes the social meaning of information without making that shift visible.\n</inspect>\n<verification>\nGround the expectation and new use in repository evidence. Do not infer consent terms, jurisdictional duties, or stakeholder expectations that are not represented.\n</verification>"
+          "name": "Is information used beyond reasonable expectations?",
+          "details": "Is personal information repurposed into a new evaluation, ranking, recommendation, or disclosure that the person could not reasonably anticipate or influence?"
         },
         {
           "id": "sensitive-data-exposure-through-outputs-and-logs",
-          "name": "Asymmetric Visibility and Control",
-          "details": "<review_goal>\nFind situations where an institution or privileged role can inspect, combine, or act on personal context while the affected person cannot meaningfully know, correct, limit, or contextualize that use.\n</review_goal>\n<inspect>\nReview role-based experiences, data-derived decisions, correction routes, notices, and user agency. Ask whether the product creates a one-way observation relationship that shapes a consequential outcome.\n</inspect>\n<verification>\nA valid finding needs an evidenced power imbalance and consequence; absence of a generic privacy setting is not sufficient.\n</verification>"
+          "name": "Who can see and control personal information?",
+          "details": "Can an institution, instructor, or other privileged role see, combine, or act on someone's information while that person cannot know about, correct, or limit that use?"
         },
         {
           "id": "unbounded-or-purpose-inconsistent-data-retention",
-          "name": "Retention That Extends Power Over Time",
-          "details": "<review_goal>\nDetermine whether retained personal context, history, or derived labels continue to influence people after the original purpose, accuracy, or relationship has changed.\n</review_goal>\n<inspect>\nTrace reuse of historical signals, profiles, labels, and decision records across time, role changes, corrections, and new contexts. Consider whether old context becomes unchallengeable evidence for later judgment.\n</inspect>\n<verification>\nReport only when the repository establishes durable influence on a consequential product behavior; an arbitrary storage-duration concern alone is not a finding.\n</verification>"
+          "name": "Does old information keep shaping decisions?",
+          "details": "Can past personal information, history, or labels keep influencing decisions after their purpose, accuracy, or context has changed?"
         }
       ]
     },
     {
       "id": "system-integrity",
       "name": "System Integrity — Durable Stakeholder Outcomes and Institutional Accountability",
-      "summary": "<scope>\nReview whether the product's overall system of roles, automation, handoffs, and recovery preserves accountable, equitable outcomes over time. This dimension is not a catch-all for correctness, security, performance, platform, or UI bugs; it covers systemic product behavior that lets stakeholder harm persist or compound.\n</scope>",
+      "summary": "Examine whether roles, automation, handoffs, and recovery together keep outcomes accountable and fair over time. This is not a catch-all for correctness, security, performance, or UI bugs; report only systemic behavior that lets harm to people persist or compound.",
       "criteria": [
         {
           "id": "broken-execution-build-and-test-paths",
-          "name": "Product Outcomes Dependent on Invisible Assumptions",
-          "details": "<review_goal>\nIdentify consequential product outcomes that depend on an unstated institutional, operational, or human assumption that affected people cannot see, assess, or reasonably satisfy.\n</review_goal>\n<inspect>\nTrace handoffs between roles, automated services, policies, and external systems. Ask whether the product presents an outcome as dependable while silently requiring a particular resource, authority, timing, or institutional practice.\n</inspect>\n<verification>\nReport a systemic finding only where the hidden assumption changes stakeholder treatment or accountability. A generic deployment, configuration, or reliability flaw is out of scope.\n</verification>"
+          "name": "Do outcomes depend on invisible assumptions?",
+          "details": "Does a consequential outcome silently depend on a resource, authority, timing, or institutional practice that affected people cannot see or reasonably meet?"
         },
         {
           "id": "state-storage-and-resource-lifecycle-corruption",
-          "name": "Harmful Patterns That Cannot Be Observed",
-          "details": "<review_goal>\nDetermine whether the product can repeatedly create a consequential adverse pattern while the people accountable for it lack a product-supported way to recognize the pattern, its source, or its distribution.\n</review_goal>\n<inspect>\nReview outcome records, role handoffs, aggregation, audit trails, escalation, and repeated automation. Focus on whether the system converts many isolated experiences into invisible institutional drift.\n</inspect>\n<verification>\nRequire an evidenced recurring decision or workflow and credible inability to learn from its outcomes. Do not report missing telemetry or monitoring for ordinary operational incidents.\n</verification>"
+          "name": "Can harmful patterns be noticed?",
+          "details": "Could the system repeatedly produce the same adverse outcome for students or instructors while no responsible person can recognize the pattern or its source?"
         },
         {
           "id": "non-atomic-concurrency-and-idempotency-failures",
-          "name": "Correction and Recovery Burdens That Compound Inequality",
-          "details": "<review_goal>\nFind product behavior that makes correction of a consequential error, unsuitable outcome, or harmful default depend on resources unequally available to affected people or frontline staff.\n</review_goal>\n<inspect>\nTrace recovery, override, support, escalation, documentation, and repeated use. Consider whether an apparently neutral correction path repeatedly transfers cost to the people with least time, authority, expertise, or access.\n</inspect>\n<verification>\nA valid finding needs an evidenced connection to durable stakeholder opportunity, learning, dignity, privacy, or decision fairness; routine error recovery is not enough.\n</verification>"
+          "name": "Does correction compound inequality?",
+          "details": "Does correcting a harmful outcome or default depend on time, authority, expertise, or access that affected people do not equally have, and could that cost repeat?"
         },
         {
           "id": "authentication-authorization-and-request-integrity",
-          "name": "Institutional Accountability Gaps in Automated Workflows",
-          "details": "<review_goal>\nDetermine whether automation can create a consequential outcome while responsibility for its judgment, correction, and downstream effect is so fragmented that no role can meaningfully own it.\n</review_goal>\n<inspect>\nMap creation, approval, deployment, receipt, challenge, and correction across roles and systems. Look for a workflow where each participant can reasonably assume another actor is responsible for an adverse consequence.\n</inspect>\n<verification>\nReport only when the repository establishes a real automated decision pathway and an accountability gap with material stakeholder consequences.\n</verification>"
+          "name": "Is someone accountable for automated outcomes?",
+          "details": "Can automation create a consequential outcome while responsibility for judging, correcting, and owning its effects is split so that no role owns it?"
         },
         {
           "id": "untrusted-input-and-boundary-security",
-          "name": "Boundary Decisions That Redefine Who Is Protected",
-          "details": "<review_goal>\nIdentify product boundary rules that determine whose safety, privacy, dignity, or opportunity is protected, and whether those rules silently privilege one role or context over another.\n</review_goal>\n<inspect>\nTrace how the product defines trusted parties, acceptable inputs, escalation, and exceptional cases when those definitions control stakeholder treatment. Focus on policy meaning and power allocation, not exploit mechanics.\n</inspect>\n<verification>\nA valid finding needs an evidenced consequential product boundary and unequal stakeholder consequence; a conventional security vulnerability is out of scope by itself.\n</verification>"
+          "name": "Do boundary rules decide who is protected?",
+          "details": "Do rules about trusted parties, acceptable input, or exceptions decide whose safety, privacy, or opportunity is protected, and do they favor one role over another?"
         },
         {
           "id": "resource-exhaustion-and-performance-boundaries",
-          "name": "Scarce Product Capacity Allocated Without Stakeholder Justification",
-          "details": "<review_goal>\nDetermine whether the product allocates scarce access, time, attention, processing, support, or institutional capacity through defaults that can systematically privilege some stakeholders without a visible, defensible rationale.\n</review_goal>\n<inspect>\nReview prioritization, queues, quotas, limits, retries, availability windows, and fallback paths as product rules. Ask who waits, loses access, or receives lower-quality treatment when capacity is constrained.\n</inspect>\n<verification>\nReport only when repository evidence establishes a consequential allocation rule and a credible unequal burden; generic performance or rate-limit defects are not findings.\n</verification>"
+          "name": "Who loses out when capacity is limited?",
+          "details": "When access, time, processing, or support is limited, who waits, loses access, or receives lower-quality output, and is that allocation justified?"
         },
         {
           "id": "masked-errors-and-unrecoverable-failure-handling",
-          "name": "Adverse Outcomes That Lose Their Institutional Meaning",
-          "details": "<review_goal>\nFind product behavior that turns a consequential adverse outcome into an isolated, normalized, or unaccountable event, preventing affected people and responsible roles from recognizing what happened or learning from it.\n</review_goal>\n<inspect>\nTrace how the product categorizes, communicates, records, escalates, and later reviews adverse outcomes. Focus on loss of accountability or agency rather than technical exception handling.\n</inspect>\n<verification>\nA valid finding requires an evidenced consequential outcome and a durable governance blind spot; a swallowed error or missing retry is not enough.\n</verification>"
+          "name": "Do adverse outcomes lose their meaning?",
+          "details": "Does the system turn a consequential adverse outcome into an isolated or normalized event that affected people and responsible roles cannot recognize or learn from?"
         },
         {
           "id": "cross-layer-contract-and-configuration-drift",
-          "name": "Conflicting Product Rules Across Roles",
-          "details": "<review_goal>\nDetermine whether different product roles, surfaces, or institutional handoffs receive incompatible definitions of a consequential rule, responsibility, entitlement, or outcome.\n</review_goal>\n<inspect>\nTrace policy meaning across interfaces, roles, automated services, documentation, and records. Look for a system in which each participant acts reasonably on a different rule and affected people bear the result.\n</inspect>\n<verification>\nReport only when the conflict changes a stakeholder's real opportunity, treatment, or ability to seek accountability; ordinary contract drift is out of scope.\n</verification>"
+          "name": "Do different roles see conflicting rules?",
+          "details": "Do different roles, screens, or handoffs apply incompatible versions of a consequential rule or responsibility, leaving affected people to bear the result?"
         }
       ]
     }

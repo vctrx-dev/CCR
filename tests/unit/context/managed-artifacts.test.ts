@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   MANAGED_ARTIFACTS,
   MANAGED_BLOCK_ARTIFACTS,
-  RETIRED_MANAGED_ARTIFACTS,
   isPackageManagedSkill,
 } from "../../../src/context/managed-artifacts";
 import { MANAGED_SKILL_MARKER } from "../../../src/context/skills";
@@ -17,12 +16,6 @@ describe("managed artifact registry", () => {
     );
     expect(MANAGED_ARTIFACTS.some((artifact) => artifact.path === ".ccr/project.md")).toBe(true);
     expect(MANAGED_ARTIFACTS.some((artifact) => artifact.path === ".ccr/index.md")).toBe(false);
-    expect(RETIRED_MANAGED_ARTIFACTS.map((artifact) => artifact.path)).toEqual([
-      ".ccr/index.md",
-      ".claude/skills/ccr-review/references/dimensions.md",
-      ".claude/skills/ccr-codebase/references/dimensions.md",
-      ".claude/skills/ccr-codebase/SKILL.md",
-    ]);
     expect(MANAGED_ARTIFACTS.some((artifact) => artifact.kind === "skill")).toBe(true);
     expect(
       MANAGED_ARTIFACTS.some((artifact) => artifact.path === ".claude/skills/ccr-hooks/SKILL.md"),

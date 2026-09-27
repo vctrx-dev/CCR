@@ -1,4 +1,4 @@
-import { CCR_REVIEW_SKILL, RETIRED_CCR_SKILL_PATHS } from "../review/skills";
+import { CCR_REVIEW_SKILL } from "../review/skills";
 import { CCR_MANUAL_SKILL } from "./manual-skill";
 import { SKILL_ARGUMENT_NORMALIZATION } from "./skill-argument-normalization";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
@@ -356,5 +356,3 @@ export const CCR_SKILLS: readonly SkillDefinition[] = [
   { id: "ccr-hooks", path: ".claude/skills/ccr-hooks/SKILL.md", content: CCR_HOOKS_SKILL },
   { id: "ccr-review", path: ".claude/skills/ccr-review/SKILL.md", content: CCR_REVIEW_SKILL },
 ];
-
-export { RETIRED_CCR_SKILL_PATHS };

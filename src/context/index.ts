@@ -31,14 +31,12 @@ export type {
   ManagedArtifactKind,
   ManagedBlockArtifact,
   ManagedSkillOwnership,
-  RetiredManagedArtifact,
   SetupPolicy,
   UninstallPolicy,
 } from "./managed-artifacts.js";
 export {
   MANAGED_ARTIFACTS,
   MANAGED_BLOCK_ARTIFACTS,
-  RETIRED_MANAGED_ARTIFACTS,
   isPackageManagedSkill,
   managedSkillOwnership,
 } from "./managed-artifacts.js";

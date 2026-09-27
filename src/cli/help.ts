@@ -14,6 +14,8 @@ Terminal commands:
   ccr update [--dry-run] [--json]                   Safely refresh package-managed CCR assets
   ccr uninstall [--dry-run] [--remove-context]      Remove integration; preserve context by default
   ccr context <command>                          Inspect human-impact context and review-safe evidence
+  ccr context save-review <scope> <dimensions> <counts> <summary>
+                                                 Save a finished review to its journal
   ccr context append-decision <decision>         Append one config-authorized decision
   ccr context journals [PR-<number>]             Read repository-wide recent journals; PR is ignored
   ccr context review-pr PR-<number>              Read bounded privacy-filtered PR evidence

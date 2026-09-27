@@ -54,6 +54,7 @@
     "test:integration": "vitest run tests/integration/",
     "test:e2e": "vitest run tests/e2e/",
     "test:package": "node scripts/package-smoke.mjs",
+    "test:prompt": "node scripts/test-prompt.mjs",
     "test:changed": "node scripts/audit.mjs --blast",
     "test:changed:print": "node scripts/audit.mjs --blast --print",
     "audit": "node scripts/audit.mjs",

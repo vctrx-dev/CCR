@@ -13,15 +13,3 @@ export const CCR_SKILL_RESOURCES: readonly SkillResourceDefinition[] = [
     content: REVIEW_DIMENSION_REFERENCE,
   },
 ];
-
-/** Exact former generated copies retained only for safe upgrade cleanup. */
-export const RETIRED_CCR_SKILL_RESOURCES: readonly SkillResourceDefinition[] = [
-  {
-    path: ".claude/skills/ccr-review/references/dimensions.md",
-    content: REVIEW_DIMENSION_REFERENCE,
-  },
-  {
-    path: ".claude/skills/ccr-codebase/references/dimensions.md",
-    content: REVIEW_DIMENSION_REFERENCE,
-  },
-];

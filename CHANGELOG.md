@@ -7,6 +7,37 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+### Added
+
+- `ccr context save-review <scope> <dimensions> <critical,high,medium,low> <summary>` saves a
+  finished review to its journal and records the reviewed state in one step.
+- Source-checkout `test:prompt` command prints the first dimension's standalone review prompt from
+  the same worker instructions used by the skill, enabling manual prompt experiments.
+
+### Removed
+
+- Setup no longer removes obsolete files from older CCR versions (`.ccr/index.md`, the
+  `ccr-codebase` skill, and old per-skill `dimensions.md` copies). Delete them manually if present.
+  `RETIRED_MANAGED_ARTIFACTS` and `RetiredManagedArtifact` are no longer exported.
+
+### Changed
+
+- Clarified that concrete identity and accessibility barriers qualify as stakeholder harms even when
+  their mechanism is technical. Inclusion guidance now covers participation blocked for a single person.
+- Review workers, prompt previews, and final skill reports now share one short prompt and a
+  `Finding` / `Scenario` / `Evidence` and `Question` / `Context` output format; material uncertainties
+  are reported as questions and "No supported inclusivity bugs found." is a valid result.
+- `/ccr-review` now uses a short master prompt: it starts one subagent per dimension with the
+  ready-made prompt embedded in the skill, verifies results, records the journal, and reports. The
+  installed dimensions reference now shows the same prompts for people instead of JSON.
+- Rewrote the pedagogy, decision-fairness, inclusion, transparency, privacy, and system-integrity
+  dimensions as concise review questions. Dimension and criterion IDs are unchanged.
+- Refocused the first review dimension on evidence of human benefit, affected perspectives, conflicting
+  success measures, and whether contrary evidence can change practice. Criterion IDs are unchanged.
+- Review discovery now tests hidden assumptions in correctly functioning product rules using concrete
+  counterexamples, counterevidence, and feedback loops. Workers receive the shared method explicitly;
+  material evidence gaps are reported as open questions rather than confirmed bugs or clean criteria.
+
 ## 0.9.2 - 2026-09-02
 
 ### Changed
