@@ -7,6 +7,8 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.10.0 - 2026-09-28 (beta-0.1)
+
 ### Added
 
 - `ccr context save-review <scope> <dimensions> <critical,high,medium,low> <summary>` saves a
@@ -45,6 +47,11 @@ contain incompatible changes when they are clearly documented.
 - Review discovery now tests hidden assumptions in correctly functioning product rules using concrete
   counterexamples, counterevidence, and feedback loops. Workers receive the shared method explicitly;
   material evidence gaps are reported as open questions rather than confirmed bugs or clean criteria.
+
+### Fixed
+
+- Pinned the transitive `js-yaml` dependency to patched version `4.3.2` to address a high-severity
+  denial-of-service advisory in the development toolchain.
 
 ## 0.9.2 - 2026-09-02
 
