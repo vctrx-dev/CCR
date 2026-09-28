@@ -40,7 +40,6 @@ describe("CLI help", () => {
     expect(output).toContain("/ccr-hooks <sync|status|remove>");
     expect(output).toContain("/ccr-review [changes|codebase|PR-<number>]");
     expect(output).toContain("[all|dimension,...]");
-    expect(output).not.toContain("/ccr-codebase");
     expect(output).toContain(
       `Configured dimension IDs: ${REVIEW_DIMENSIONS.dimensions.map(({ id }) => id).join(", ")}`,
     );

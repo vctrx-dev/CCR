@@ -1,6 +1,6 @@
 {
   "name": "@vctrx/ccr",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "private": false,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.32.0",
@@ -10,7 +10,7 @@
   "description": "Human-impact product context and stakeholder-impact review for Claude Code",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vctrx-dev/CCR.git"
+    "url": "https://github.com/vctrx-dev/CCR"
   },
   "type": "module",
   "bin": {
@@ -54,6 +54,7 @@
     "test:integration": "vitest run tests/integration/",
     "test:e2e": "vitest run tests/e2e/",
     "test:package": "node scripts/package-smoke.mjs",
+    "test:prompt": "node scripts/test-prompt.mjs",
     "test:changed": "node scripts/audit.mjs --blast",
     "test:changed:print": "node scripts/audit.mjs --blast --print",
     "audit": "node scripts/audit.mjs",
@@ -69,7 +70,8 @@
   "pnpm": {
     "overrides": {
       "esbuild": "0.28.1",
-      "fast-uri": "3.1.6"
+      "fast-uri": "3.1.6",
+      "js-yaml": "4.3.2"
     },
     "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "husky"]
   },

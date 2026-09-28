@@ -15,6 +15,7 @@ const INCOMPLETE_LOCK_GRACE_MS = 5_000;
 const MAX_MANAGED_LOCK_AGE_MS = 15 * 60_000;
 const LOCK_OWNER_FILE_PATTERN = /^([a-f0-9-]{36})\.owner\.json$/u;
 const STALE_LOCK_MARKER = "stale lock quarantine\n";
+const MANAGED_WRITE_LOCK_GROUP = ".ccr/private/managed-write-locks";
 
 /** Shared lock for setup, uninstall, configuration initialization, and context automation. */
 export const MANAGED_LIFECYCLE_LOCK_PATH = ".ccr/private/managed-lifecycle.lock";
@@ -207,6 +208,28 @@ async function reclaimManagedLock(
 }
 
 /**
+ * Compare-and-swap writes share this grouping path. Remove it only after its final lock is gone so
+ * callers retain serialization without leaving an empty implementation directory in `.ccr/private`.
+ */
+async function removeEmptyManagedWriteLockGroup(root: string, target: string): Promise<void> {
+  const group = await assertSafeManagedPath(root, MANAGED_WRITE_LOCK_GROUP);
+  if (path.resolve(path.dirname(target)) !== path.resolve(group)) return;
+  try {
+    await rmdir(group);
+  } catch (error: unknown) {
+    if (
+      isFileNotFound(error) ||
+      (error instanceof Error &&
+        "code" in error &&
+        ["EEXIST", "ENOTEMPTY"].includes(String(error.code)))
+    ) {
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
  * Atomically acquires a repository-contained, token-owned local lock. An absent result means a
  * live owner or a recently created incomplete owner holds it. Release cannot remove a replacement
  * owner's lock, and dead or old incomplete locks are reclaimed through an atomic rename.
@@ -278,6 +301,7 @@ export async function tryAcquireManagedLock(
     if (didRemoveLock && quarantine !== undefined) {
       await rm(quarantine, { recursive: true, force: true });
     }
+    if (didRemoveLock) await removeEmptyManagedWriteLockGroup(root, target);
   };
 }
 

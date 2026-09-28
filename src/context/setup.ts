@@ -5,7 +5,6 @@ import type { ContextConfig } from "./config";
 import { CONFIG_MANUAL } from "./config-manual";
 import {
   MANAGED_LIFECYCLE_LOCK_PATH,
-  deleteManagedTextIfUnchanged,
   readManagedTextIfExists,
   withManagedLock,
   writeManagedTextIfUnchanged,
@@ -13,7 +12,6 @@ import {
 import {
   MANAGED_ARTIFACTS,
   MANAGED_BLOCK_ARTIFACTS,
-  RETIRED_MANAGED_ARTIFACTS,
   managedSkillOwnership,
 } from "./managed-artifacts";
 import type { ManagedArtifact } from "./managed-artifacts";
@@ -24,7 +22,7 @@ import { managedBlock, upsertManagedBlock } from "./managed-block";
  * registry, not in this workflow, so their lifecycle is handled consistently.
  */
 
-export type SetupAction = "create" | "modify" | "preserve" | "remove" | "unchanged";
+export type SetupAction = "create" | "modify" | "preserve" | "unchanged";
 
 export interface SetupChange {
   path: string;
@@ -102,23 +100,6 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
       return planArtifactChange(artifact, existing);
     }),
   );
-  const retiredEntries = (
-    await Promise.all(
-      RETIRED_MANAGED_ARTIFACTS.map(async (artifact): Promise<SetupChange | undefined> => {
-        const existing = await readManagedTextIfExists(root, artifact.path);
-        if (existing === undefined) return undefined;
-        const isRetiredPackageSkill =
-          artifact.path.startsWith(".claude/skills/") &&
-          managedSkillOwnership(existing) === "package";
-        return {
-          path: artifact.path,
-          action: existing === artifact.content || isRetiredPackageSkill ? "remove" : "preserve",
-          content: artifact.content,
-          expectedContent: existing,
-        };
-      }),
-    )
-  ).filter((change): change is SetupChange => change !== undefined);
   const changes = await Promise.all(
     blockArtifacts.map(async (artifact): Promise<SetupChange> => {
       const relativePath = artifact.path;
@@ -132,7 +113,7 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
       };
     }),
   );
-  return { root, config, changes: [...managedEntries, ...retiredEntries, ...changes] };
+  return { root, config, changes: [...managedEntries, ...changes] };
 }
 
 /** Applies the preview while preserving existing context and user-authored files. */
@@ -155,16 +136,12 @@ export async function applySetup(
     const changedPaths: string[] = [];
     for (const change of preview.changes) {
       if (change.action === "unchanged" || change.action === "preserve") continue;
-      const didApply =
-        change.action === "remove"
-          ? change.expectedContent !== undefined &&
-            (await deleteManagedTextIfUnchanged(root, change.path, change.expectedContent))
-          : await writeManagedTextIfUnchanged(
-              root,
-              change.path,
-              change.expectedContent,
-              change.content,
-            );
+      const didApply = await writeManagedTextIfUnchanged(
+        root,
+        change.path,
+        change.expectedContent,
+        change.content,
+      );
       if (!didApply) {
         throw new Error(`CCR managed file changed after preview: ${change.path}.`);
       }

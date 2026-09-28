@@ -42,4 +42,4 @@ jobs:
         run: npm install --global npm@11.19.0
       - run: npm --version
       - name: Publish with npm trusted publishing
-        run: npm publish --access public
+        run: npm publish --access public --tag beta-0.1
