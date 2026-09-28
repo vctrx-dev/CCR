@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
-import { RETIRED_MANAGED_ARTIFACTS } from "../../../src/context/managed-artifacts";
 import { applyConfigSetup, applySetup, previewSetup } from "../../../src/context/setup";
 
 const roots: string[] = [];
@@ -36,17 +35,8 @@ describe("CCR setup", () => {
     expect(preview.changes.map((change) => change.path)).toContain(
       ".claude/skills/ccr-review/SKILL.md",
     );
-    expect(preview.changes.map((change) => change.path)).not.toContain(
-      ".claude/skills/ccr-codebase/SKILL.md",
-    );
     expect(preview.changes.map((change) => change.path)).toContain(
       ".claude/skills/ccr/references/dimensions.md",
-    );
-    expect(preview.changes.map((change) => change.path)).not.toContain(
-      ".claude/skills/ccr-review/references/dimensions.md",
-    );
-    expect(preview.changes.map((change) => change.path)).not.toContain(
-      ".claude/skills/ccr-codebase/references/dimensions.md",
     );
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/risks.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/architecture.md");
@@ -54,41 +44,6 @@ describe("CCR setup", () => {
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/index.md");
     expect(preview.changes.map((change) => change.path)).not.toContain("CLAUDE.md");
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
-  });
-
-  it("should remove the unchanged retired context index during an upgrade", async () => {
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    const root = await makeRepository();
-    const retiredIndex = RETIRED_MANAGED_ARTIFACTS.find(
-      (artifact) => artifact.path === ".ccr/index.md",
-    );
-    expect(retiredIndex).toBeDefined();
-    await mkdir(path.join(root, ".ccr"));
-    await writeFile(path.join(root, ".ccr/index.md"), retiredIndex?.content ?? "", "utf8");
-
-    const preview = await previewSetup(root);
-    expect(preview.changes.find((change) => change.path === ".ccr/index.md")?.action).toBe(
-      "remove",
-    );
-
-    expect((await applySetup(root, preview)).changedPaths).toContain(".ccr/index.md");
-    await expect(readFile(path.join(root, ".ccr/index.md"), "utf8")).rejects.toThrow();
-  });
-
-  it("should preserve a human-edited retired context index", async () => {
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    const root = await makeRepository();
-    const indexPath = path.join(root, ".ccr/index.md");
-    await mkdir(path.dirname(indexPath), { recursive: true });
-    await writeFile(indexPath, "# Team-owned navigation\n", "utf8");
-
-    const preview = await previewSetup(root);
-    expect(preview.changes.find((change) => change.path === ".ccr/index.md")?.action).toBe(
-      "preserve",
-    );
-
-    expect((await applySetup(root, preview)).changedPaths).not.toContain(".ccr/index.md");
-    expect(await readFile(indexPath, "utf8")).toBe("# Team-owned navigation\n");
   });
 
   it("should preserve existing instructions when integration is opted in", async () => {

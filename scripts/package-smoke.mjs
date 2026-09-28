@@ -183,6 +183,7 @@ try {
     "review-state",
     "review-context-state",
     "record-review-state",
+    "save-review",
   ]) {
     if (!installedContextHelp.includes(command)) {
       throw new Error(`Installed context help is missing ${command}.`);
@@ -331,16 +332,12 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     throw new Error("setup did not install the data-driven review skill and dimensions.");
   }
   const dimensionsReference = readFileSync(dimensionsPath, "utf8");
-  const dimensionsMatch = /```json\r?\n([\s\S]*?)\r?\n```/u.exec(dimensionsReference);
-  if (!dimensionsMatch?.[1]) {
-    throw new Error("Installed dimensions reference does not contain a JSON registry.");
-  }
-  const installedDimensions = JSON.parse(dimensionsMatch[1]);
-  if (JSON.stringify(installedDimensions) !== JSON.stringify(reviewRegistry)) {
-    throw new Error("Installed dimensions reference does not match the packaged registry.");
-  }
-  if (existsSync(path.join(scripted, ".claude", "skills", "ccr-codebase"))) {
-    throw new Error("setup installed the retired ccr-codebase skill.");
+  for (const dimension of reviewRegistry.dimensions) {
+    const expected = [`## ${dimension.id}`, `### Dimension: ${dimension.name}`];
+    for (const criterion of dimension.criteria) expected.push(criterion.name, criterion.details);
+    if (expected.some((text) => !dimensionsReference.includes(text))) {
+      throw new Error("Installed dimensions reference does not match the packaged registry.");
+    }
   }
   if (
     !existsSync(ignorePath) ||

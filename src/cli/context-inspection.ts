@@ -26,6 +26,7 @@ import {
   readSafePullRequestEvidence,
   readSafePullRequestHeadEvidence,
 } from "../review/pr-evidence";
+import { saveReview } from "../review/review-save";
 import {
   computeReviewContextState,
   computeWorkingReviewState,
@@ -170,6 +171,14 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
         ? await ensureWorkingJournalEntry(root())
         : await ensureJournalEntryForHead(root());
       io.write(`${JSON.stringify(journal)}\n`);
+    });
+  context
+    .command("save-review <scope> <dimensions> <counts> <summary>")
+    .description("Save a finished review to its journal; counts are critical,high,medium,low")
+    .action(async (scope: string, dimensions: string, counts: string, summary: string) => {
+      const saved = await saveReview(root(), { scope, dimensions, counts, summary });
+      io.write(`Review saved to ${saved.path}.
+`);
     });
   context
     .command("append-decision <decision>")

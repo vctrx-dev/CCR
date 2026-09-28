@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { parseReviewDimensionRegistry } from "../../../src/review/dimensions";
 
 describe("review dimension registry", () => {
+  it("should preserve case-sensitive research criterion IDs while validating their syntax", () => {
+    const makeRegistry = (id: string) => ({
+      dimensions: [
+        {
+          id: "example-dimension",
+          name: "Example dimension",
+          summary: "Example scope.",
+          criteria: [{ id, name: "Example criterion", details: "Example definition." }],
+        },
+      ],
+    });
+    const registry = parseReviewDimensionRegistry(makeRegistry("STUDY-A2-C9"));
+    expect(registry.dimensions[0]?.criteria[0]?.id).toBe("STUDY-A2-C9");
+    for (const id of ["", " STUDY-A2-C9", "STUDY A2 C9", "STUDY--A2", "<STUDY>"]) {
+      expect(() => parseReviewDimensionRegistry(makeRegistry(id))).toThrow();
+    }
+  });
+
   it("should parse data-only dimensions and preserve their declared order", () => {
     const registry = parseReviewDimensionRegistry({
       dimensions: [

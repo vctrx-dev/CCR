@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
+import { renderDimensionWorkerPrompt } from "./dimension-worker-prompt";
 import dimensionData from "./dimensions.json";
-import { STAKEHOLDER_IMPACT_REFERENCE } from "./impact-review-guidance";
 
 /**
  * Shared data-driven review taxonomy. Add or revise dimensions in `dimensions.json` and validate
@@ -12,7 +12,7 @@ const dimensionIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 
 const reviewCriterionSchema = z
   .object({
-    id: dimensionIdSchema,
+    id: z.string().regex(/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/u),
     name: z.string().trim().min(1),
     details: z.string().trim().min(1),
   })
@@ -46,7 +46,8 @@ function duplicate(values: string[]): string | undefined {
 
 /**
  * Validates the data-only review taxonomy before it is embedded in installed skills. Dimension and
- * criterion IDs are stable selectors; edit the JSON registry rather than review orchestration code.
+ * IDs retain their declared case: dimension selectors are lowercase, while research criterion IDs
+ * may contain uppercase letters. Edit the JSON registry rather than review orchestration code.
  */
 export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionRegistry {
   const registry = reviewDimensionRegistrySchema.parse(input);
@@ -61,33 +62,25 @@ export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionReg
   return registry;
 }
 
-/** Renders the validated taxonomy as a package-owned, progressively loaded skill reference. */
+/** Renders standalone single-agent dimension prompts; `##` headings are the selector IDs. */
 export function renderReviewDimensionReference(input: unknown): string {
   const registry = parseReviewDimensionRegistry(input);
-  const emptyNotice = registry.dimensions.length
-    ? "Use only the dimensions selected by the invoking skill."
-    : "No review dimensions are configured. Stop the review and ask the maintainer to populate `src/review/dimensions.json`; do not invent dimensions or criteria.";
+  const prompts = registry.dimensions.map((dimension) => {
+    const prompt = renderDimensionWorkerPrompt(dimension, "the current codebase").trimEnd();
+    return `## ${dimension.id}\n\n\`\`\`\`markdown\n${prompt}\n\`\`\`\``;
+  });
+  const body = prompts.length
+    ? prompts.join("\n\n")
+    : "No review dimensions are configured. Stop and ask the maintainer to populate `src/review/dimensions.json`.";
   return `---
 name: ccr-review-dimensions
-description: CCR's package-managed review taxonomy loaded by ccr-review.
+description: Reference copy of the CCR single-agent dimension prompts for people; skills do not load it.
 ---
 
 ${MANAGED_SKILL_MARKER}
-# CCR review dimensions
+# CCR dimension prompts
 
-${emptyNotice}
-
-${STAKEHOLDER_IMPACT_REFERENCE}
-
-The array order is the canonical order for selection, coverage ledgers, and reports. Each dimension
-owns its fixed criteria; treat each criterion's name and details as binding review guidance. Criterion
-IDs are stable selectors and can retain historical names, so never infer their intended meaning from an
-ID alone. Apply criteria within their parent dimension and never remove a selected dimension from
-coverage.
-
-\`\`\`json
-${JSON.stringify(registry, null, 2)}
-\`\`\`
+${body}
 `;
 }
 

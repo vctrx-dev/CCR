@@ -4,6 +4,11 @@ Update this file whenever a user-facing skill, command, setting, or setup flow c
 
 ## Quick flow
 
+Skills describe the intended results and file-ownership rules in plain language. Claude chooses
+the tools for discovery and consults installed help as needed. Managed journal, review, decision,
+configuration, and validation operations still use CCR's installed support. The terminal examples
+below remain available for people who want to run those operations directly.
+
 ```text
 Install → Setup → Initialize → Preload context → Review → Journal/context sync → Amend with feedback
 ```
@@ -205,10 +210,7 @@ npx --no-install ccr setup --dry-run
 
 `config init` creates configuration files. `setup` adds Claude skills, `project.md`, `stakeholders.md`,
 and an empty `decisions.md`; it applies these safe managed changes by default. Use `--dry-run` for a
-non-mutating preview. It preserves existing context and instruction files. An obsolete generated
-`index.md` is removed only when unedited. On upgrade, the former package-managed
-`.claude/skills/ccr-codebase/SKILL.md` is retired. Package-marked variants are removed because their
-header authorizes package replacement; user-owned or foreign-marked files are preserved.
+non-mutating preview. It preserves existing context and instruction files.
 Hook strategy is selected later through repository analysis. Applied setup, update, configuration,
 automatic context, and uninstall writers share one bounded token-owned lifecycle lock. Every planned
 write or delete compares the exact current content before mutation. CCR cooperating writers are
@@ -232,6 +234,63 @@ progressive-disclosure resources, and CCR-marked instruction blocks. It preserve
 `.ccr/config.json`, `project.md`, `stakeholders.md`, `decisions.md`, local journals, private state,
 and user-owned files. A foreign or malformed managed skill stops the update instead of replacing it.
 
+If a review uses the old `Issue:` format, inspect the local skill and refresh it with
+`npx --no-install ccr update` if outdated. Format drift can also be an instruction-following failure;
+it does not prove a stale installation.
+
+### How assumption discovery works
+
+Initialization includes a clarification conversation. After investigating the repository, Claude asks
+focused questions about unclear project facts and stakeholders in the same chat, waits for your
+answers, and follows up on material ambiguity before finalizing `project.md` and `stakeholders.md`.
+The initial invitation to provide optional context is not the only opportunity to clarify facts.
+Your answers are incorporated into the relevant paragraphs in plain language; raw conversations,
+question lists, and "What still needs confirming" or "Open questions" sections are not saved there.
+You may say you do not know or skip a question. Important remaining limits are stated as limits,
+without inventing certainty or repeatedly asking. If you are unavailable, initialization pauses.
+Later automatic updates preserve uncertainty without adding question backlogs; stakeholder ownership
+after initialization remains unchanged.
+
+One agent reviews all selected dimensions without subagents or delegation. It first establishes who uses
+the product and who is affected, then applies each dimension's summary and numbered questions. These
+are discovery lenses, not an exhaustive checklist: investigate assumptions about normality, success,
+credibility, authority, and burden, including assumptions not explicitly named by the criteria. For each
+potential issue it identifies the specific rule, who could be affected and in what circumstance, how the
+rule changes their participation, opportunity, representation, or treatment, and whether safeguards,
+exceptions, or human correction already address it. Ordinary functional bugs, vulnerabilities, generic
+UX issues, and missing features are not findings merely because stakeholders could be affected.
+Accessibility barriers qualify even when caused by a defect: name the access need, blocked action or
+unequal participation barrier, and concrete scenario, and check equivalent routes. Examine labels,
+code, prompts, comments, documentation, and directory names for exclusionary meaning in context;
+isolated keywords do not establish harm. Failure recovery and privacy protection qualify when the
+criteria and a concrete human consequence are supported. Incomplete evidence becomes a question;
+finding nothing is acceptable. Criterion IDs follow the current workbook; names and details supply
+their meaning.
+
+For prompt development in the CCR source checkout, run `pnpm test:prompt` or `npm run test:prompt`.
+Copy its prompt into Claude Code in the target repository. It reviews only the first source dimension
+without invoking a skill. Edit the shared guidance, prompt template, or dimension data and rerun.
+`dimension-prompts.md` provides a standalone whole-codebase review with all dimensions and no writes.
+See TEST.md for paths and the iteration loop; this is a contributor command, not an installed CLI command.
+
+Reviewers use concrete stakeholder scenarios, including relevant combinations of race, culture,
+language, disability, finances, resources, and power. These are possible circumstances to test, not
+fixed group traits. The model does not speak for a community; observed disparities require evidence.
+Examples include dialect mistaken for subject knowledge and limited availability mistaken for ability.
+
+CCR follows input → representation or proxy → product rule → outcome → later reuse. It asks what
+must be true for that rule to treat people fairly, then varies a plausible circumstance while keeping
+relevant need or capability constant. It checks who loses agency, what becomes authoritative, and
+whether repeated decisions reinforce their own evidence. Shared harms, such as narrowing the meaning
+of learning, also qualify without requiring a comparison between groups.
+
+Each finding must establish whose participation, identity, or treatment the behavior affects and how.
+A technical defect may supply that mechanism. Evidence establishes the behavior; the report labels hypothetical circumstances and inferred
+impact. It checks exceptions and downstream safeguards before claiming a capability is missing.
+Unresolved facts that determine whether harm exists appear under Open questions, without severity.
+Criteria remain covered, with unknown distinguished from clear or not applicable. No finding quota or
+promise of discovering every unknown applies.
+
 ## 4. Initialize
 
 Open Claude Code:
@@ -240,10 +299,10 @@ Open Claude Code:
 /ccr-context initialize
 ```
 
-Run this after setup. It populates `project.md` as an evidence-backed account of how the product
-affects people: its purpose, consequential rules or defaults, affected roles, and the resulting
-behavior or uncertainty. It includes technical details only when they explain that causal path; it
-also populates `stakeholders.md`, leaves `decisions.md` empty, and syncs hooks when enabled. If
+Run this after setup. One agent fills `project.md` with the product's purpose, how people use it,
+who its results affect, and the rules shaping participation, learning, privacy, choices, and opportunity.
+It reads technical sources to establish the facts but keeps implementation details out of the story.
+It also fills `stakeholders.md`, preserves `decisions.md` (empty on a fresh setup), and syncs hooks when enabled. If
 `domain` is still the generated `"unspecified"` default, it also
 records one concise product-domain label supported by repository evidence (or `general-software` when
 the repository has no more specific product signal). A conditional updater prevents this one-time
@@ -252,11 +311,20 @@ but never updates it automatically; stakeholder changes are human-owned.
 
 Claude can use its normal repository tools—Read, Grep, Glob, Bash, Git, tests, and documentation—plus
 supplied plans or specifications. It chooses the investigation needed to verify material claims and
-preserve uncertainty. `project.md` is deliberately human-readable: it begins with plain-language
-purpose and may use headings, short bullets, comparison tables, causal flows, or a small Mermaid
-diagram when that makes consequential behavior clearer.
+preserve uncertainty. Both files use everyday language, simple headings, and paragraphs or bullets.
+There is no target length: include what helps the ethical review, without padding or technical inventories.
+`stakeholders.md` explains each supported role's goals, activities, access needs or circumstances,
+how decisions affect them, and what they can understand, question, or change. People affected without
+an account belong here too. Possible roles are labeled as unconfirmed rather than invented as facts.
+Record existing safeguards as well as constraints; these documents are background, not a bug report
+or a declaration of fairness. Distinguish known behavior, possible
+effects, unanswered questions, and future plans.
 
-Claims cite paths and concrete symbols, tests, commands, or contracts. Plans remain intent unless
+All generated context prose, including stakeholders, decisions, and journals, is written for a
+non-technical ethical reviewer. Omit paths, code terms, commands, technical citations, and internal
+mechanics; explain people's experiences, choices, and consequences. Verify claims against sources
+before writing rather than adding technical evidence sections or moving them to another context file.
+Package-managed continuity metadata is preserved. Plans remain intent unless
 implementation evidence confirms them. Review the resulting `.ccr` changes. Validation inspects
 every managed Markdown context file through a 10,000 UTF-16-character window; content beyond that
 window is rejected as unvalidated, so shorten the file before validating it again. Independently, a
@@ -278,28 +346,29 @@ Review all configured dimensions by default:
 Review one or more dimensions by ID:
 
 ```text
-/ccr-review fairness-evaluation, pedagogy
-/ccr-review codebase privacy
-/ccr-review PR-123 fairness-evaluation, privacy
+/ccr-review data-system-reliability, alignment-with-teaching-learning
+/ccr-review codebase privacy-data-protection
+/ccr-review PR-123 fairness-non-discrimination, privacy-data-protection
 ```
 
-Current review dimensions: `fairness-evaluation`, `pedagogy`, `decision-fairness`, `inclusion`,
-`transparency`, `privacy`, `system-integrity`. Run
+Current review dimensions: `data-system-reliability`, `alignment-with-teaching-learning`,
+`fairness-non-discrimination`, `inclusion-accessibility`, `transparency-explainability`,
+`privacy-data-protection`, `human-control-review`. Run
 `npx --no-install ccr help` to see the IDs bundled in the installed version.
 
 ### Stakeholder-impact review
 
-CCR is designed to find consequential product behaviors and unknown long-term effects, not to
-restate an ordinary technical, security, or UI code review. It asks how the target product's
+CCR is designed to find consequential exclusion, unfair treatment, and harmful product assumptions.
+It asks how the target product's
 assumptions, authority structures, decision logic, incentives, and feedback loops may harm, exclude,
 mislead, or systematically disadvantage the people who use it or live with its decisions.
 
 Everything can technically work and still produce a valid CCR finding. Conversely, a broken endpoint,
 missing security control, edge-case filename, loading state, or rendering failure is not a CCR finding
 merely because it can be assigned a dimension. Technical behavior is relevant only when it proves a
-specific, evidence-backed pathway to product-level stakeholder harm. If the same finding would fit a
-generic file uploader, banking app, or dashboard without understanding the target product's people,
-domain, and decisions, reject it.
+specific, evidence-backed pathway to stakeholder harm. A required name field that rejects a legitimate
+name or an inaccessible exam control can establish exclusion even though the mechanism is technical.
+The concern need not be unique to one product or affect a majority of users.
 
 A credible finding must establish all of the following:
 
@@ -314,7 +383,10 @@ must not be used to dress up a routine defect as a socio-technical finding.
 
 #### Illustrative findings
 
-These examples guide the reviewer's reasoning. They are not preloaded claims about every product.
+These examples explain the intended review lens to readers. The shared prompt also includes concise
+classification examples for decision assumptions, accessibility, wording, and technical-only faults.
+Workers instead derive hypotheses from the target's definitions of success, knowledge, participation,
+and authority, checking whose legitimate circumstances do not fit and what consequences follow.
 
 **A source's worldview may become assessment authority without a visible choice.** A question
 generation workflow can function perfectly while treating uploaded material as neutral ground truth.
@@ -322,7 +394,8 @@ If the product provides no deliberate way to identify perspective, contested cla
 framing, or omitted viewpoints, students may be assessed against one institutional, cultural, or
 political framing without educators or learners being able to see that choice. This is a product
 assumption about what counts as knowledge, not an upload or rendering defect. Relevant dimensions may
-include pedagogy, decision-fairness, transparency, and inclusion.
+include Alignment with Teaching & Learning, Fairness & Non-Discrimination,
+Transparency & Explainability, and Inclusion & Accessibility.
 
 **Automation may optimize for answerability rather than defensible learning.** If generation uses
 source material and requested counts or types without asking for learning objectives, reasoning level,
@@ -330,7 +403,7 @@ or evidence of understanding, the product's default incentive can favor facts th
 derive and score. Over time, recall and source-phrase matching may displace interpretation, transfer,
 uncertainty, or critical thinking. The concern is not whether a question renders; it is whether the
 product quietly defines learning as what is easiest to automate. Relevant dimensions may include
-pedagogy, fairness-evaluation, and transparency.
+Alignment with Teaching & Learning, Data & System Reliability, and Transparency & Explainability.
 
 **Unequal outcomes may persist because nobody can discover the pattern.** A product can include human
 review yet offer no feedback loop showing whether some generated questions repeatedly confuse,
@@ -338,35 +411,33 @@ misrepresent, or disadvantage learners in particular contexts, language backgrou
 needs. Individual decisions can look reasonable while harmful patterns repeat across classes or
 cohorts. This is a governance question about whether responsible people can detect and correct
 unequal outcomes, not a request to profile people unnecessarily. Relevant dimensions may include
-fairness-evaluation, inclusion, transparency, and system-integrity.
+Fairness & Non-Discrimination, Inclusion & Accessibility, Transparency & Explainability,
+and Human Control & Review.
 
 **The person with least power may carry the whole burden of contesting a decision.** When automated
 assessment becomes consequential but learners cannot understand why an answer is accepted, identify
 ambiguity, or seek correction, the product creates one-way authority even if approval workflows work
 as designed. That burden is especially consequential where language, cultural context, disability
 accommodations, or legitimate alternative interpretations affect what counts as correct. Relevant
-dimensions may include decision-fairness, transparency, inclusion, and pedagogy.
+dimensions may include Fairness & Non-Discrimination, Transparency & Explainability,
+Inclusion & Accessibility, and Alignment with Teaching & Learning.
 
-The dimensions are lenses for these kinds of impact patterns. They are not buckets for generic
-reliability, security, accessibility, performance, or interface defects. `privacy` and
-`system-integrity` apply when a system's information or operational behavior establishes a concrete
+The dimensions are lenses for these kinds of impact patterns. Accessibility and identity restrictions
+qualify when they concretely block participation, create unequal participation barriers, or distort
+identity, including when someone eventually completes a task. `privacy-data-protection` and
+`data-system-reliability` apply when a system's information or operational behavior establishes a concrete
 stakeholder harm pathway, rather than simply because a generic flaw exists.
+This includes inappropriate access or disclosure, unjustified retention, and failure responses that
+leave learners with lost work, blocked participation, or unjustified penalties. Wording in code,
+comments, prompts, documentation, and directory names is reviewed in context for its effects on
+learners, educators, and developers; isolated keyword matches are not findings.
 
 `/ccr-review` and `/ccr-review changes` check staged, unstaged, and approved untracked changes.
 `/ccr-review codebase` checks the complete safe Git index plus live changes. `/ccr-review PR-123`
 uses read-only GitHub CLI metadata, the pull-request patch, and relevant head content; it does not
-checkout or mutate branches. Before dispatching review workers, every scope reads current
-`project.md`, `stakeholders.md`, and `decisions.md`, then reads every journal returned within
-the configured `context.recentJournalEntries` count. CCR selects those entries repository-wide by
-validated `Updated` metadata, regardless of branch or pull-request directory. Stable paths and
-branch/PR metadata identify continuity; they do not determine recency. Equal `Updated` values sort by
-`Started` newest-first, then stable repository path. A legacy entry's single valid `Timestamp` serves
-as its activity time until reuse migrates it to `Started` and `Updated`. These files remain advisory
-context; code, tests, and schemas remain authoritative. CCR helpers provide continuity and reviewed
-state, but they do not restrict a reviewer to a special reader. Workers may use normal repository
-tools while respecting configured privacy exclusions. For pull requests, `ccr context review-pr`
-establishes the immutable base/head identity; workers may then use normal read-only GitHub,
-repository, and documentation tools without mutating Git or remote state.
+checkout or mutate branches. The reviewer reads `project.md` and `stakeholders.md` for product context;
+these files remain advisory, and code, tests, and schemas remain authoritative. It may use normal
+read-only repository and GitHub tools while respecting configured privacy exclusions.
 
 The general form is `/ccr-review [changes|codebase|PR-<number>] [all|dimension,...]`. A missing scope
 defaults to `changes`, and a selector without a scope is a supported changes-review shorthand.
@@ -374,25 +445,21 @@ After unique obvious misspellings are normalized, unrelated scopes or dimension 
 numbers, duplicate IDs, and mixed `all` selections stop before review or journal writes. PR review
 requires an authenticated `gh` CLI and never uses the current working tree as PR evidence.
 
-Each selected dimension gets exactly one subagent. That worker assesses every criterion, forms
-multiple concrete stakeholder-impact hypotheses, and traces relevant product decisions, authority,
-feedback, and correction paths before returning evidence-backed findings. It uses implementation
-details to prove or disprove an impact pathway, rather than scanning for generic defects. Its prompt
-preserves the complete dimension definition and criteria but omits duplicated repository summaries and
-master-only workflow instructions. Each worker can use normal research tools while treating CCR
-context as advisory continuity. The master agent collects, deduplicates, verifies, and
-validates the findings before reporting them. One root cause is reported once with every applicable
-selected dimension. Each finding includes:
+The same agent reviews each selected dimension itself using the lenses embedded in the skill.
+It uses read-only tools for investigation, checks counterevidence and equivalent routes, merges
+duplicates, and moves material uncertainty to questions. No subagents are used. Each finding includes:
 
 ```text
-Severity: Critical | High | Medium | Low
-Affected people: roles and relevant power relationship
-Product behavior: evidence-backed assumption, decision, or incentive
-Harm pathway: why the behavior can negatively affect people
-Evidence: repository/relative/path and supporting behavior
-Case: realistic condition in which the impact occurs
-Dimension: selected dimension ID or IDs
+**Finding [severity; dimension-id]:** concise description of the inclusivity bug and who may be affected
+**Scenario:** one realistic or hypothetical example
+**Evidence:** relevant file/path, function, rule, or code behavior
 ```
+
+Uncertain issues use `**Question:**` and `**Context:**` without severity. Findings always identify the
+dimension and are sorted most severe first. Responses omit introductions, coverage tables, and
+inspected-file lists, and propose no fixes unless asked. If no finding survives, CCR says "No supported
+inclusivity bugs found." Verification stays internal; material gaps become questions. Skills still disclose actual
+context edits, appended decisions, or failed continuity in one short line. Prompt experiments write nothing.
 
 Reviews never fix files without approval. A change review reuses the working journal, a clean-tree
 review reuses the `HEAD` journal, and every `PR-<number>` reuses one PR-specific journal. Working
@@ -412,18 +479,15 @@ continuity-context fingerprint excludes only CCR's active write target and selec
 count from the remaining journals, preventing CCR's own journal write from invalidating its record.
 PR freshness uses the same complete review-input fingerprint. CCR rechecks code and review inputs
 before the human-facing report and records continuity plus current status in the latest review run.
-A first code or context transition
-restarts the review against reloaded evidence; a second stops as unstable. PR review applies the same
-context-freshness rule alongside immutable base/head refs. The recorder rejects PR, old-branch,
+If recording finds changed code or
+context, the review is reported as stale. The recorder rejects PR, old-branch,
 old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurrently modified
 journals. If code or context changes afterward, pre-commit warns before approval and post-commit
 marks the prior review stale; both hooks remain advisory. Journals do not duplicate Git's path
-inventory. `project.md` uses descriptive headings, short sections, useful bullets, and optional small
-Mermaid diagrams for readability. It is a causal product-and-people narrative, not a technical architecture summary;
-CCR records technical facts only when they make a consequential product rule, constraint, or
-uncertainty understandable. It changes only for a
-verified major feature, architecture, public workflow, product constraint, stakeholder impact, or
-plan change; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
+inventory. `project.md` uses plain language about purpose, people's activities, and the rules affecting
+them, without technical terms or source citations. Interactive and automatic
+updates share this guidance. It changes only for a verified lasting change to those facts or confirmed
+plans; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
 after initialization.
 `decisions.md` is human-owned. It starts empty; review can append at most one concise decision only
 when `instructions.updateDecisionsMd` is `true`, the human confirms the durable future-review rule
@@ -438,28 +502,60 @@ has this data-only shape:
 
 ```json
 {
-  "id": "privacy",
-  "name": "Privacy",
+  "id": "privacy-data-protection",
+  "name": "Privacy & Data Protection",
   "summary": "What this dimension reviews.",
   "criteria": [
     {
       "id": "data-collection",
       "name": "Data collection",
-      "details": "The complete research-backed criterion and review guidance."
+      "details": "The criterion definition and illustrative review indicators."
     }
   ]
 }
 ```
 
-IDs are lowercase kebab-case selectors. Dimension and criterion IDs must be unique within their
+Dimension IDs are lowercase kebab-case selectors. Criterion IDs preserve research-source capitalization
+and contain alphanumeric segments separated by hyphens. Dimension and criterion IDs must be unique within their
 respective scope. Change the taxonomy in this registry, then update matching README and user-manual
 references and run package smoke. `scripts/package-smoke.mjs` derives the shipped help
-and README assertion from the registry. Setup renders the validated installed registry once at
-`.claude/skills/ccr/references/dimensions.md`; `/ccr-review` and `/ccr` read that shared file.
+and README assertion from the registry. The `/ccr-review` skill embeds shared guidance once and a
+summary and questions for each dimension. Setup writes standalone single-agent dimension prompts
+to `.claude/skills/ccr/references/dimensions.md` as a human reference.
 
-The included dimensions are a maintained baseline. Extend them when the taxonomy matures, but keep
-each criterion's domain purpose and put genuinely cross-cutting correctness defects under
-`system-integrity`. An empty registry stops reviews instead of inventing criteria.
+The current baseline comes from `CCR_v5_7_review.xlsx`, with all seven dimensions and 28 criteria
+in workbook order. Dimension names, descriptions, review questions, boundaries, criterion names,
+definitions, and illustrative indicators are preserved. Criterion IDs exactly match the workbook,
+such as `CCR-D1-C1`, but are omitted from prompts. Boundary references use exact criterion names
+instead of IDs. Dimension selectors follow the full workbook names in lowercase kebab-case, with
+ampersands omitted; prompt dimension names match the workbook exactly.
+
+| Workbook ID | Dimension | CCR selector | Criteria |
+|---|---|---|---|
+| CCR-D1 | Data & System Reliability | `data-system-reliability` | 5 |
+| CCR-D2 | Alignment with Teaching & Learning | `alignment-with-teaching-learning` | 4 |
+| CCR-D3 | Fairness & Non-Discrimination | `fairness-non-discrimination` | 4 |
+| CCR-D4 | Inclusion & Accessibility | `inclusion-accessibility` | 3 |
+| CCR-D5 | Transparency & Explainability | `transparency-explainability` | 3 |
+| CCR-D6 | Privacy & Data Protection | `privacy-data-protection` | 6 |
+| CCR-D7 | Human Control & Review | `human-control-review` | 3 |
+
+The old `fairness-evaluation`, `system-integrity`, `pedagogy`, `decision-fairness`, `inclusion`,
+`transparency`, and `privacy` selectors are retired, not aliases. Use
+`fairness-non-discrimination` for group fairness evaluation, `data-system-reliability` for data and operational
+reliability, and `human-control-review` for challenges, intervention, and meaningful choice.
+Reinstall the updated package and run setup to refresh installed skills and their reference prompts.
+`pnpm test:prompt` still previews the first dimension, now Data & System Reliability.
+
+Indicators are non-exhaustive examples, not mandatory checks. Review prompts and supplied information
+alongside actual behavior; an instruction to be fair or accurate does not demonstrate effectiveness.
+Evaluation records, learning goals, or user interaction evidence may be outside the repository;
+missing evidence is a gap, not proof of a fault. The workbook's sources and evidence mapping distinguish
+research, guidance, and developer interpretations; the framework is not empirically validated or a
+comprehensive ethics or accessibility evaluation. LLM examples are developer interpretations within
+the criteria. The runtime taxonomy is review guidance, not a claim that every indicator is empirically
+established. Extend the registry while preserving each criterion's ethical purpose. An empty registry
+stops reviews instead of inventing criteria.
 
 ## Context operations
 
@@ -481,6 +577,7 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 | `ccr context commit-read <HEAD> <file>` | Read one bounded immutable changed blob or deletion marker |
 | `ccr context review-context-state [PR-<number>]` | Fingerprint review inputs and continuity-safe context; the optional PR identifies only the continuity write target |
 | `ccr context review-state` | Fingerprint current approved code, review inputs, and continuity-safe context |
+| `ccr context save-review <scope> <dimensions> <critical,high,medium,low> <summary>` | Save a finished review to its journal and record its state in one step |
 | `ccr context record-review-state <journal> <code-fingerprint> <context-fingerprint>` | Validate and bind the latest completed local review run |
 | `ccr context review-pr PR-<number>` | Read bounded privacy-filtered PR metadata and patch |
 | `ccr context review-pr-head PR-<number> <files...>` | Read up to eight approved PR head files |
@@ -488,7 +585,7 @@ each criterion's domain purpose and put genuinely cross-cutting correctness defe
 Once a CCR skill is loaded, its operation, review scope, and configured dimension selector accept an
 obvious minor misspelling when exactly one valid choice is clearly intended. CCR normalizes the value
 and continues without asking for perfect spelling. Examples include `initailize` → `initialize`,
-`statsu` → `status`, and `codbase privcy` → `codebase privacy`. If the input is ambiguous or not
+`statsu` → `status`, and `codbase privacy-data-protection` → `codebase privacy-data-protection`. If the input is ambiguous or not
 reasonably close, CCR shows the valid choices and asks one focused question before any review or
 write. PR numbers, paths, config keys and values, flags, terminal commands, and free-form content are
 never fuzzy-corrected. Claude Code still resolves the slash-skill name before CCR receives its
