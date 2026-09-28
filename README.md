@@ -251,6 +251,7 @@ interfaces, code, prompts, comments, documentation, and directory names is exami
 by keyword alone. Failure recovery and privacy protection can qualify with a supported human
 consequence under the criteria. Ordinary technical faults alone remain excluded. Source code is never changed
 without later approval. `dimension-prompts.md` is the standalone, read-only whole-codebase test prompt.
+Dimension prompts introduce the numbered criteria with “Review the code against these criteria:”.
 
 Reports contain `Finding [severity; dimension-id]` / `Scenario` / `Evidence` entries and `Question` /
 `Context` pairs. Coverage, file inventories, and progress narration are omitted. Findings are sorted

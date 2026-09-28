@@ -7,6 +7,13 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+## 0.10.1 - 2026-09-28 (beta-0.2)
+
+### Changed
+
+- Simplified dimension summaries and clarified that numbered review items are criteria rather than
+  questions in generated prompts and the standalone review prompt. Run setup to refresh installed prompts.
+
 ## 0.10.0 - 2026-09-28 (beta-0.1)
 
 ### Added
