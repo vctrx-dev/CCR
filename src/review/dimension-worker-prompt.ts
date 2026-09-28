@@ -52,16 +52,16 @@ ${STAKEHOLDER_IMPACT_REVIEW_STANDARD}`;
 
 /** Includes scope boundaries and criterion names; research IDs stay in registry metadata. */
 export function renderDimensionSection(dimension: ReviewDimension): string {
-  const questions = dimension.criteria
+  const criteria = dimension.criteria
     .map(({ name, details }, index) => `${index + 1}. **${name}**\n   ${details}`)
     .join("\n\n");
   return `### Dimension: ${dimension.name}
 
 ${dimension.summary}
 
-Review the code through these questions:
+Review the code against these criteria:
 
-${questions}`;
+${criteria}`;
 }
 
 /** Renders a read-only, single-agent review of one dimension for contributor previews. */

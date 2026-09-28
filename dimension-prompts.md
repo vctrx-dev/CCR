@@ -91,9 +91,9 @@ Use these examples to understand the distinction, not as issues to assume exist 
 
 ### Dimension: Data & System Reliability
 
-Problems where data, models, generated instructional content or failure responses do not support reliable use for the intended learners and setting. Are the data, outputs and operating behaviour reliable enough for their intended educational use? Insufficient Checks on AI-Generated Instructional Content addresses assurance of generated content; Undisclosed or Misrepresented AI Involvement addresses disclosure. Inadequate Response to System Failures addresses failures during operation; Models Used Beyond Their Validated Scope addresses a model's supported scope. Reliability examples also cover educators using the feature, while learning outcomes remain learner-focused. For LLM integrations, consider the configured feature: prompts, supplied information, generated outputs and connected actions. Evaluation may concern complete tasks or conversations. A base model's general capabilities do not by themselves establish suitability for a particular educational use.
+Description: Problems where data, models, generated instructional content or failure responses do not support reliable use for the intended learners and setting. question to review: are the data, outputs and operating behaviour reliable enough for their intended educational use?
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **Unrepresentative Training or Evaluation Data**
    Training or evaluation data do not adequately represent the learners, settings or situations the feature is intended to serve. This can hide unreliable or uneven performance; adequacy depends on the intended use. Illustrative indicators (not mandatory checks): Training or evaluation data leave out intended learners, settings or situations, such as evaluation prompts covering only one language or task. Combined data summaries hide how little information is available for some groups or settings.
@@ -114,9 +114,9 @@ Review the code through these questions:
 
 ### Dimension: Alignment with Teaching & Learning
 
-Problems where progression, adaptation, learner status or tutoring disregards a justified learning purpose or relevant learner needs. Does the feature support the intended learning and the learner's relevant circumstances? Course rules and educator preferences do not automatically establish ethical adequacy. Consider access, fairness and meaningful choice alongside teaching intent.
+Description: Problems where progression, adaptation, learner status or tutoring disregards a justified learning purpose or relevant learner needs. Question to review: Does the feature support the intended learning and the learner's relevant circumstances? Course rules and educator preferences do not automatically establish ethical adequacy. Consider access, fairness and meaningful choice alongside teaching intent.
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **Negative Flags Without Reassessment**
    Earlier negative judgments continue shaping a learner's treatment without appropriate reassessment as circumstances change. Keeping historical records can be justified, but their continuing effect on new decisions needs a current basis. Illustrative indicators (not mandatory checks): Earlier negative flags keep affecting decisions without reconsidering the learner's current situation. Restrictions remain after the negative flag that caused them has been corrected or cleared.
@@ -134,9 +134,9 @@ Review the code through these questions:
 
 ### Dimension: Fairness & Non-Discrimination
 
-Problems where evaluation or decision behaviour overlooks unjustified disadvantage, or sensitive information and fairness fixes are handled without adequate safeguards. Could the feature disadvantage learners or groups without adequate justification? Missing Fairness Checks Across Learner Groups concerns evaluation; Unfair Decisions Based on Sensitive Attributes or Proxies concerns decision effects; Bias-Reduction Measures Without Adequate Evaluation concerns a claimed fix; Inadequate Limits on Sensitive Attribute Use concerns sensitive-attribute handling. Appropriate accommodations may involve different treatment. Where an educational feature evaluates or treats educators or other people, the shared fairness concerns also apply.
+Description: Problems where evaluation or decision behaviour overlooks unjustified disadvantage, or sensitive information and fairness fixes are handled without adequate safeguards. Question to review: Could the feature disadvantage learners or groups without adequate justification?
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **Missing Fairness Checks Across Learner Groups**
    Evaluation does not adequately examine differences in errors, treatment or outcomes across relevant learner groups, or explain how to judge those differences. Overall results and incomplete group data can conceal disadvantage. Illustrative indicators (not mandatory checks): Overall results hide group differences in errors, treatment or outcomes, such as the quality of AI feedback or refusals to help. Groups are omitted or combined in ways that conceal disadvantage. Missing or sparse group information is overlooked when interpreting fairness results.
@@ -154,9 +154,9 @@ Review the code through these questions:
 
 ### Dimension: Inclusion & Accessibility
 
-Problems where representations, language or essential activities exclude intended learners because of identity, language, ability or available resources. Can intended learners represent themselves and complete essential activities with dignity and adequate access? Review complete activities and relevant audience needs. This dimension is not a replacement for a comprehensive accessibility evaluation. Examples include learners, educators and other intended users of the educational feature. Includes inclusivity bugs in features and workflows (Barriers to Access and Participation), and exclusionary wording in code and documentation (Exclusionary Language in Code and Interfaces).
+Description: Problems where representations, language or essential activities exclude intended learners because of identity, language, ability or available resources. Question to review: Can intended learners represent themselves and complete essential activities with dignity and adequate access?
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **Defaults That Exclude Learner Identities or Languages**
    Forms, representations or defaults reject, distort or exclude the identities, languages or formats of intended learners. Adequacy depends on the audience the feature is meant to serve. Illustrative indicators (not mandatory checks): Forms reject or alter people's names, languages or personal details. Required categories force people to describe themselves inaccurately. Language or format assumptions prevent intended users from completing a task.
@@ -171,9 +171,9 @@ Review the code through these questions:
 
 ### Dimension: Transparency & Explainability
 
-Problems where the meaning, basis, limits or origin of outputs is hidden or misleading to affected people. Can people understand what the system is doing and accurately interpret its outputs? Unexplained Automated Decisions addresses decision explanations; Unsupported Causal Claims in Analytics addresses unsupported causal claims; Undisclosed or Misrepresented AI Involvement addresses AI provenance. Disclosure does not by itself establish quality, fairness or consent. Affected people include learners, educators interpreting results and others whose decisions depend on the output.
+Description: Problems where the meaning, basis, limits or origin of outputs is hidden or misleading to affected people. Question to review: Can people understand what the system is doing and accurately interpret its outputs?
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **Unexplained Automated Decisions**
    Automated scores, flags or recommendations lack an understandable and truthful account of their meaning, basis and relevant limitations. Affected people cannot properly interpret the output when deciding how to act or seek review. Illustrative indicators (not mandatory checks): Explanations, including AI-generated reasons, do not match how a decision was made. Scores or recommendations hide uncertainty or limits that affect their interpretation. People cannot access an explanation when they need to act on or question a decision.
@@ -188,9 +188,9 @@ Review the code through these questions:
 
 ### Dimension: Privacy & Data Protection
 
-Problems where learner information is collected, used, monitored, accessed or retained beyond justified purposes and applicable conditions. Is learner information handled only as needed, for justified purposes and with appropriate protection? Learner Data Use Ignores Applicable Permissions: processing conditions; Learner Records Kept Beyond Their Purpose: retention; Learner Data Exposed in Logs: logs/telemetry; Excessive Monitoring of Learners: surveillance; Unnecessary Collection or Reuse of Learner Data: collection/reuse; Inappropriate Access to Learner Records: access. Permission alone does not justify unnecessary processing. Examples also apply to educators' and other people's personal data handled by the educational feature.
+Description: Problems where learner information is collected, used, monitored, accessed or retained beyond justified purposes and applicable conditions. Question to review: Is learner information handled only as needed, for justified purposes and with appropriate protection?
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **Learner Data Use Ignores Applicable Permissions**
    Learner data is processed outside the permissions and conditions applicable to its purpose, including after relevant changes or withdrawal. Consent requirements apply where consent is the appropriate basis for that use. Illustrative indicators (not mandatory checks): Personal data is used outside the permissions or conditions that apply to that use. Consent-based processing continues after consent is withdrawn. Changed permissions are not respected by background tasks or connected services.
@@ -214,9 +214,9 @@ Review the code through these questions:
 
 ### Dimension: Human Control & Review
 
-Problems where people cannot exercise meaningful choices, challenge automated decisions or control consequential actions. Can affected people exercise meaningful choice and obtain effective human intervention or review? No Effective Way to Challenge Automated Decisions: challenge and remedy; High-Impact Automated Actions Without Human Control: control over consequential actions; Choices That Pressure or Mislead Learners: meaningful choice. Educator authority does not replace learner rights or an effective challenge route. Choice and review examples also cover educators and other people affected by the educational feature.
+Description: Problems where people cannot exercise meaningful choices, challenge automated decisions or control consequential actions. Question to review: Can affected people exercise meaningful choice and obtain effective human intervention or review?
 
-Review the code through these questions:
+Review the code against these criteria:
 
 1. **No Effective Way to Challenge Automated Decisions**
    Learners or educators lack an effective route to challenge automated decisions and obtain appropriate correction. Review must reach someone able to consider relevant context, act on it and correct affected records or consequences. Illustrative indicators (not mandatory checks): People affected by a decision cannot find or use a way to challenge it. Challenges or supporting information do not reach someone able to review and correct the decision. Accepted corrections do not update affected records, restrictions or later decisions.

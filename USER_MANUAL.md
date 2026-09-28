@@ -271,6 +271,7 @@ For prompt development in the CCR source checkout, run `pnpm test:prompt` or `np
 Copy its prompt into Claude Code in the target repository. It reviews only the first source dimension
 without invoking a skill. Edit the shared guidance, prompt template, or dimension data and rerun.
 `dimension-prompts.md` provides a standalone whole-codebase review with all dimensions and no writes.
+Dimension prompts introduce the numbered criteria with “Review the code against these criteria:”.
 See TEST.md for paths and the iteration loop; this is a contributor command, not an installed CLI command.
 
 Reviewers use concrete stakeholder scenarios, including relevant combinations of race, culture,

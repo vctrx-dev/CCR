@@ -3,7 +3,7 @@
     {
       "id": "data-system-reliability",
       "name": "Data & System Reliability",
-      "summary": "Problems where data, models, generated instructional content or failure responses do not support reliable use for the intended learners and setting. Are the data, outputs and operating behaviour reliable enough for their intended educational use? Insufficient Checks on AI-Generated Instructional Content addresses assurance of generated content; Undisclosed or Misrepresented AI Involvement addresses disclosure. Inadequate Response to System Failures addresses failures during operation; Models Used Beyond Their Validated Scope addresses a model's supported scope. Reliability examples also cover educators using the feature, while learning outcomes remain learner-focused. For LLM integrations, consider the configured feature: prompts, supplied information, generated outputs and connected actions. Evaluation may concern complete tasks or conversations. A base model's general capabilities do not by themselves establish suitability for a particular educational use.",
+      "summary": "Description: Problems where data, models, generated instructional content or failure responses do not support reliable use for the intended learners and setting. question to review: are the data, outputs and operating behaviour reliable enough for their intended educational use? ",
       "criteria": [
         {
           "id": "CCR-D1-C1",
@@ -35,7 +35,7 @@
     {
       "id": "alignment-with-teaching-learning",
       "name": "Alignment with Teaching & Learning",
-      "summary": "Problems where progression, adaptation, learner status or tutoring disregards a justified learning purpose or relevant learner needs. Does the feature support the intended learning and the learner's relevant circumstances? Course rules and educator preferences do not automatically establish ethical adequacy. Consider access, fairness and meaningful choice alongside teaching intent.",
+      "summary": "Description: Problems where progression, adaptation, learner status or tutoring disregards a justified learning purpose or relevant learner needs. Question to review: Does the feature support the intended learning and the learner's relevant circumstances? Course rules and educator preferences do not automatically establish ethical adequacy. Consider access, fairness and meaningful choice alongside teaching intent.",
       "criteria": [
         {
           "id": "CCR-D2-C1",
@@ -62,7 +62,7 @@
     {
       "id": "fairness-non-discrimination",
       "name": "Fairness & Non-Discrimination",
-      "summary": "Problems where evaluation or decision behaviour overlooks unjustified disadvantage, or sensitive information and fairness fixes are handled without adequate safeguards. Could the feature disadvantage learners or groups without adequate justification? Missing Fairness Checks Across Learner Groups concerns evaluation; Unfair Decisions Based on Sensitive Attributes or Proxies concerns decision effects; Bias-Reduction Measures Without Adequate Evaluation concerns a claimed fix; Inadequate Limits on Sensitive Attribute Use concerns sensitive-attribute handling. Appropriate accommodations may involve different treatment. Where an educational feature evaluates or treats educators or other people, the shared fairness concerns also apply.",
+      "summary": " Description: Problems where evaluation or decision behaviour overlooks unjustified disadvantage, or sensitive information and fairness fixes are handled without adequate safeguards. Question to review: Could the feature disadvantage learners or groups without adequate justification?",
       "criteria": [
         {
           "id": "CCR-D3-C1",
@@ -89,7 +89,7 @@
     {
       "id": "inclusion-accessibility",
       "name": "Inclusion & Accessibility",
-      "summary": "Problems where representations, language or essential activities exclude intended learners because of identity, language, ability or available resources. Can intended learners represent themselves and complete essential activities with dignity and adequate access? Review complete activities and relevant audience needs. This dimension is not a replacement for a comprehensive accessibility evaluation. Examples include learners, educators and other intended users of the educational feature. Includes inclusivity bugs in features and workflows (Barriers to Access and Participation), and exclusionary wording in code and documentation (Exclusionary Language in Code and Interfaces).",
+      "summary": "Description: Problems where representations, language or essential activities exclude intended learners because of identity, language, ability or available resources. Question to review: Can intended learners represent themselves and complete essential activities with dignity and adequate access?",
       "criteria": [
         {
           "id": "CCR-D4-C1",
@@ -111,7 +111,7 @@
     {
       "id": "transparency-explainability",
       "name": "Transparency & Explainability",
-      "summary": "Problems where the meaning, basis, limits or origin of outputs is hidden or misleading to affected people. Can people understand what the system is doing and accurately interpret its outputs? Unexplained Automated Decisions addresses decision explanations; Unsupported Causal Claims in Analytics addresses unsupported causal claims; Undisclosed or Misrepresented AI Involvement addresses AI provenance. Disclosure does not by itself establish quality, fairness or consent. Affected people include learners, educators interpreting results and others whose decisions depend on the output.",
+      "summary": "Description: Problems where the meaning, basis, limits or origin of outputs is hidden or misleading to affected people. Question to review: Can people understand what the system is doing and accurately interpret its outputs?",
       "criteria": [
         {
           "id": "CCR-D5-C1",
@@ -133,7 +133,7 @@
     {
       "id": "privacy-data-protection",
       "name": "Privacy & Data Protection",
-      "summary": "Problems where learner information is collected, used, monitored, accessed or retained beyond justified purposes and applicable conditions. Is learner information handled only as needed, for justified purposes and with appropriate protection? Learner Data Use Ignores Applicable Permissions: processing conditions; Learner Records Kept Beyond Their Purpose: retention; Learner Data Exposed in Logs: logs/telemetry; Excessive Monitoring of Learners: surveillance; Unnecessary Collection or Reuse of Learner Data: collection/reuse; Inappropriate Access to Learner Records: access. Permission alone does not justify unnecessary processing. Examples also apply to educators' and other people's personal data handled by the educational feature.",
+      "summary": "Description: Problems where learner information is collected, used, monitored, accessed or retained beyond justified purposes and applicable conditions. Question to review: Is learner information handled only as needed, for justified purposes and with appropriate protection?",
       "criteria": [
         {
           "id": "CCR-D6-C1",
@@ -170,7 +170,7 @@
     {
       "id": "human-control-review",
       "name": "Human Control & Review",
-      "summary": "Problems where people cannot exercise meaningful choices, challenge automated decisions or control consequential actions. Can affected people exercise meaningful choice and obtain effective human intervention or review? No Effective Way to Challenge Automated Decisions: challenge and remedy; High-Impact Automated Actions Without Human Control: control over consequential actions; Choices That Pressure or Mislead Learners: meaningful choice. Educator authority does not replace learner rights or an effective challenge route. Choice and review examples also cover educators and other people affected by the educational feature.",
+      "summary": "Description: Problems where people cannot exercise meaningful choices, challenge automated decisions or control consequential actions. Question to review: Can affected people exercise meaningful choice and obtain effective human intervention or review?",
       "criteria": [
         {
           "id": "CCR-D7-C1",
