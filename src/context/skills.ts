@@ -204,6 +204,10 @@ the authorized context files.
 ## Before finishing
 - During initialize, make \`.ccr/stakeholders.md\` useful and concise. Later operations leave it
   unchanged.
+- Before completing initialize, ask all material clarification questions in this chat and incorporate
+  the answers. Neither project.md nor stakeholders.md should contain an unanswered-question section
+  or a Q&A transcript. Replace legacy question sections only when authorized to edit that file,
+  preserving useful facts and clearly stated limits.
 - Read the account as a non-technical ethical reviewer. Every sentence should explain the purpose,
   people's activities, important rules, or who can be affected without requiring computing knowledge.
   Keep useful uncertainties and existing safeguards. Translate jargon into people's experiences;
@@ -219,9 +223,35 @@ Ask once: "Can you provide optional context that is not in this repository, such
 specifications, research, or product decisions?" Continue when the answer is none. Run
 the normal discovery tools needed to identify instructions, manifests, entry points, schemas, tests,
 and user-facing documentation. Follow people's activities and the decisions affecting them yourself.
-Use what you learn to fill
+Resolve uncertainties through the clarification conversation below before finalizing either file.
+Use what you learn and the user's answers to fill
 \`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
 \`.ccr/decisions.md\` unchanged, verify the draft, validate, and create or complete one journal.
+
+### Clarify in this conversation
+
+When discovery leaves a question about the project or its stakeholders, ask the user here in the
+same session before writing the final context. Ask focused, plain-language questions one at a time
+or in small related groups, explain briefly why the answer matters, and wait for the reply. Use the
+interactive question tool when available; otherwise ask directly in chat. The opening optional-context
+question does not replace this conversation. Do not end initialization by handing the user a list
+of questions in a file.
+
+Use repository evidence first and avoid asking again about facts already established in this session.
+Follow up when an answer leaves a material ambiguity. Distinguish what happens today from plans and
+user-described practices outside the software. If an answer conflicts with observed behavior, explain
+the difference neutrally and ask which describes current practice; do not silently override evidence.
+Only save a concise, non-sensitive summary of clarified facts, not the raw conversation.
+
+Examples:
+- If the actual audience is unclear, ask who currently uses the product and who receives its outputs.
+- If two notices describe uploaded material differently, ask which description reflects current use.
+- If correction happens outside the tool, ask who handles it and how affected people reach them.
+- If the user says they do not know or asks to skip, accept that and retain a brief factual limitation
+  where relevant. Do not invent an answer, repeat the same question, or treat silence as confirmation.
+
+Proceed when relevant questions are answered or explicitly left unknown or skipped. If the user is
+not available, pause initialization for their reply rather than claiming the context is complete.
 
 ### Set the initial domain
 After initial discovery and before drafting shared context, check the configured domain.

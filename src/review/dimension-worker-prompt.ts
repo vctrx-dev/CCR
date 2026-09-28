@@ -12,13 +12,14 @@ export const REVIEW_REPORT_FORMAT = `### Output
 
 For supported bugs:
 
-**Finding [severity; dimension-id]:** in plain language, who is treated unfairly or excluded and how
+**Finding [severity; dimension-id]:** in plain language, who is harmed, treated unfairly, or excluded and how
 **Scenario:** a realistic example of how this affects someone; say if it is hypothetical
 **Evidence:** relevant file/path, function, rule, or code behavior
 
 Use Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
 and combine duplicates. For accessibility, explain the person's access need and the action they
-cannot complete. Check that each finding meets the rules above before reporting it.
+cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
+above before reporting it.
 
 For uncertain issues:
 
@@ -49,7 +50,7 @@ ${PRODUCT_AUDIENCE_CONTEXT}
 ${STAKEHOLDER_IMPACT_REVIEW_STANDARD}`;
 }
 
-/** Includes each dimension's scope boundary; criterion IDs are metadata, not review instructions. */
+/** Includes scope boundaries and criterion names; research IDs stay in registry metadata. */
 export function renderDimensionSection(dimension: ReviewDimension): string {
   const questions = dimension.criteria
     .map(({ name, details }, index) => `${index + 1}. **${name}**\n   ${details}`)

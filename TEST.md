@@ -83,7 +83,7 @@ Open Claude Code and run:
 
 Repeat representative operations with obvious unique spelling mistakes, such as
 `/ccr-context initailize`, `/ccr-context verfiy`, `/ccr-hooks statsu`, and
-`/ccr-review codbase privcy`. Each must normalize to the single intended installed choice and
+`/ccr-review codbase privacy-data-protection`. Each must normalize to the single intended installed choice and
 continue without asking for corrected spelling. Then try an unrelated or ambiguous token; it must
 show valid choices, ask at most one focused question, and make no review or repository write. Confirm
 that PR numbers, paths, config keys and values, flags, terminal commands, and free-form addition text
@@ -129,24 +129,30 @@ silently interpreted as empty text.
 
 ## 4. Validate review selection
 
+For initialization, also try an unclear audience, conflicting product descriptions, and an outside
+support process. Expect focused questions in the same chat before final context is written. Answer
+one question, clarify a second, and explicitly skip a third. Check that answers appear as ordinary
+context prose, skipped facts remain honestly limited, and neither project.md nor stakeholders.md
+contains a question backlog or raw Q&A. If no reply is supplied, initialization should pause.
+
 The bundled dimensions are:
 
-- `fairness-evaluation`
-- `pedagogy`
-- `decision-fairness`
-- `inclusion`
-- `transparency`
-- `privacy`
-- `system-integrity`
+- `data-system-reliability`
+- `alignment-with-teaching-learning`
+- `fairness-non-discrimination`
+- `inclusion-accessibility`
+- `transparency-explainability`
+- `privacy-data-protection`
+- `human-control-review`
 
 Run representative valid forms:
 
 ```text
 /ccr-review
 /ccr-review all
-/ccr-review changes privacy
-/ccr-review codebase system-integrity, privacy
-/ccr-review PR-123 fairness-evaluation, privacy
+/ccr-review changes privacy-data-protection
+/ccr-review codebase human-control-review, privacy-data-protection
+/ccr-review PR-123 fairness-non-discrimination, privacy-data-protection
 ```
 
 Also try unrelated scopes and IDs that are not minor unique misspellings, `PR-0`, duplicate IDs,
@@ -156,8 +162,10 @@ stop before investigation or journal writes and show the valid scopes and instal
 Every review runs in one agent without subagents or delegation. It assesses every selected dimension
 and criterion, forms concrete ethical-impact hypotheses, and checks evidence and counterevidence.
 It must not turn routine engineering faults into findings merely by assigning a dimension. Verify
-that accessibility barriers include an access need, blocked action, concrete scenario, and a check
-for equivalent routes. The same agent deduplicates and verifies candidates before reporting.
+that accessibility barriers include an access need, blocked action or unequal participation burden,
+concrete scenario, and a check for equivalent routes. Eventual completion does not rule out a barrier.
+Check failure recovery and privacy protection against their criteria and concrete human consequences.
+The same agent deduplicates and verifies candidates before reporting.
 
 ### Qualitatively evaluate stakeholder-impact review
 
@@ -273,7 +281,7 @@ because fixing the implementation would remove it.
 
 Use this negative control: a CSV-download filename sanitizer permits Windows reserved names such as
 `CON.csv`. Unless the target evidence shows a specific product-level stakeholder harm, CCR must reject
-it as a standalone technical/UI defect rather than relabel it as inclusion or system-integrity.
+it as a standalone technical/UI defect rather than relabel it as inclusion or data-system-reliability.
 
 ## 5. Validate every review scope
 

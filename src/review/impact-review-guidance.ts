@@ -18,28 +18,41 @@ point, not a complete list of everything that could be wrong. Check every select
 its questions, but do not feel you need to find an issue in each one. If you cannot check something
 important, say what is missing. Do not claim to have reviewed code you could not read.
 
+The criteria and indicators guide discovery; indicators are illustrative, not mandatory checks.
+Review prompts, supplied information, generated outputs, and connected actions alongside the code.
+Instructions to be accurate, fair, or protective are not evidence that they work. Assessment may need
+learning goals, evaluation records, or user interaction evidence outside the repository. Missing
+evidence is a gap, not proof of a fault. The framework is not empirically validated or comprehensive;
+its LLM examples are developer interpretations of the criteria.
+
 ### What counts as an issue
 
 For each possible issue, explain who is affected, what the software does, and a realistic situation
-where it treats someone unfairly, excludes them, limits their choices, or represents them harmfully.
+where it harms their learning, exposes their information, treats them unfairly, excludes them,
+limits their choices, or represents them harmfully.
 Point to the code or product rule that supports your explanation.
 
 For a decision or assumption, ask: would this still be unfair if the code worked exactly as intended?
 Then explain which assumption or rule is unfair and why. Working as intended is not enough by itself.
 
 Accessibility barriers count too, even when caused by a coding mistake. Name the person's access
-need, the action they cannot complete, and the code causing the problem. Check whether another
-usable way to complete the same task exists. The same applies to rules that reject a legitimate
-name or force someone to misrepresent who they are. You do not need to prove anyone intended harm.
+need, the action blocked or made unequally burdensome, and the code causing the problem. A barrier
+can qualify even when someone eventually completes the task through extra steps or workarounds.
+Check whether another usable way to complete the same task exists. The same applies to rules that
+reject a legitimate name or force someone to misrepresent who they are. You do not need to prove
+anyone intended harm.
 
-Leave out ordinary crashes, security vulnerabilities, login faults, race conditions, data loss,
-slow code, missing tests, and general UI/UX or error-handling problems. Saying "this could affect
-students" does not turn a technical bug into an ethical issue. When resources are limited, look at
+Leave out ordinary engineering defects without a supported human consequence under the criteria.
+Failure recovery, privacy exposure, and access-control defects can qualify when evidence connects
+them to lost learning work, blocked participation, unjustified penalties, or inappropriate use or
+disclosure of people's information. Saying "this could affect students" is not enough. Do not turn
+this into a general security, performance, or UI/UX review. When resources are limited, look at
 who gets priority and why. When someone needs a correction, look at who can realistically get one.
 For privacy, look at how people's information is used, whether they have a say, and whether that
-use matches what they were told. Do not turn this into a security review.
+use matches its justified purpose and applicable permissions, including logs, retention, and access.
 
-Look at wording in context, including labels and directory names people see. Explain who encounters
+Look at wording in context, including interfaces, prompts, code, comments, documentation, and
+directory names. Learners, educators, and developers can be affected. Explain who encounters
 it and why it could demean, stereotype, or exclude them. A word alone is not proof of harm.
 Do not guess the developer's intentions or claim a community reacted a certain way without evidence.
 
@@ -58,8 +71,7 @@ It is completely fine to find no supported inclusivity issues.
   no usable alternative. Explain the blocked action, not just the missing keyboard support.
 - A screen labels people "master" and "slave". Consider what that wording says about those people
   and who sees it. An isolated internal variable called "master" does not establish the same issue.
-- A slow query or an upload crash is a technical bug. Leave it out. A rule that denies support to
-  learners because they cannot attend during working hours is different: examine who it excludes
-  and whether the rule has a fair justification.
+- A slow query alone is a technical bug. A failed submission that gives a learner a penalty with
+  no effective recovery route can qualify. Verify the penalty and available recovery before reporting.
 
 Use these examples to understand the distinction, not as issues to assume exist in this repository.`;

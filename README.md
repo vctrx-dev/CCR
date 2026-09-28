@@ -181,24 +181,31 @@ Then open Claude Code:
 
 Inside a loaded CCR skill, obvious minor misspellings of an operation, review scope, or configured
 dimension ID are normalized when exactly one valid choice is clearly intended. For example,
-`/ccr-context initailize`, `/ccr-hooks statsu`, and `/ccr-review codbase privcy` proceed as
-`initialize`, `status`, and `codebase privacy`. Ambiguous input asks one focused question instead of
+`/ccr-context initailize`, `/ccr-hooks statsu`, and `/ccr-review codbase privacy-data-protection` proceed as
+`initialize`, `status`, and `codebase privacy-data-protection`. Ambiguous input asks one focused question instead of
 guessing or writing. CCR never fuzzy-corrects PR numbers, paths, config keys or values, flags,
 terminal commands, or free-form content. Claude Code resolves the slash-skill name itself before CCR
 receives its arguments.
 
 The review skill loads its taxonomy from the validated data-only
-`src/review/dimensions.json` registry. Current review dimensions: `fairness-evaluation`, `pedagogy`,
-`decision-fairness`, `inclusion`, `transparency`, `privacy`, `system-integrity`.
-The first dimension, `fairness-evaluation`, asks what counts as human benefit, whose experience can
-challenge that judgment, whether better results conceal lost opportunities, and whether contrary
-evidence can change practice. It starts from product rules, not missing metrics or dashboards.
-Its focus is how evidence is selected and interpreted to justify benefit, not copying concerns from
-other dimensions. Labels and settings alone do not establish a claim of educational validity.
+`src/review/dimensions.json` registry. Current review dimensions: `data-system-reliability`,
+`alignment-with-teaching-learning`, `fairness-non-discrimination`, `inclusion-accessibility`,
+`transparency-explainability`, `privacy-data-protection`, `human-control-review`.
+The taxonomy follows `CCR_v5_7_review.xlsx`: seven dimensions and 28 criteria, preserving its names,
+definitions, illustrative indicators, order, and dimension boundaries. Criterion IDs retain the
+workbook's exact capitalization in registry metadata but are omitted from prompts. Boundary references
+use criterion names instead of IDs. Dimension selectors follow the full workbook names in kebab-case.
+The first dimension's criteria cover
+data coverage, early warnings, model scope, instructional content checks, and failure recovery.
+Fairness evaluation now belongs under `fairness-non-discrimination`; meaningful choice, challenges, and human
+intervention belong under `human-control-review`. The retired `fairness-evaluation` and
+`system-integrity` selectors are no longer accepted. See the user manual for the workbook-ID mapping.
+Indicators are examples, not mandatory checks. Missing evaluation evidence is a gap, not proof of a
+fault; the framework is not empirically validated and does not claim comprehensive coverage.
 Blank arguments default to a changes review across all dimensions. Use `/ccr-review changes` for
 clarity, `/ccr-review codebase` for the complete codebase, or `/ccr-review PR-123` for pull request
 123. Put `all` or comma-separated dimension IDs after the scope, such as
-`/ccr-review codebase privacy, transparency`. A selector without a scope remains a changes review
+`/ccr-review codebase privacy-data-protection, transparency-explainability`. A selector without a scope remains a changes review
 as a supported shorthand. `npx --no-install ccr help` prints the IDs bundled in the installed
 version. An empty registry stops a review and reports that condition instead of inventing criteria.
 To add, delete, reorder, or revise dimensions, change the registry first; also update matching README
@@ -206,6 +213,11 @@ and user-manual references, then run package smoke to verify the shipped help an
 remain aligned.
 
 ## Stakeholder-impact review
+
+During `/ccr-context initialize`, Claude asks project and stakeholder clarification questions in the
+same chat and waits for your answers before finalizing `project.md` and `stakeholders.md`. Answers
+become plain-language context, not a saved Q&A or an "Open questions" section. You can answer that
+you do not know or skip a question; any important remaining limitation is stated plainly.
 
 CCR is a socio-technical, stakeholder-impact review—not a conventional defect scan. It examines how
 a product's assumptions, allocation of authority, decision rules, and feedback loops can harm,
@@ -233,9 +245,11 @@ It reads source, README, documentation, and `.ccr/project.md` and `.ccr/stakehol
 verifies candidates, merges duplicates, saves through CCR's review support, and reports.
 Skill prompts describe goals and ownership rules in plain language. Claude chooses its tools and
 consults installed help when needed, rather than following a prescribed terminal-command sequence.
-Accessibility findings must identify the access need, blocked action, evidence, and equivalent-route
-check, even when the cause is an implementation defect. User-facing terminology is examined in
-context, not by keyword alone. Ordinary technical faults remain excluded. Source code is never changed
+Accessibility findings must identify the access need, blocked action or unequal participation barrier,
+evidence, and equivalent-route check, even when someone eventually completes the task. Terminology in
+interfaces, code, prompts, comments, documentation, and directory names is examined in context, not
+by keyword alone. Failure recovery and privacy protection can qualify with a supported human
+consequence under the criteria. Ordinary technical faults alone remain excluded. Source code is never changed
 without later approval. `dimension-prompts.md` is the standalone, read-only whole-codebase test prompt.
 
 Reports contain `Finding [severity; dimension-id]` / `Scenario` / `Evidence` entries and `Question` /
@@ -246,8 +260,8 @@ changes or failed continuity still receive a brief disclosure.
 The dimensions are stakeholder-impact lenses, not buckets for ordinary engineering defects. They
 examine, for example, whether the product treats one perspective as neutral authority, rewards
 automation-friendly answers over defensible learning, makes unequal outcomes hard to discover, or
-puts the burden of contesting consequential decisions on people with the least power. `privacy` and
-`system-integrity` apply when a system's information or operational behavior creates a concrete harm
+puts the burden of contesting consequential decisions on people with the least power. `privacy-data-protection` and
+`data-system-reliability` apply when a system's information or operational behavior creates a concrete harm
 pathway for people—not merely because a generic security or reliability flaw exists. The reviewer
 reports one evidence-backed root cause with every applicable dimension instead of duplicating it.
 Changes and codebase reviews record their code and context fingerprints in the review journal with
@@ -394,8 +408,9 @@ Runtime requirement: Node.js 22.12 or later and Claude Code 2.1.0 or later.
 ## Current scope
 
 The package provides context management plus one data-driven review skill with changes, codebase,
-and read-only pull-request scopes. Its review taxonomy covers fairness evaluation, pedagogy, decision
-fairness, inclusion, transparency, privacy, and cross-cutting system integrity. Automated fixes and the
+and read-only pull-request scopes. Its review taxonomy covers Data & System Reliability,
+Alignment with Teaching & Learning, Fairness & Non-Discrimination, Inclusion & Accessibility,
+Transparency & Explainability, Privacy & Data Protection, and Human Control & Review. Automated fixes and the
 GitHub Action remain on the roadmap. They are not claimed as available.
 
 ## Development

@@ -12,7 +12,7 @@ const dimensionIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 
 const reviewCriterionSchema = z
   .object({
-    id: dimensionIdSchema,
+    id: z.string().regex(/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/u),
     name: z.string().trim().min(1),
     details: z.string().trim().min(1),
   })
@@ -46,7 +46,8 @@ function duplicate(values: string[]): string | undefined {
 
 /**
  * Validates the data-only review taxonomy before it is embedded in installed skills. Dimension and
- * criterion IDs are stable selectors; edit the JSON registry rather than review orchestration code.
+ * IDs retain their declared case: dimension selectors are lowercase, while research criterion IDs
+ * may contain uppercase letters. Edit the JSON registry rather than review orchestration code.
  */
 export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionRegistry {
   const registry = reviewDimensionRegistrySchema.parse(input);

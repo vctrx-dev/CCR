@@ -22,18 +22,26 @@ contain incompatible changes when they are clearly documented.
 
 ### Changed
 
-- Clarified that concrete identity and accessibility barriers qualify as stakeholder harms even when
-  their mechanism is technical. Inclusion guidance now covers participation blocked for a single person.
+- Context initialization now asks project and stakeholder clarification questions in the same chat
+  before finalizing the files. Answers become context prose; question-list scaffolds are removed,
+  and explicitly unknown or skipped facts remain plain-language limitations.
+
+- Replaced the review taxonomy with the seven dimensions and 28 criteria from `CCR_v5_7_review.xlsx`,
+  retaining workbook wording, illustrative indicators, and boundaries. Criterion IDs exactly match
+  the workbook and remain metadata, omitted from prompts. Dimension selectors now follow the full
+  workbook names rather than old shorthand labels. `data-system-reliability` and `human-control-review` replace the retired
+  `fairness-evaluation` and `system-integrity` selectors; group fairness evaluation is now part of
+  `fairness-non-discrimination`. Reinstall and run setup to refresh installed prompts.
+- Aligned review exclusions with the updated criteria: failure recovery and privacy protection can
+  qualify with concrete human consequences, and unequal participation barriers can qualify even
+  when someone eventually completes the task. Contextual language review includes internal code,
+  prompts, comments, and documentation as well as interfaces.
 - Review workers, prompt previews, and final skill reports now share one short prompt and a
   `Finding` / `Scenario` / `Evidence` and `Question` / `Context` output format; material uncertainties
   are reported as questions and "No supported inclusivity bugs found." is a valid result.
-- `/ccr-review` now uses a short master prompt: it starts one subagent per dimension with the
-  ready-made prompt embedded in the skill, verifies results, records the journal, and reports. The
+- `/ccr-review` now uses a single agent to review every selected dimension with the
+  shared guidance embedded in the skill, verify results, record the journal, and report. The
   installed dimensions reference now shows the same prompts for people instead of JSON.
-- Rewrote the pedagogy, decision-fairness, inclusion, transparency, privacy, and system-integrity
-  dimensions as concise review questions. Dimension and criterion IDs are unchanged.
-- Refocused the first review dimension on evidence of human benefit, affected perspectives, conflicting
-  success measures, and whether contrary evidence can change practice. Criterion IDs are unchanged.
 - Review discovery now tests hidden assumptions in correctly functioning product rules using concrete
   counterexamples, counterevidence, and feedback loops. Workers receive the shared method explicitly;
   material evidence gaps are reported as open questions rather than confirmed bugs or clean criteria.

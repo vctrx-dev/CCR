@@ -58,8 +58,14 @@ revise an answer; someone responsible for running the service may manage account
 when the actual process is unknown. Do not merely remove citations from an otherwise technical report.
 
 These files are background for a review, not a list of bugs or a declaration that the product is
-fair. Record relevant rules and existing safeguards even when no concern is apparent. Describe a
-possible concern as a question unless the evidence establishes it. Do not invent developer motives,
+fair. Record relevant rules and existing safeguards even when no concern is apparent. Keep possible
+concerns distinct from established facts. Clarification questions belong in the interactive chat,
+not in project.md or stakeholders.md: do not add question lists, Q&A transcripts, or sections such as
+"Open questions" or "What still needs confirming". Incorporate clarified facts into the relevant
+paragraphs. If something remains unknown after the user declines or cannot answer, state only the
+useful limitation in plain language; do not disguise an unasked question as a statement. Automatic
+updates cannot ask questions: preserve uncertainty without inventing answers or adding a question backlog.
+Do not invent developer motives,
 community reactions, measured disparities, or outside policies. An absent screen does not prove
 there is no human process elsewhere. Never copy secrets, personal records, or private discussions.
 
@@ -94,11 +100,6 @@ privacy, or how people are represented. Keep this in plain language, without imp
 Describe what people need to take part, who makes decisions, and what people can understand,
 question, or change. Include accessibility needs, existing alternatives, and human support when known.
 
-## What still needs confirming
-
-Separate known behavior, possible effects, and unanswered questions. Label future plans clearly.
-Do not assume harm or fairness. Keep only details that help a reviewer understand the people involved.
-
 `,
   ".ccr/stakeholders.md": `${managedHeader}
 # Stakeholders
@@ -125,10 +126,6 @@ Do not assume harm or fairness. Keep only details that help a reviewer understan
 
 - For each relevant role, connect what they do or receive to effects on learning, opportunity,
   participation, dignity, privacy, or workload. Include existing support and alternatives.
-
-## Open questions
-
-- State what is unknown about people's needs, the use of outputs, or outside review and support.
 
 `,
   ".ccr/decisions.md": "",

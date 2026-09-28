@@ -19,7 +19,7 @@ const DIMENSION_LENSES = REVIEW_DIMENSIONS.dimensions
  */
 export const CCR_REVIEW_SKILL = `---
 name: ccr-review
-description: Review code for inclusivity bugs. Usage /ccr-review [changes | codebase | PR-<number>] [all | dimension-id,...]; changes = uncommitted changes (default), codebase = whole codebase, PR-<number> = a pull request; all = every dimension (default). Example /ccr-review PR-123 privacy,inclusion.
+description: Review code for inclusivity bugs. Usage /ccr-review [changes | codebase | PR-<number>] [all | dimension-id,...]; changes = uncommitted changes (default), codebase = whole codebase, PR-<number> = a pull request; all = every dimension (default). Example /ccr-review PR-123 privacy-data-protection,inclusion-accessibility.
 argument-hint: "[changes | codebase | PR-<number>] [all | dimension-id,...]"
 ---
 

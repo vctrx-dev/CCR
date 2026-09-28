@@ -240,6 +240,17 @@ it does not prove a stale installation.
 
 ### How assumption discovery works
 
+Initialization includes a clarification conversation. After investigating the repository, Claude asks
+focused questions about unclear project facts and stakeholders in the same chat, waits for your
+answers, and follows up on material ambiguity before finalizing `project.md` and `stakeholders.md`.
+The initial invitation to provide optional context is not the only opportunity to clarify facts.
+Your answers are incorporated into the relevant paragraphs in plain language; raw conversations,
+question lists, and "What still needs confirming" or "Open questions" sections are not saved there.
+You may say you do not know or skip a question. Important remaining limits are stated as limits,
+without inventing certainty or repeatedly asking. If you are unavailable, initialization pauses.
+Later automatic updates preserve uncertainty without adding question backlogs; stakeholder ownership
+after initialization remains unchanged.
+
 One agent reviews all selected dimensions without subagents or delegation. It first establishes who uses
 the product and who is affected, then applies each dimension's summary and numbered questions. These
 are discovery lenses, not an exhaustive checklist: investigate assumptions about normality, success,
@@ -248,11 +259,13 @@ potential issue it identifies the specific rule, who could be affected and in wh
 rule changes their participation, opportunity, representation, or treatment, and whether safeguards,
 exceptions, or human correction already address it. Ordinary functional bugs, vulnerabilities, generic
 UX issues, and missing features are not findings merely because stakeholders could be affected.
-Accessibility barriers qualify even when caused by a defect: name the access need, blocked action,
-and concrete scenario, and check equivalent routes. Examine user-facing labels and directory names
-for exclusionary meaning in context; isolated keywords do not establish harm. Incomplete
-evidence becomes a question; finding nothing is acceptable. Criterion IDs remain stable; names and
-details supply the current meaning.
+Accessibility barriers qualify even when caused by a defect: name the access need, blocked action or
+unequal participation barrier, and concrete scenario, and check equivalent routes. Examine labels,
+code, prompts, comments, documentation, and directory names for exclusionary meaning in context;
+isolated keywords do not establish harm. Failure recovery and privacy protection qualify when the
+criteria and a concrete human consequence are supported. Incomplete evidence becomes a question;
+finding nothing is acceptable. Criterion IDs follow the current workbook; names and details supply
+their meaning.
 
 For prompt development in the CCR source checkout, run `pnpm test:prompt` or `npm run test:prompt`.
 Copy its prompt into Claude Code in the target repository. It reviews only the first source dimension
@@ -333,13 +346,14 @@ Review all configured dimensions by default:
 Review one or more dimensions by ID:
 
 ```text
-/ccr-review fairness-evaluation, pedagogy
-/ccr-review codebase privacy
-/ccr-review PR-123 fairness-evaluation, privacy
+/ccr-review data-system-reliability, alignment-with-teaching-learning
+/ccr-review codebase privacy-data-protection
+/ccr-review PR-123 fairness-non-discrimination, privacy-data-protection
 ```
 
-Current review dimensions: `fairness-evaluation`, `pedagogy`, `decision-fairness`, `inclusion`,
-`transparency`, `privacy`, `system-integrity`. Run
+Current review dimensions: `data-system-reliability`, `alignment-with-teaching-learning`,
+`fairness-non-discrimination`, `inclusion-accessibility`, `transparency-explainability`,
+`privacy-data-protection`, `human-control-review`. Run
 `npx --no-install ccr help` to see the IDs bundled in the installed version.
 
 ### Stakeholder-impact review
@@ -380,7 +394,8 @@ If the product provides no deliberate way to identify perspective, contested cla
 framing, or omitted viewpoints, students may be assessed against one institutional, cultural, or
 political framing without educators or learners being able to see that choice. This is a product
 assumption about what counts as knowledge, not an upload or rendering defect. Relevant dimensions may
-include pedagogy, decision-fairness, transparency, and inclusion.
+include Alignment with Teaching & Learning, Fairness & Non-Discrimination,
+Transparency & Explainability, and Inclusion & Accessibility.
 
 **Automation may optimize for answerability rather than defensible learning.** If generation uses
 source material and requested counts or types without asking for learning objectives, reasoning level,
@@ -388,7 +403,7 @@ or evidence of understanding, the product's default incentive can favor facts th
 derive and score. Over time, recall and source-phrase matching may displace interpretation, transfer,
 uncertainty, or critical thinking. The concern is not whether a question renders; it is whether the
 product quietly defines learning as what is easiest to automate. Relevant dimensions may include
-pedagogy, fairness-evaluation, and transparency.
+Alignment with Teaching & Learning, Data & System Reliability, and Transparency & Explainability.
 
 **Unequal outcomes may persist because nobody can discover the pattern.** A product can include human
 review yet offer no feedback loop showing whether some generated questions repeatedly confuse,
@@ -396,19 +411,26 @@ misrepresent, or disadvantage learners in particular contexts, language backgrou
 needs. Individual decisions can look reasonable while harmful patterns repeat across classes or
 cohorts. This is a governance question about whether responsible people can detect and correct
 unequal outcomes, not a request to profile people unnecessarily. Relevant dimensions may include
-fairness-evaluation, inclusion, transparency, and system-integrity.
+Fairness & Non-Discrimination, Inclusion & Accessibility, Transparency & Explainability,
+and Human Control & Review.
 
 **The person with least power may carry the whole burden of contesting a decision.** When automated
 assessment becomes consequential but learners cannot understand why an answer is accepted, identify
 ambiguity, or seek correction, the product creates one-way authority even if approval workflows work
 as designed. That burden is especially consequential where language, cultural context, disability
 accommodations, or legitimate alternative interpretations affect what counts as correct. Relevant
-dimensions may include decision-fairness, transparency, inclusion, and pedagogy.
+dimensions may include Fairness & Non-Discrimination, Transparency & Explainability,
+Inclusion & Accessibility, and Alignment with Teaching & Learning.
 
 The dimensions are lenses for these kinds of impact patterns. Accessibility and identity restrictions
-qualify when they concretely block participation or distort identity. `privacy` and
-`system-integrity` apply when a system's information or operational behavior establishes a concrete
+qualify when they concretely block participation, create unequal participation barriers, or distort
+identity, including when someone eventually completes a task. `privacy-data-protection` and
+`data-system-reliability` apply when a system's information or operational behavior establishes a concrete
 stakeholder harm pathway, rather than simply because a generic flaw exists.
+This includes inappropriate access or disclosure, unjustified retention, and failure responses that
+leave learners with lost work, blocked participation, or unjustified penalties. Wording in code,
+comments, prompts, documentation, and directory names is reviewed in context for its effects on
+learners, educators, and developers; isolated keyword matches are not findings.
 
 `/ccr-review` and `/ccr-review changes` check staged, unstaged, and approved untracked changes.
 `/ccr-review codebase` checks the complete safe Git index plus live changes. `/ccr-review PR-123`
@@ -480,29 +502,60 @@ has this data-only shape:
 
 ```json
 {
-  "id": "privacy",
-  "name": "Privacy",
+  "id": "privacy-data-protection",
+  "name": "Privacy & Data Protection",
   "summary": "What this dimension reviews.",
   "criteria": [
     {
       "id": "data-collection",
       "name": "Data collection",
-      "details": "The complete research-backed criterion and review guidance."
+      "details": "The criterion definition and illustrative review indicators."
     }
   ]
 }
 ```
 
-IDs are lowercase kebab-case selectors. Dimension and criterion IDs must be unique within their
+Dimension IDs are lowercase kebab-case selectors. Criterion IDs preserve research-source capitalization
+and contain alphanumeric segments separated by hyphens. Dimension and criterion IDs must be unique within their
 respective scope. Change the taxonomy in this registry, then update matching README and user-manual
 references and run package smoke. `scripts/package-smoke.mjs` derives the shipped help
 and README assertion from the registry. The `/ccr-review` skill embeds shared guidance once and a
 summary and questions for each dimension. Setup writes standalone single-agent dimension prompts
 to `.claude/skills/ccr/references/dimensions.md` as a human reference.
 
-The included dimensions are a maintained baseline. Extend them when the taxonomy matures, but keep
-each criterion's ethical purpose. `system-integrity` concerns institutional accountability and unequal
-burden, not cross-cutting correctness defects. An empty registry stops reviews instead of inventing criteria.
+The current baseline comes from `CCR_v5_7_review.xlsx`, with all seven dimensions and 28 criteria
+in workbook order. Dimension names, descriptions, review questions, boundaries, criterion names,
+definitions, and illustrative indicators are preserved. Criterion IDs exactly match the workbook,
+such as `CCR-D1-C1`, but are omitted from prompts. Boundary references use exact criterion names
+instead of IDs. Dimension selectors follow the full workbook names in lowercase kebab-case, with
+ampersands omitted; prompt dimension names match the workbook exactly.
+
+| Workbook ID | Dimension | CCR selector | Criteria |
+|---|---|---|---|
+| CCR-D1 | Data & System Reliability | `data-system-reliability` | 5 |
+| CCR-D2 | Alignment with Teaching & Learning | `alignment-with-teaching-learning` | 4 |
+| CCR-D3 | Fairness & Non-Discrimination | `fairness-non-discrimination` | 4 |
+| CCR-D4 | Inclusion & Accessibility | `inclusion-accessibility` | 3 |
+| CCR-D5 | Transparency & Explainability | `transparency-explainability` | 3 |
+| CCR-D6 | Privacy & Data Protection | `privacy-data-protection` | 6 |
+| CCR-D7 | Human Control & Review | `human-control-review` | 3 |
+
+The old `fairness-evaluation`, `system-integrity`, `pedagogy`, `decision-fairness`, `inclusion`,
+`transparency`, and `privacy` selectors are retired, not aliases. Use
+`fairness-non-discrimination` for group fairness evaluation, `data-system-reliability` for data and operational
+reliability, and `human-control-review` for challenges, intervention, and meaningful choice.
+Reinstall the updated package and run setup to refresh installed skills and their reference prompts.
+`pnpm test:prompt` still previews the first dimension, now Data & System Reliability.
+
+Indicators are non-exhaustive examples, not mandatory checks. Review prompts and supplied information
+alongside actual behavior; an instruction to be fair or accurate does not demonstrate effectiveness.
+Evaluation records, learning goals, or user interaction evidence may be outside the repository;
+missing evidence is a gap, not proof of a fault. The workbook's sources and evidence mapping distinguish
+research, guidance, and developer interpretations; the framework is not empirically validated or a
+comprehensive ethics or accessibility evaluation. LLM examples are developer interpretations within
+the criteria. The runtime taxonomy is review guidance, not a claim that every indicator is empirically
+established. Extend the registry while preserving each criterion's ethical purpose. An empty registry
+stops reviews instead of inventing criteria.
 
 ## Context operations
 
@@ -532,7 +585,7 @@ burden, not cross-cutting correctness defects. An empty registry stops reviews i
 Once a CCR skill is loaded, its operation, review scope, and configured dimension selector accept an
 obvious minor misspelling when exactly one valid choice is clearly intended. CCR normalizes the value
 and continues without asking for perfect spelling. Examples include `initailize` → `initialize`,
-`statsu` → `status`, and `codbase privcy` → `codebase privacy`. If the input is ambiguous or not
+`statsu` → `status`, and `codbase privacy-data-protection` → `codebase privacy-data-protection`. If the input is ambiguous or not
 reasonably close, CCR shows the valid choices and asks one focused question before any review or
 write. PR numbers, paths, config keys and values, flags, terminal commands, and free-form content are
 never fuzzy-corrected. Claude Code still resolves the slash-skill name before CCR receives its
