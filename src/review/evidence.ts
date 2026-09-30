@@ -9,18 +9,8 @@ import {
   readBoundedUtf8TextIfExists,
   readRegularFileGitMode,
 } from "../context/files";
-import {
-  readBoundedStagedDiff,
-  readBoundedUnstagedDiff,
-  readIndexEntries,
-  readUnstagedPaths,
-  readUntrackedPaths,
-} from "../context/git";
-import {
-  filterExcludedPaths,
-  readResolvedContextConfig,
-  readSafeStagedPaths,
-} from "../context/privacy";
+import { readBoundedStagedDiff, readBoundedUnstagedDiff } from "../context/git";
+import { filterExcludedPaths, readSafeStagedInventory } from "../context/privacy";
 
 /**
  * Privacy-preserving live-change boundary for review skills. It exposes only Git-selected staged,
@@ -49,19 +39,14 @@ export function hasSafeReviewChanges(changes: SafeReviewChanges): boolean {
 
 /** Lists safe live change paths, retaining separate staged/unstaged states for partially staged files. */
 export async function listSafeReviewChanges(root: string): Promise<SafeReviewChanges> {
-  const [config, staged] = await Promise.all([
-    readResolvedContextConfig(root),
-    readSafeStagedPaths(root),
-  ]);
+  const staged = await readSafeStagedInventory(root);
+  const { config } = staged;
   const regularTrackedPaths = new Set(
-    readIndexEntries(root)
+    staged.entries
       .filter(({ mode }) => mode.startsWith("100"))
       .map(({ path: relativePath }) => relativePath),
   );
-  const unstagedFiltered = filterExcludedPaths(
-    readUnstagedPaths(root),
-    config.privacy.excludedPaths,
-  );
+  const unstagedFiltered = filterExcludedPaths(staged.unstagedPaths, config.privacy.excludedPaths);
   const unstagedPaths = unstagedFiltered.included.filter((candidate) =>
     regularTrackedPaths.has(candidate),
   );
@@ -69,7 +54,7 @@ export async function listSafeReviewChanges(root: string): Promise<SafeReviewCha
     (candidate) => !regularTrackedPaths.has(candidate),
   );
   const untrackedFiltered = filterExcludedPaths(
-    readUntrackedPaths(root),
+    staged.untrackedPaths,
     config.privacy.excludedPaths,
   );
   const overlayPaths = new Set(

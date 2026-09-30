@@ -107,15 +107,19 @@ path, interpreter, or minimal Git hook. Disable hooks before initialization if t
 
 - `pre-commit` — warns when repository files are staged without a staged shared `.ccr/` file or the
   staged review evidence or shared context differs from the latest recorded CCR review.
-- `post-commit` — starts the commit journal, marks a mismatched review stale, and prints an update
-  instruction when needed.
+- `post-commit` — starts the commit journal, marks a mismatched review stale, and prints
+  `/ccr-context update last commit` when needed.
 
-Hooks are advisory by default. With `hooks.autoUpdateContext: true`, post-commit runs the update
-through headless Claude Code without permission questions. CCR first copies at most 200 approved
-paths and 200,000 retained characters, with a 512,000-byte final ceiling, from the exact immutable
-`HEAD` commit into a temporary ignored `.ccr/private/` packet. Headless Claude can read only approved
+Hooks are advisory by default. With `hooks.autoUpdateContext: true`, post-commit announces and runs
+the update through headless Claude Code without permission questions; the commit is already saved,
+and the hook returns when the update finishes, which can take a few minutes. CCR first copies at
+most 200 approved paths and 200,000 retained characters, with a 512,000-byte final ceiling, from the
+exact immutable `HEAD` commit into a temporary ignored `.ccr/private/` packet. Each file carries its
+content and its diff against the parent. CCR sets the journal's `Updated` time after validation.
+Headless Claude can read only approved
 `.ccr` inputs and that packet and can write only the exact journal and `.ccr/project.md`, plus append
-at most one normalized, nonduplicate decision line when its opt-in is true. Replacing, deleting, or
+at most one normalized, nonduplicate decision line when its opt-in is true and the approved journal
+already records the explicit human review rationale. It cannot infer decisions from a commit. Replacing, deleting, or
 otherwise rewriting `.ccr/decisions.md` fails closed.
 It receives no shell, task, glob, grep, raw repository-read, hook, MCP, Git-mutation, or saved-session
 capability.
@@ -196,7 +200,7 @@ reject an active lifecycle instead of changing its permissions mid-run. Defaults
   "instructions": {
     "updateClaudeMd": false,
     "updateAgentsMd": false,
-    "updateDecisionsMd": false
+    "updateDecisionsMd": true
   }
 }
 ```
@@ -321,10 +325,11 @@ Record existing safeguards as well as constraints; these documents are backgroun
 or a declaration of fairness. Distinguish known behavior, possible
 effects, unanswered questions, and future plans.
 
-All generated context prose, including stakeholders, decisions, and journals, is written for a
+Generated context narrative, including stakeholders, decisions, and journals, is written for a
 non-technical ethical reviewer. Omit paths, code terms, commands, technical citations, and internal
 mechanics; explain people's experiences, choices, and consequences. Verify claims against sources
-before writing rather than adding technical evidence sections or moving them to another context file.
+before writing. Journals may include a separate, minimal Supporting references section for relevant
+paths, check results, and finding origins needed to recover the basis of important conclusions.
 Package-managed continuity metadata is preserved. Plans remain intent unless
 implementation evidence confirms them. Review the resulting `.ccr` changes. Validation inspects
 every managed Markdown context file through a 10,000 UTF-16-character window; content beyond that
@@ -467,19 +472,93 @@ review reuses the `HEAD` journal, and every `PR-<number>` reuses one PR-specific
 entries gain branch and commit fields after commit. Human feedback about the same code—such as
 marking findings as false positives—amends the same journal entry and review-run section instead of
 creating another. Each completed review replaces the journal's initial summary placeholder with a
-concise factual scope, evidence, and outcome record. New journal filenames use the UTC calendar date
+concise factual scope, evidence, and outcome record. The skill then fills in each distinct finding;
+the CLI's short save summary alone is not the complete session account.
+
+After review, Claude updates the active entry before every subsequent response in that session,
+including questions, explanations, user feedback, user-made changes it has inspected, requested
+fixes, and checks. A turn with no new substance refreshes `Updated` without adding filler. Findings
+have stable labels, impact summaries, current dispositions, and reasons or verification results.
+The entry uses `Summary` and `Findings and outcomes`, with `Work and decisions` and `Next steps`
+when useful. Empty disposition categories, duplicated reports, and conversation transcripts are
+removed. Earlier meaningful findings and corrected conclusions remain understandable.
+
+Claude reads shared context and configured recent journals before reviewing, plus the active entry.
+It rereads context after relevant changes or contradictions, and consults older entries when a
+specific question needs their history. The active path and unresolved work carry through session
+compaction; Claude reloads them on resumption. Follow-up discussion reuses that path. Edits following
+a clean-tree review continue in a working journal with a bounded historical account and a link to
+the previous entry. Partial commits also preserve this continuation without carrying old review
+fingerprints or context-assessment receipts into new work. Branch/repository/PR changes and a newly completed
+review selecting another target use normal identity rules, with a concise continuation summary.
+Journals remain work/commit/PR-based, not isolated by a Claude session ID; concurrent sessions must
+reread and preserve one another's work. This is skill-guided behavior, not an automatic per-message
+hook or a background observer of edits made outside Claude.
+
+Claude decides whether a durable clarification or product change warrants updating `project.md`
+or an opted-in decision, shows shared-context changes, and validates them. Most turns need neither.
+Follow-ups amend the narrative without calling `save-review`. When Claude's own follow-up edits
+shared context for this review, it re-records the run with `context record-review-state` while the
+code fingerprint is unchanged; that command refuses changed code. Code changes and other people's
+context edits require another review before being considered freshly reviewed. Claude proposes, but
+never applies, `stakeholders.md` edits, and records a context assessment after a local review so
+pre-commit does not ask for one again. Reports label findings `F1`, `F2`, and so on, reuse those
+labels in follow-ups, and open with a `Context applied` line. Claude does not open or search
+privacy-excluded files such as `.env*`, keys, credential files, or `secrets/` folders.
+
+Review input always includes the active entry, even when older than the configured recent selection.
+`context journals` leaves the active entry out so every configured slot shows other history.
+Long journal previews reserve independent space for current summaries, findings, next steps, and
+work/decisions instead of returning only the oldest prefix. Omitted material is marked; read the
+complete entry when a conclusion needs its supporting history. Journals can keep minimal Supporting
+references separately from plain-language prose, including check results and finding origins.
+
+`context validate` and `context status` distinguish structural validity from readiness: `unfilled`
+means untouched templates or heading-only accounts, `populated` means prose exists, and `invalid`
+means structural checks failed. Neither populated nor structurally valid claims factual verification.
+
+Privacy restrictions in `privacy.excludedPaths` survive legacy configuration upgrades and unrelated
+setting changes. This optional JSON field adds up to 100 globs to mandatory exclusions. PR evidence
+approval and the returned net diff use the same immutable base/head comparison, including rename
+source paths; intermediate commit patches are not exposed.
+
+Long journal previews prioritize living findings over historical review runs. Continuation carries
+useful review-run findings, human explanations, and next steps, with their historical origin and a
+link to the full previous entry; completion receipts are not carried forward.
+
+To assess an already-created commit, obtain fingerprints with
+`ccr context review-state --commit <full-HEAD-sha>`, then record them with
+`ccr context assess <code-fingerprint> <context-fingerprint> <summary> --commit <full-HEAD-sha>`.
+The explicit commit must still be current HEAD. Working and committed assessments have distinct
+targets; a committed receipt does not certify later working changes.
+
+After assessing current local work, use
+`ccr context assess <code-fingerprint> <context-fingerprint> <summary>` with the values from
+`ccr context review-state`. The summary records why context changed or why no edit was needed.
+Changed evidence rejects the receipt. Receipts are stored per branch, so assessing another branch
+does not discard this one. Pre/post-commit reminders consult a matching assessment,
+not whether an arbitrary shared file was edited. An assessment does not mark an ethical review
+complete. Automatic updates save their completion receipt only after their postconditions pass;
+a completed review narrative alone no longer skips the automatic assessment.
+
+Normal decision capture remains append-only and opt-in. Only an explicit human request to maintain
+decisions permits reconciliation or compaction: show the diff, preserve applicable explanations and
+concise superseded-rule history, and validate. Routine project compaction never grants this authority.
+
+New journal filenames use the UTC calendar date
 (`YYYY-MM-DD.md`), with numeric suffixes for additional entries on the same date. Different commits
 get separate journal entries; repeated reviews of one commit reuse its entry. `Started` records when
 the stable journal was created, while `Updated` advances when CCR reuses, completes, finalizes, or
 amends it. Work spanning several days does not rename the journal. Older `Timestamp` metadata migrates
 to `Started` and `Updated` when reused. For changes and codebase scopes, CCR fingerprints the
-privacy-approved code state and every bounded review input: resolved configuration, `project.md`,
-`stakeholders.md`, `decisions.md`, and the repository-wide recent journals. The input-context
-fingerprint includes an existing active journal whenever the reviewer reads it. A separate
-continuity-context fingerprint excludes only CCR's active write target and selects the configured
-count from the remaining journals, preventing CCR's own journal write from invalidating its record.
-PR freshness uses the same complete review-input fingerprint. CCR rechecks code and review inputs
-before the human-facing report and records continuity plus current status in the latest review run.
+privacy-approved code state and the review's freshness context: `project.md`, `stakeholders.md`,
+`decisions.md`, the domain, and privacy exclusions. Local journals and operational settings such as
+hooks or journal counts do not affect freshness, so work on another branch, a PR review, or a
+timestamp refresh cannot make a local review stale. A separate input-context fingerprint also covers
+the full configuration and the recent and active journals the reviewer read. The review captures
+`context review-state` before discovery and passes it to
+`context save-review --expected-state <fingerprint> --expected-context <fingerprint>`, which refuses
+code or context edited during the review. PR runs record the reviewed head in their summary.
 If recording finds changed code or
 context, the review is reported as stale. The recorder rejects PR, old-branch,
 old-HEAD, placeholder, structurally incomplete, malformed, oversized, or concurrently modified
@@ -490,10 +569,26 @@ them, without technical terms or source citations. Interactive and automatic
 updates share this guidance. It changes only for a verified lasting change to those facts or confirmed
 plans; routine bug fixes and findings stay in the journal. CCR never updates `stakeholders.md`
 after initialization.
-`decisions.md` is human-owned. It starts empty; review can append at most one concise decision only
-when `instructions.updateDecisionsMd` is `true`, the human confirms the durable future-review rule
-or repository evidence directly states the decision, and `ccr context append-decision <decision>`
-accepts the bounded entry. A finding or recommendation alone is not a decision.
+`decisions.md` is human-owned. It starts empty and captures uncommon human rationale learned during
+review follow-up, rather than policies inferred from code. Review can append a concise decision when
+`instructions.updateDecisionsMd` is `true`, the human explains a lasting choice behind a finding,
+and that reusable explanation is missing from shared context. Use
+`ccr context append-decision <decision>` for each bounded append; context operations append at most
+one decision. Preserve existing human entries.
+
+For example, the human explains that findings 2 and 3 are false positives because the displayed
+result is deliberately a draft and a trained person makes the final decision outside the software.
+The journal records both responses. If absent from existing context, decisions records the choice,
+reason, scope, and draft-only/human-review conditions. Human intent and outside practices need not
+already exist in code; code-related assertions are checked and contradictions remain visible.
+"False positive" without a reason calls for clarification, not an unexplained permanent exemption.
+
+Every review reads decisions alongside project and stakeholder context and applies those scoped
+explanations. It avoids repeating the same resolved finding while its assumptions hold. If the
+product later publishes final results automatically, the reviewer can raise the materially changed
+concern and explain why the earlier decision no longer settles it. A finding, recommendation, fix
+request, or acceptance of unresolved risk alone does not establish a false positive or a durable rule.
+If the rationale is already adequately represented in shared context, update only the journal.
 The default is `false`, so reviews otherwise leave the file unchanged.
 
 ### Maintain review dimensions
@@ -573,13 +668,13 @@ stops reviews instead of inventing criteria.
 | `/ccr-context compact` | Compact project context only |
 | `/ccr-review [scope] [all\|dimension,...]` | Review changes, codebase, or a pull request |
 | `ccr context append-decision <decision>` | Append one config-authorized decision line |
-| `ccr context journals [PR-<number>]` | Read configured repository-wide recent journals ordered by `Updated`; the validated legacy PR token does not scope results |
+| `ccr context journals [PR-<number>]` | Read configured repository-wide recent journals ordered by `Updated`, except the active entry; `PR-<number>` names the active PR entry and never scopes results |
 | `ccr context commit-changes <HEAD> [--after <path>]` | Page through privacy-approved paths changed by the exact current commit |
 | `ccr context commit-read <HEAD> <file>` | Read one bounded immutable changed blob or deletion marker |
-| `ccr context review-context-state [PR-<number>]` | Fingerprint review inputs and continuity-safe context; the optional PR identifies only the continuity write target |
-| `ccr context review-state` | Fingerprint current approved code, review inputs, and continuity-safe context |
-| `ccr context save-review <scope> <dimensions> <critical,high,medium,low> <summary>` | Save a finished review to its journal and record its state in one step |
-| `ccr context record-review-state <journal> <code-fingerprint> <context-fingerprint>` | Validate and bind the latest completed local review run |
+| `ccr context review-context-state [PR-<number>]` | Fingerprint review inputs and freshness context; the optional PR identifies only the active journal |
+| `ccr context review-state` | Fingerprint current approved code, review inputs, and freshness context |
+| `ccr context save-review <scope> <dimensions> <critical,high,medium,low> <summary> [--expected-state <fp> --expected-context <fp>]` | Save a finished review and record its state; expected fingerprints refuse inputs changed during the review |
+| `ccr context record-review-state <journal> <code-fingerprint> <context-fingerprint>` | Bind the latest completed local review run; re-recording requires unchanged code |
 | `ccr context review-pr PR-<number>` | Read bounded privacy-filtered PR metadata and patch |
 | `ccr context review-pr-head PR-<number> <files...>` | Read up to eight approved PR head files |
 
@@ -596,8 +691,8 @@ Review `.ccr` changes after every operation.
 
 ## Optional commit warning
 
-Pre-commit warns about possibly stale shared context. Post-commit starts the journal and prints an
-update instruction when needed. Neither blocks commits. Inspect with `ccr hooks status` or
+Pre-commit warns about possibly stale shared context. Post-commit starts the journal and prints
+`/ccr-context update last commit` when needed. Neither blocks commits. Inspect with `ccr hooks status` or
 `/ccr-hooks status`; remove with `/ccr-hooks remove`, then disable `hooks.enabled`.
 
 ## Privacy

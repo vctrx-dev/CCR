@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { computeContextAssessmentState, recordContextAssessment } from "../context/assessment";
 import {
   listSafeCommitPaths,
   listSafeRecentPaths,
@@ -10,11 +11,12 @@ import {
 } from "../context/broker";
 import { appendDecision } from "../context/decisions";
 import {
+  type ReviewJournalTarget,
   ensureJournalEntryForHead,
   ensurePullRequestJournalEntry,
   ensureWorkingJournalEntry,
   parsePullRequestToken,
-  readRecentJournalEntries,
+  readRecentJournalEntriesExcludingActive,
 } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
 import {
@@ -27,17 +29,33 @@ import {
   readSafePullRequestHeadEvidence,
 } from "../review/pr-evidence";
 import { saveReview } from "../review/review-save";
-import {
-  computeReviewContextState,
-  computeWorkingReviewState,
-  recordWorkingReviewState,
-} from "../review/review-state";
+import { computeReviewContextState, recordWorkingReviewState } from "../review/review-state";
 import type { CliIo } from "./index";
 import { findCliRepositoryRoot } from "./io";
 
 /** Registers privacy-filtered evidence, local continuity inspection, and opt-in decision commands. */
 export function registerContextInspectionCommands(context: Command, io: CliIo): void {
   const root = () => findCliRepositoryRoot(io);
+  context
+    .command("assess <code-fingerprint> <context-fingerprint> <summary>")
+    .description("Record a completed context assessment against unchanged evidence")
+    .option("--commit <commit>", "assess the exact current HEAD commit rather than working changes")
+    .action(
+      async (
+        codeFingerprint: string,
+        contextFingerprint: string,
+        summary: string,
+        options: { commit?: string },
+      ) => {
+        await recordContextAssessment(root(), {
+          codeFingerprint,
+          contextFingerprint,
+          summary,
+          commit: options.commit,
+        });
+        io.write("Context assessment recorded.\n");
+      },
+    );
   context.command("changes").action(async () => {
     const changes = await readSafeStagedPaths(root());
     io.write(
@@ -94,10 +112,17 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   });
   context
     .command("journals [pull-request]")
-    .description("Read repository-wide recent journals; a legacy PR token does not scope results")
+    .description(
+      "Read repository-wide recent journals except the active entry; PR-<number> names that entry",
+    )
     .action(async (pullRequest: string | undefined) => {
-      if (pullRequest !== undefined) parsePullRequestToken(pullRequest);
-      io.write(`${JSON.stringify(await readRecentJournalEntries(root()))}\n`);
+      const target: ReviewJournalTarget =
+        pullRequest === undefined
+          ? { kind: hasSafeReviewChanges(await listSafeReviewChanges(root())) ? "working" : "head" }
+          : { kind: "pull-request", pullRequest: parsePullRequestToken(pullRequest) };
+      io.write(
+        `${JSON.stringify(await readRecentJournalEntriesExcludingActive(root(), target))}\n`,
+      );
     });
   context.command("review-changes").action(async () => {
     io.write(`${JSON.stringify(await listSafeReviewChanges(root()))}\n`);
@@ -105,8 +130,9 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   context
     .command("review-state")
     .description("Fingerprint current code, review inputs, and continuity context")
-    .action(async () => {
-      io.write(`${JSON.stringify(await computeWorkingReviewState(root()))}\n`);
+    .option("--commit <commit>", "fingerprint the exact current HEAD commit for context assessment")
+    .action(async (options: { commit?: string }) => {
+      io.write(`${JSON.stringify(await computeContextAssessmentState(root(), options.commit))}\n`);
     });
   context
     .command("review-context-state [pull-request]")
@@ -123,7 +149,9 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
     });
   context
     .command("record-review-state <journal> <fingerprint> <context-fingerprint>")
-    .description("Verify and record code and context fingerprints in the latest journal review run")
+    .description(
+      "Record fingerprints in the latest journal review run; re-recording requires unchanged code",
+    )
     .action(async (journal: string, fingerprint: string, contextFingerprint: string) => {
       await recordWorkingReviewState(root(), journal, fingerprint, contextFingerprint);
       io.write("Review state recorded.\n");
@@ -175,11 +203,21 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   context
     .command("save-review <scope> <dimensions> <counts> <summary>")
     .description("Save a finished review to its journal; counts are critical,high,medium,low")
-    .action(async (scope: string, dimensions: string, counts: string, summary: string) => {
-      const saved = await saveReview(root(), { scope, dimensions, counts, summary });
-      io.write(`Review saved to ${saved.path}.
+    .option("--expected-state <fingerprint>", "code fingerprint captured before the review")
+    .option("--expected-context <fingerprint>", "context fingerprint captured before the review")
+    .action(
+      async (
+        scope: string,
+        dimensions: string,
+        counts: string,
+        summary: string,
+        options: { expectedState?: string; expectedContext?: string },
+      ) => {
+        const saved = await saveReview(root(), { scope, dimensions, counts, summary, ...options });
+        io.write(`Review saved to ${saved.path}.
 `);
-    });
+      },
+    );
   context
     .command("append-decision <decision>")
     .description("Append one opt-in, human-confirmed decision")

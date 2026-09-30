@@ -6,6 +6,7 @@ import {
   listSafeCommitPaths,
   listSafeRecentPaths,
   listSafeRepositoryPaths,
+  readSafeCommitDiff,
   readSafeCommitFile,
   readSafeRepositoryDiff,
   readSafeRepositoryFile,
@@ -144,6 +145,16 @@ it("should expose only privacy-approved regular files changed by the exact HEAD 
   );
   await expect(readSafeCommitFile(root, commit, ".env.commit")).rejects.toThrow(/approved/i);
   await expect(readSafeCommitFile(root, commit, "unchanged.ts")).rejects.toThrow(/approved/i);
+  await expect(readSafeCommitDiff(root, commit, "changed.ts")).resolves.toContain(
+    "+export const changed = true;",
+  );
+  await expect(readSafeCommitDiff(root, commit, "deleted.ts")).resolves.toContain(
+    "-export const deleted = true;",
+  );
+  await expect(readSafeCommitDiff(root, commit, "binary.dat")).resolves.toBe(
+    "[CCR binary commit diff omitted]\n",
+  );
+  await expect(readSafeCommitDiff(root, commit, ".env.commit")).rejects.toThrow(/approved/i);
 
   await writeFile(path.join(root, "later.ts"), "export {};\n", "utf8");
   await runCommand("git", ["add", "later.ts"], { cwd: root });

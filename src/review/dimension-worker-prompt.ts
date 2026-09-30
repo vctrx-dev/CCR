@@ -10,14 +10,18 @@ type ReviewDimension = ReviewDimensionRegistry["dimensions"][number];
 /** Shared reporting contract; evidence and uncertainty stay separate from supported findings. */
 export const REVIEW_REPORT_FORMAT = `### Output
 
+Begin with one **Context applied:** line naming the recorded decisions and earlier open findings
+that shaped this review, or \`none\`.
+
 For supported bugs:
 
-**Finding [severity; dimension-id]:** in plain language, who is harmed, treated unfairly, or excluded and how
+**F1 [severity; dimension-id]:** in plain language, who is harmed, treated unfairly, or excluded and how
 **Scenario:** a realistic example of how this affects someone; say if it is hypothetical
 **Evidence:** relevant file/path, function, rule, or code behavior
 
-Use Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
-and combine duplicates. For accessibility, explain the person's access need and the action they
+Number findings F1, F2, and so on in report order, and reuse the label of a finding carried forward
+from the active journal. Use Critical, High, Medium, or Low based on the impact on people. Put the
+most severe issues first and combine duplicates. For accessibility, explain the person's access need and the action they
 cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
 above before reporting it.
 

@@ -10,6 +10,21 @@ import {
 } from "../../../src/context/config";
 
 describe("parseContextConfig", () => {
+  it("should preserve explicit privacy restrictions across legacy upgrades and unrelated changes", () => {
+    const legacy = JSON.stringify({
+      schemaVersion: 2,
+      domain: "education-technology",
+      context: DEFAULT_CONTEXT_CONFIG.context,
+      privacy: { excludedPaths: ["learner-records/**"] },
+      instructions: DEFAULT_CONTEXT_CONFIG.instructions,
+    });
+    const parsed = parseContextConfig(legacy);
+    for (const config of [parsed, updateContextConfig(parsed, "hooks.enabled", "false")]) {
+      expect(parseContextConfig(serializeContextConfig(config)).privacy.excludedPaths).toEqual([
+        "learner-records/**",
+      ]);
+    }
+  });
   it("should accept and preserve the minimal documented defaults", () => {
     const parsed = parseContextConfig(serializeContextConfig(DEFAULT_CONTEXT_CONFIG));
 
@@ -18,7 +33,7 @@ describe("parseContextConfig", () => {
       domain: "unspecified",
       hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
       context: { recentJournalEntries: 3, maxCompactionPercent: 25 },
-      instructions: { updateClaudeMd: false, updateAgentsMd: false, updateDecisionsMd: false },
+      instructions: { updateClaudeMd: false, updateAgentsMd: false, updateDecisionsMd: true },
     });
     expect(parsed.privacy.excludedPaths).toEqual([]);
   });

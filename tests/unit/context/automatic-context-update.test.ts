@@ -39,7 +39,10 @@ async function makeAutomationRoot(): Promise<string> {
   await mkdir(path.join(root, ".ccr/journal/main"), { recursive: true });
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      instructions: { ...DEFAULT_CONTEXT_CONFIG.instructions, updateDecisionsMd: false },
+    }),
   );
   await writeFile(path.join(root, ".ccr/project.md"), "# Project\n");
   await writeFile(path.join(root, ".ccr/stakeholders.md"), "# Stakeholders\n");
@@ -96,11 +99,24 @@ describe("runAutomaticContextUpdate", () => {
     await expect(readFile(path.join(root, evidencePacketPath(commit)), "utf8")).rejects.toThrow();
   });
 
-  it("should recognize a canonically complete journal after bounded state pruning", async () => {
+  it("should refresh Updated from CCR's clock because the headless worker has none", async () => {
+    const root = await makeAutomationRoot();
+    const startedAt = new Date().toISOString().replace(/\.\d{3}Z$/u, "Z");
+
+    await runUpdate(root, () => completeJournal(root));
+    const journal = await readFile(path.join(root, JOURNAL_PATH), "utf8");
+
+    expect(journal).toContain("- **Started**: 2026-08-27T01:00:00Z");
+    const updated = /^- \*\*Updated\*\*: (\S+)$/mu.exec(journal)?.[1] ?? "";
+    expect(updated >= startedAt).toBe(true);
+  });
+
+  it("should recognize successful automation after bounded state pruning", async () => {
     const root = await makeAutomationRoot();
     const commit = commitFor(root);
-    const runClaude = vi.fn();
-    await completeJournal(root);
+    const runClaude = vi.fn(() => completeJournal(root));
+    await runUpdate(root, runClaude);
+    runClaude.mockClear();
     await mkdir(path.join(root, ".ccr/private"), { recursive: true });
     await writeFile(
       path.join(root, ".ccr/private/auto-update.json"),
@@ -112,6 +128,28 @@ describe("runAutomaticContextUpdate", () => {
 
     await expect(runUpdate(root, runClaude)).resolves.toEqual({ status: "already-updated" });
     expect(runClaude).not.toHaveBeenCalled();
+  });
+
+  it("should run automation even when a review already completed the journal narrative", async () => {
+    const root = await makeAutomationRoot();
+    await completeJournal(root);
+    const runner = vi.fn(() => completeJournal(root));
+
+    expect(await runUpdate(root, runner)).toEqual({ status: "updated" });
+    expect(runner).toHaveBeenCalledTimes(1);
+  });
+
+  it("should retry after a runner completes narrative but fails its write boundary", async () => {
+    const root = await makeAutomationRoot();
+    await expect(
+      runUpdate(root, async () => {
+        await completeJournal(root);
+        await writeFile(path.join(root, "unauthorized.txt"), "changed");
+      }),
+    ).rejects.toThrow("unauthorized path");
+    const runner = vi.fn(() => completeJournal(root));
+    expect(await runUpdate(root, runner)).toEqual({ status: "updated" });
+    expect(runner).toHaveBeenCalledTimes(1);
   });
 
   it("should validate context before accepting a completed journal without state", async () => {

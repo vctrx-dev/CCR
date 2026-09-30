@@ -1,4 +1,5 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
+import { promisify } from "node:util";
 
 /**
  * Bounded read-only Git process adapter.
@@ -14,6 +15,23 @@ export interface BoundedGitText {
 }
 
 const DEFAULT_GIT_BUFFER_BYTES = 16 * 1024 * 1024;
+const execFileAsync = promisify(execFile);
+
+/** Bounded metadata reads may contain NUL path separators; unlike evidence, retain those bytes. */
+export async function runGitMetadata(root: string, args: string[]): Promise<string> {
+  try {
+    const result = await execFileAsync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: DEFAULT_GIT_BUFFER_BYTES,
+      timeout: 30_000,
+      windowsHide: true,
+    });
+    return result.stdout;
+  } catch {
+    throw new Error("Git metadata read failed or exceeded its safe limit.");
+  }
+}
 
 /** Executes one bounded synchronous Git metadata operation. */
 export function runGit(

@@ -13,6 +13,7 @@ import {
   assertJournalContentWithinLimit,
   createJournalDocument,
   refreshJournalActivity,
+  selectJournalNarrative,
 } from "./journal-document";
 
 /**
@@ -120,10 +121,37 @@ export async function readJournalPaths(root: string): Promise<string[]> {
 
 /** Formats already-bounded journal content for context presentation. */
 export function formatJournalEvidence(content: string): string {
-  return truncateEvidence(content, {
-    isTruncated: content.length > MAX_JOURNAL_EVIDENCE_CHARACTERS,
-    marker: `[CCR journal truncated at ${MAX_JOURNAL_EVIDENCE_CHARACTERS} characters]`,
-    maximumCharacters: MAX_JOURNAL_EVIDENCE_CHARACTERS,
+  if (content.length <= MAX_JOURNAL_EVIDENCE_CHARACTERS) return content;
+  const sections = content.split(/(?=^## )/mu);
+  const header = sections.shift() ?? "";
+  const selected = [header.slice(0, 600)];
+  // Reserve independent budgets so a long findings list cannot hide the next action.
+  for (const section of selectJournalNarrative(content)) {
+    const origin = section.reviewRun === undefined ? "" : `Historical ${section.reviewRun}: `;
+    selected.push(`## ${origin}${section.title}\n\n${section.body}`.slice(0, 550));
+  }
+  const latestRun = sections.filter((part) => part.startsWith("## Review run")).at(-1);
+  if (latestRun !== undefined) selected.push((latestRun.split(/^### /mu)[0] ?? "").slice(0, 450));
+  if (selected.length === 1) selected.push(content.slice(-2_800));
+  return truncateEvidence(selected.join("\n"), {
+    isTruncated: true,
+    marker:
+      "[CCR journal truncated at 4000 characters]\n[History omitted; read the complete entry for detail]",
+    maximumCharacters: MAX_JOURNAL_EVIDENCE_CHARACTERS - 100,
+  });
+}
+
+/** Carries bounded narrative across work identities without transferring prior completion receipts. */
+export function formatJournalContinuation(content: string): string {
+  const sections = selectJournalNarrative(content);
+  const excerpts = sections.map(({ title, body, reviewRun }) => {
+    const origin = reviewRun === undefined ? "" : `From ${reviewRun}.\n\n`;
+    return `### ${title}\n\n${origin}${body.slice(0, 400)}`;
+  });
+  return truncateEvidence(excerpts.join("\n\n"), {
+    isTruncated: sections.some(({ body }) => body.length > 400),
+    marker: "[Earlier detail omitted; follow the previous journal link for full history.]",
+    maximumCharacters: 2_400,
   });
 }
 

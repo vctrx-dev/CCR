@@ -24,6 +24,21 @@ if (
   throw new Error("Review dimension registry has an invalid shape.");
 }
 const reviewDimensionIds = reviewRegistry.dimensions.map((dimension) => dimension.id);
+const inspectionSource = readFileSync(
+  path.join(root, "src", "cli", "context-inspection.ts"),
+  "utf8",
+);
+const inspectionCommands = [...inspectionSource.matchAll(/\.command\("([^" ]+)/gu)].map(
+  (match) => match[1],
+);
+const inspectionOptions = [
+  ...inspectionSource.matchAll(/\.command\("([^" ]+)[\s\S]*?(?=\n {2}context\b|$)/gu),
+].flatMap((command) =>
+  [...command[0].matchAll(/\.option\("([^" ]+)/gu)].map((option) => ({
+    command: command[1],
+    option: option[1],
+  })),
+);
 const configManualSource = readFileSync(
   path.join(root, "src", "context", "config-manual.ts"),
   "utf8",
@@ -176,7 +191,14 @@ try {
     throw new Error("Installed CLI help is incomplete or stale.");
   }
   const installedContextHelp = runInstalled(installedBin, ["context", "--help"], consumer);
+  for (const { command, option } of inspectionOptions) {
+    const commandHelp = runInstalled(installedBin, ["context", command, "--help"], consumer);
+    if (!commandHelp.includes(option)) {
+      throw new Error(`Installed context ${command} help is missing ${option}.`);
+    }
+  }
   for (const command of [
+    ...inspectionCommands,
     "commit-changes",
     "commit-read",
     "journals",
@@ -199,7 +221,7 @@ try {
   );
   if (
     !installedJournalHelp.includes("Usage: ccr context journals [options] [pull-request]") ||
-    !installedJournalHelp.includes("legacy PR token does not scope results")
+    !installedJournalHelp.includes("except the active entry")
   ) {
     throw new Error("Installed journal help has stale compatibility or recency guidance.");
   }
@@ -302,8 +324,8 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   if (!existsSync(decisionsPath) || readFileSync(decisionsPath, "utf8") !== "") {
     throw new Error("setup did not create an empty decisions document.");
   }
-  if (installedConfig.instructions?.updateDecisionsMd !== false) {
-    throw new Error("Generated configuration did not default decision updates to false.");
+  if (installedConfig.instructions?.updateDecisionsMd !== true) {
+    throw new Error("Generated configuration did not default decision updates to true.");
   }
   if (installedConfig.hooks?.autoUpdateContext !== false) {
     throw new Error("Generated configuration did not default automatic context updates to false.");

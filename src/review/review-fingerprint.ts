@@ -15,7 +15,7 @@ import {
   readParentCommit,
 } from "../context/git";
 import { type ReviewJournalTarget, readReviewJournalEntriesForReview } from "../context/journal";
-import { readResolvedContextConfig, readSafeStagedPaths } from "../context/privacy";
+import { readResolvedContextConfig } from "../context/privacy";
 import { hasSafeReviewChanges, listSafeReviewChanges } from "./evidence";
 
 /**
@@ -43,19 +43,16 @@ export interface ReviewContextState {
   inputContextFingerprint: string;
 }
 
-function hashReviewContext(
-  config: Awaited<ReturnType<typeof readResolvedContextConfig>>,
-  contextEntries: Array<[string, "missing"] | [string, "present", string]>,
-  journalEntries: Array<readonly [string, string]>,
-): string {
-  const canonical = JSON.stringify({ config, contextEntries, journalEntries });
-  return `sha256:${createHash("sha256").update(canonical).digest("hex")}`;
+function hashCanonical(value: unknown): string {
+  return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
 
 /**
- * Computes a complete review-input hash and a continuity-safe hash from one repository-wide journal
- * snapshot. The latter excludes the active write target before applying the configured count;
- * `pullRequest` identifies only that target and never scopes journal recency.
+ * Computes a complete review-input hash and a freshness hash. Freshness covers only shared context
+ * and the settings that change what a review may read or how it frames findings; local journals,
+ * hook toggles, and journal counts are advisory or operational and would otherwise make unrelated
+ * branch, PR, or timestamp activity mark a review stale. `pullRequest` identifies only the active
+ * journal for the input hash and never scopes journal recency.
  */
 async function computeReviewContextStateForTarget(
   root: string,
@@ -92,22 +89,22 @@ async function computeReviewContextStateForTarget(
       .map(({ path: journalPath, content }) => [journalPath, content] as const)
       .sort(([left], [right]) => left.localeCompare(right));
   return {
-    contextFingerprint: hashReviewContext(
+    contextFingerprint: hashCanonical({
+      contextEntries,
+      reviewSettings: { domain: config.domain, privacy: config.privacy },
+    }),
+    inputContextFingerprint: hashCanonical({
       config,
       contextEntries,
-      canonicalEntries(journals.continuityEntries),
-    ),
-    inputContextFingerprint: hashReviewContext(
-      config,
-      contextEntries,
-      canonicalEntries(journals.inputEntries),
-    ),
+      journalEntries: canonicalEntries(journals.inputEntries),
+    }),
   };
 }
 
 /**
- * Fingerprints every bounded review-context input and returns a separate continuity-safe hash.
- * An optional PR identifies only its active journal; local targets follow the approved live state.
+ * Fingerprints every bounded review-context input and returns a separate freshness hash that
+ * ignores local journals and operational settings. An optional PR identifies only its active
+ * journal; local targets follow the approved live state.
  */
 export async function computeReviewContextState(
   root: string,
@@ -120,7 +117,7 @@ export async function computeReviewContextState(
   return computeReviewContextStateForTarget(root, target);
 }
 
-/** Returns the continuity-stable context hash retained for existing API consumers. */
+/** Returns the review-freshness context hash retained for existing API consumers. */
 export async function computeReviewContextFingerprint(
   root: string,
   pullRequest?: number,
@@ -188,11 +185,8 @@ export async function computeWorkingReviewState(root: string): Promise<ReviewSta
 
 /** Fingerprints the exact privacy-approved commit candidate currently in Git's index. */
 export async function computeStagedReviewState(root: string): Promise<ReviewState> {
-  const [staged, changes] = await Promise.all([
-    readSafeStagedPaths(root),
-    listSafeReviewChanges(root),
-  ]);
-  const paths = staged.included.filter(isReviewTrackedPath);
+  const changes = await listSafeReviewChanges(root);
+  const paths = changes.stagedPaths.filter(isReviewTrackedPath);
   const index = new Map(readIndexEntries(root).map((entry) => [entry.path, entry]));
   return fingerprintState(
     root,

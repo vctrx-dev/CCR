@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { runAfterCommitCheck } from "../context/after-commit";
+import { hasCurrentContextAssessment } from "../context/assessment";
 import { runAutomaticContextUpdate } from "../context/automatic-context-update";
 import { readStagedContextState } from "../context/git";
 import { readHookState } from "../context/hook-state";
@@ -26,14 +27,15 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
   const settings = await readHookSettings(root);
   if (!settings?.enabled) return;
   const result = await runAfterCommitCheck(root);
+  const isAssessed = result.commit ? await hasCurrentContextAssessment(root, result.commit) : false;
   if (result.journalCreated && result.journalPath) {
     io.write(
       `${formatTone("CCR: started local journal entry", "success", io.isColorEnabled === true)} ${result.journalPath}.\n`,
     );
   }
-  if (result.shouldWarn) {
+  if (result.hasRepositoryChanges && !isAssessed) {
     io.write(
-      `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: last commit changed repository files without updating shared context (.ccr/).\n`,
+      `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: last commit changed repository files without a matching context assessment.\n`,
     );
   }
   if (result.reviewStatus === "stale") {
@@ -41,9 +43,12 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
       `${formatTone("CCR warning", "warning", io.isColorEnabled === true)}: the commit differs from the state recorded by its latest CCR review; that review is now marked stale.\n`,
     );
   }
-  if (result.prompt) {
+  if ((result.prompt || result.hasRepositoryChanges) && !isAssessed) {
     const journalPath = result.journalPath;
     if (settings.autoUpdateContext && result.commit && result.hasRepositoryChanges && journalPath) {
+      io.write(
+        `${formatTone("CCR: running automatic context update", "info", io.isColorEnabled === true)}; the commit is already saved and this can take a few minutes.\n`,
+      );
       try {
         const automatic = await runAutomaticContextUpdate(
           root,
@@ -68,7 +73,7 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
     io.write(
       `${formatTone("Paste this into Claude Code to update context and journal:", "info", io.isColorEnabled === true)}\n`,
     );
-    io.write(`  ${result.prompt}\n`);
+    io.write(`  ${result.prompt ?? "/ccr-context update"}\n`);
   }
 }
 
@@ -83,7 +88,7 @@ async function runPreCommitCommand(io: CliIo): Promise<void> {
       `${formatTone("CCR warning: staged review evidence or shared context differs from the latest recorded CCR review.", "warning", io.isColorEnabled === true)}\nRun \`/ccr-review changes\` again before human approval, or continue knowing the prior review is stale.\n`,
     );
   }
-  if (state.shouldWarn) {
+  if (state.hasRepositoryChanges && !(await hasCurrentContextAssessment(root))) {
     const warning = [
       "CCR warning: context might need updating.",
       "Run `/ccr-context update` in Claude Code, or continue if context is unaffected.",

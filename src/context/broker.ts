@@ -7,6 +7,7 @@ import {
 } from "./evidence-format";
 import { assertSafeManagedPath, readBoundedUtf8TextIfExists } from "./files";
 import {
+  readBoundedCommitDiff,
   readBoundedGitBlob,
   readBoundedStagedDiff,
   readChangedPaths,
@@ -229,6 +230,30 @@ export async function readSafeCommitFile(
       : await renderRepositoryBlob(root, entry.oid);
   validateCurrentCommit(root, commit);
   return content;
+}
+
+/**
+ * Reads the bounded parent-to-commit diff for one privacy-approved changed path so evidence
+ * consumers can tell new behavior from unchanged code in the exact immutable current commit.
+ */
+export async function readSafeCommitDiff(
+  root: string,
+  commit: string,
+  candidate: string,
+): Promise<string> {
+  const normalized = normalizeRepositoryPath(candidate);
+  const safe = await safeCommitFiles(root, commit);
+  if (!safe.result.paths.includes(normalized)) {
+    throw new Error("Path is not an approved changed file for the current commit.");
+  }
+  const bounded = await readBoundedCommitDiff(root, commit, normalized, MAX_EVIDENCE_CHARACTERS);
+  validateCurrentCommit(root, commit);
+  if (bounded.isBinary) return "[CCR binary commit diff omitted]\n";
+  return truncateEvidence(bounded.content, {
+    isTruncated: bounded.isTruncated,
+    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
+    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
+  });
 }
 
 /** Reads one approved index blob, never a newer unstaged worktree version. */

@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { hasCurrentContextAssessment } from "../context/assessment";
 import { readStagedContextState } from "../context/git";
 import { readHookState } from "../context/hook-state";
 import {
@@ -7,7 +8,7 @@ import {
   validateContextHookRemoval,
 } from "../context/hooks";
 import { applyUninstall, previewUninstall } from "../context/uninstall";
-import { validateContext } from "../context/validate";
+import { inspectContextReadiness } from "../context/validate";
 import { registerContextInspectionCommands } from "./context-inspection";
 import type { CliIo } from "./index";
 import { findCliRepositoryRoot, writeCliLines } from "./io";
@@ -93,11 +94,17 @@ export function registerContextCommands(program: Command, io: CliIo): void {
     .command("context")
     .description("Inspect product-impact context and manage opt-in decisions");
   context.command("validate").action(async () => {
-    const result = await validateContext(findCliRepositoryRoot(io));
+    const result = await inspectContextReadiness(findCliRepositoryRoot(io));
     writeCliLines(
       io,
       result.isValid
-        ? [formatTone("✔ CCR context is valid.", "success", io.isColorEnabled === true)]
+        ? [
+            formatTone(
+              `✔ CCR context structural checks passed. Readiness: ${result.readiness}; facts not verified.`,
+              "success",
+              io.isColorEnabled === true,
+            ),
+          ]
         : [
             formatTone("✖ CCR context is invalid:", "error", io.isColorEnabled === true),
             ...result.issues,
@@ -107,16 +114,24 @@ export function registerContextCommands(program: Command, io: CliIo): void {
   });
   context.command("status").action(async () => {
     const root = findCliRepositoryRoot(io);
-    const validation = await validateContext(root);
+    const validation = await inspectContextReadiness(root);
     const staged = readStagedContextState(root);
+    const isAssessed = await hasCurrentContextAssessment(root);
     writeCliLines(io, [
       formatHeading("CCR context status", io.isColorEnabled === true),
       `Context: ${formatStatus(validation.isValid ? "valid" : "invalid", io.isColorEnabled === true)}`,
+      `Readiness: ${validation.readiness}; facts not verified.`,
       `Staged repository files: ${formatStatus(staged.hasRepositoryChanges ? "yes" : "no", io.isColorEnabled === true)}`,
       `Staged shared context: ${formatStatus(staged.hasContextChanges ? "yes" : "no", io.isColorEnabled === true)}`,
-      staged.shouldWarn
+      staged.hasRepositoryChanges && !isAssessed
         ? formatTone("Warning: context might need updating.", "warning", io.isColorEnabled === true)
-        : formatTone("No context warning.", "success", io.isColorEnabled === true),
+        : formatTone(
+            isAssessed
+              ? "Context assessment matches staged work."
+              : "No staged repository work to assess.",
+            "success",
+            io.isColorEnabled === true,
+          ),
     ]);
   });
   registerContextInspectionCommands(context, io);

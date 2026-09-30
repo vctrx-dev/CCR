@@ -8,6 +8,7 @@ import {
   readBoundedStagedDiff,
   readBoundedUnstagedDiff,
   readChangedPaths,
+  readLiveGitInventory,
   readStagedContextState,
 } from "../../../src/context/git";
 import {
@@ -17,6 +18,28 @@ import {
 } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
+
+it("should preserve exact Unicode paths and separate live states in an unborn repository", async () => {
+  const root = await createTemporaryGitRepository(roots, "ccr-live-inventory-");
+  const name = "- rôle with spaces.ts";
+  await writeFile(path.join(root, name), "before\n");
+  await runCommand("git", ["add", "--", name], { cwd: root });
+  await writeFile(path.join(root, name), "after\n");
+  await writeFile(path.join(root, "new.ts"), "new\n");
+  const inventory = await readLiveGitInventory(root);
+  expect(inventory.headEntries).toEqual([]);
+  expect(inventory.entries.map((entry) => entry.path)).toEqual([name]);
+  expect(inventory.stagedPaths).toEqual([name]);
+  expect(inventory.unstagedPaths).toEqual([name]);
+  expect(inventory.untrackedPaths).toEqual(["new.ts"]);
+});
+
+it("should report a bounded metadata failure without exposing process diagnostics", async () => {
+  const root = await createTemporaryGitRepository(roots, "ccr-metadata-failure-");
+  await expect(readLiveGitInventory(path.join(root, "private-missing-folder"))).rejects.toThrow(
+    /^Git metadata read failed or exceeded its safe limit\.$/u,
+  );
+});
 
 async function makeRepository(): Promise<string> {
   return createTemporaryGitRepository(roots, "ccr-git-");

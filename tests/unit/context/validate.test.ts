@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applySetup } from "../../../src/context/setup";
-import { validateContext } from "../../../src/context/validate";
+import { CONTEXT_FILES } from "../../../src/context/templates";
+import { inspectContextReadiness, validateContext } from "../../../src/context/validate";
 
 const roots: string[] = [];
 const readFileMock = vi.hoisted(() => vi.fn());
@@ -28,6 +29,39 @@ async function makeSetup(): Promise<string> {
 }
 
 describe("validateContext", () => {
+  it("should distinguish installed templates, partial population, and populated context", async () => {
+    const root = await makeSetup();
+    expect(await inspectContextReadiness(root)).toMatchObject({
+      isValid: true,
+      readiness: "unfilled",
+      unfilledPaths: [".ccr/project.md", ".ccr/stakeholders.md"],
+    });
+    await writeFile(path.join(root, ".ccr/project.md"), "# Project\nPeople share lesson plans.\n");
+    await writeFile(
+      path.join(root, ".ccr/stakeholders.md"),
+      `${CONTEXT_FILES[".ccr/stakeholders.md"]?.replaceAll("\n", "\r\n")}\r\n`,
+    );
+    expect(await inspectContextReadiness(root)).toMatchObject({
+      readiness: "unfilled",
+      unfilledPaths: [".ccr/stakeholders.md"],
+    });
+    await writeFile(
+      path.join(root, ".ccr/stakeholders.md"),
+      "# Stakeholders\nTeachers share their plans.\n",
+    );
+    expect(await inspectContextReadiness(root)).toMatchObject({
+      readiness: "populated",
+      unfilledPaths: [],
+    });
+    await writeFile(path.join(root, ".ccr/project.md"), "# Project\n\n## Purpose\n");
+    expect(await inspectContextReadiness(root)).toMatchObject({ readiness: "unfilled" });
+    await rm(path.join(root, ".ccr/project.md"));
+    expect(await inspectContextReadiness(root)).toMatchObject({
+      readiness: "invalid",
+      isValid: false,
+    });
+  });
+
   it("should accept a generated setup", async () => {
     const result = await validateContext(await makeSetup());
     expect(result).toEqual({ isValid: true, issues: [] });
@@ -79,31 +113,15 @@ describe("validateContext", () => {
     );
   });
 
-  it("should reject absolute claims", async () => {
-    const root = await makeSetup();
-    await writeFile(
-      path.join(root, ".ccr/project.md"),
-      ["# Project", "", "The service never returns an incorrect result.", ""].join("\n"),
-      "utf8",
-    );
-
-    const result = await validateContext(root);
-
-    expect(result.issues.join("\n")).toContain("contains an absolute claim");
-  });
-
-  it("should allow absolute words inside commands and code examples", async () => {
+  it("should accept plain-language prose that uses words such as all or never", async () => {
     const root = await makeSetup();
     await writeFile(
       path.join(root, ".ccr/project.md"),
       [
         "# Project",
         "",
-        "Run `npm run test:all` for the repository suite.",
-        "",
-        "```sh",
-        "npm run test:all",
-        "```",
+        "Teachers mark student work. All students receive a pass or fail result.",
+        "Learners never see the numeric score behind their result.",
         "",
       ].join("\n"),
       "utf8",
@@ -111,7 +129,7 @@ describe("validateContext", () => {
 
     const result = await validateContext(root);
 
-    expect(result.issues.join("\n")).not.toContain("contains an absolute claim");
+    expect(result).toEqual({ isValid: true, issues: [] });
   });
 
   it("should validate line-ranged citations and ignore web route literals", async () => {

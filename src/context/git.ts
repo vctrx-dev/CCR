@@ -1,5 +1,5 @@
 import type { BoundedGitText } from "./git-process";
-import { runBoundedGit, runGit } from "./git-process";
+import { runBoundedGit, runGit, runGitMetadata } from "./git-process";
 
 export type { BoundedGitText } from "./git-process";
 
@@ -193,6 +193,24 @@ export function readIndexEntries(root: string): IndexEntry[] {
   return parseGitEntries(runGit(root, ["ls-files", "--stage", "-z"]), 1);
 }
 
+/** Reads independent inventories concurrently with exact NUL-delimited paths and bounded output. */
+export async function readLiveGitInventory(root: string) {
+  const [head, index, staged, unstaged, untracked] = await Promise.all([
+    runGitMetadata(root, ["ls-tree", "-r", "-z", "HEAD"]).catch(() => ""),
+    runGitMetadata(root, ["ls-files", "--stage", "-z"]),
+    runGitMetadata(root, ["diff", "--cached", "--name-only", "-z"]),
+    runGitMetadata(root, ["diff", "--name-only", "-z"]),
+    runGitMetadata(root, ["ls-files", "--others", "--exclude-standard", "-z"]),
+  ]);
+  return {
+    headEntries: parseGitEntries(head, 2),
+    entries: parseGitEntries(index, 1),
+    stagedPaths: parseGitPaths(staged),
+    unstagedPaths: parseGitPaths(unstaged),
+    untrackedPaths: parseGitPaths(untracked),
+  };
+}
+
 /** Reads HEAD tree metadata, returning empty for a repository without a first commit. */
 export function readHeadEntries(root: string): IndexEntry[] {
   try {
@@ -255,6 +273,35 @@ export async function readBoundedStagedDiff(
     await runBoundedGit(
       root,
       ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--", relativePath],
+      maximumCharacters,
+    ),
+  );
+}
+
+/** Streams a bounded diff of one path against the commit's first parent, or the empty tree. */
+export async function readBoundedCommitDiff(
+  root: string,
+  commit: string,
+  relativePath: string,
+  maximumCharacters: number,
+): Promise<BoundedGitText> {
+  return classifyBoundedGitDiff(
+    await runBoundedGit(
+      root,
+      [
+        "diff-tree",
+        "--root",
+        "--no-commit-id",
+        "-p",
+        "-r",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        commit,
+        "--",
+        relativePath,
+      ],
       maximumCharacters,
     ),
   );

@@ -322,6 +322,22 @@ worktrees. Only its bounded continuity writes are allowed.
 
 ## 6. Validate continuity and freshness
 
+Check context assessment separately: `context validate` must identify untouched templates as
+unfilled, and populated prose must not claim factual verification. Record an assessment using the
+current `context review-state` fingerprints and `context assess`; unchanged-context decisions should
+suppress the corresponding reminder, while changed code or shared context invalidates that receipt.
+An arbitrary config edit must not count as assessment. A completed review narrative must not skip
+the first automatic context update, and a failed write-boundary check must remain retryable.
+
+Continue a clean-HEAD review into edits and a partial commit. Check the new working journal links
+the previous account without inheriting review receipts. Put the active journal outside the recent
+selection and place current findings after a long history: input must still expose the active entry,
+current findings and next steps, with omissions marked. Inspect full entries for supporting detail.
+
+For decision maintenance, explicitly request reconciliation of conflicting historical rules. Verify
+the proposed diff preserves applicable human rationale, identifies superseded assumptions, and
+does not treat routine project compaction as permission to rewrite decisions.
+
 After a successful changes or codebase review, inspect its journal. The latest `## Review run` must
 contain exactly one non-empty Scope, Dimensions, Evidence, Finding counts, and Outcomes record, plus:
 
@@ -368,7 +384,29 @@ Also try an oversized, NUL-containing, and malformed-UTF-8 shared and local conf
 must fail visibly before parsing or retaining the complete file. Restore valid configuration before
 continuing.
 
-## 8. Validate automatic post-commit context
+## 8. Validate review continuity and automatic post-commit context
+
+### Review-session continuity evaluation
+
+In a disposable repository with refreshed skills, run these same-session checks in Claude Code:
+
+1. Review a change with several distinct supported findings. Read the journal alone: each finding,
+   impact, disposition, and next action should be understandable without the conversation.
+2. Explain why two findings are false positives using an intentional draft-only workflow and an
+   outside human review process. With decision capture enabled and that rationale absent from
+   context, expect a scoped decision with the human's reason; retain every other finding. Repeat
+   with capture disabled, already-documented rationale, and bare disagreement without a reason.
+3. Request a fix, then ask an explanation question. Both turns should amend the same entry. A check
+   that cannot run leaves the fix unverified; neither turn creates a fresh completed review.
+4. Review unchanged work again: apply the human rationale without repeating the resolved findings.
+   Then change the workflow to publish final results automatically: reconsider supported concerns
+   and explain which condition of the prior decision changed.
+5. Compact and resume the conversation. Reload the active journal and relevant shared context,
+   preserve finding labels and pending checks, and avoid duplicate decisions or journal entries.
+
+These are behavioral model evaluations, not exact-string or snapshot tests of shipped prose.
+
+### Automatic worker
 
 This section requires an installed and authenticated Claude Code CLI:
 
@@ -394,7 +432,7 @@ Create a disposable commit containing additions, a deletion or rename, and a bin
   `stakeholders.md`, other journals, private state, source, ignored
   outside files, and untracked directories remain unchanged;
 - a successful journal preserves `Started`, advances a valid UTC `Updated`, matches the exact commit,
-  contains a real summary, and retains all four outcome categories;
+  contains a real summary and substantive findings/outcomes without requiring empty categories;
 - automation leaves changes unstaged, creates no commit, records bounded idempotency state only after
   validation, and does not rerun an already-complete journal even after old state entries are pruned;
 - failure exposes no raw provider response, remains non-blocking, attempts conditional temporary

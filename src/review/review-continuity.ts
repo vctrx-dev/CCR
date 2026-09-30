@@ -185,6 +185,11 @@ export async function recordWorkingReviewState(
   const section = latestReviewSection(content);
   if (section === undefined) throw new Error("Journal does not contain a review run.");
   assertCompleteReviewContinuity(content, section);
+  // Re-recording may absorb this review's own context edits, never code it did not examine.
+  const previous = parseReviewRecord(content.slice(section.start, section.end));
+  if (previous !== undefined && previous.fingerprint !== expected) {
+    throw new Error("Code changed since this review was recorded; run the review again.");
+  }
   const body = content
     .slice(section.start, section.end)
     .replace(/^- \*\*Reviewed state\*\*: `[^`]+`\r?\n?/gmu, "")

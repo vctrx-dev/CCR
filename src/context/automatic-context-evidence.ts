@@ -1,4 +1,9 @@
-import { type SafePathList, listSafeCommitPaths, readSafeCommitFile } from "./broker";
+import {
+  type SafePathList,
+  listSafeCommitPaths,
+  readSafeCommitDiff,
+  readSafeCommitFile,
+} from "./broker";
 
 /**
  * Bounded immutable evidence assembly for headless continuity updates. Extend the broker rather
@@ -9,14 +14,20 @@ const MAX_PACKET_PATHS = 200;
 const MAX_RETAINED_CHARACTERS = 200_000;
 const MAX_PACKET_BYTES = 512_000;
 
+/**
+ * Evidence source for one commit. `readDiff` is optional so adapters without parent access still
+ * work; when present, each file's diff shares the retained-content budget with its full content.
+ */
 export interface AutomaticContextEvidenceBroker {
   listPaths(root: string, commit: string, after?: string): Promise<SafePathList>;
   readFile(root: string, commit: string, file: string): Promise<string>;
+  readDiff?(root: string, commit: string, file: string): Promise<string>;
 }
 
 const DEFAULT_EVIDENCE_BROKER: AutomaticContextEvidenceBroker = {
   listPaths: listSafeCommitPaths,
   readFile: readSafeCommitFile,
+  readDiff: readSafeCommitDiff,
 };
 
 async function readAllApprovedPaths(
@@ -65,15 +76,18 @@ export async function buildAutomaticContextEvidencePacket(
   broker: AutomaticContextEvidenceBroker = DEFAULT_EVIDENCE_BROKER,
 ): Promise<string> {
   const inventory = await readAllApprovedPaths(root, commit, broker);
-  const files: Array<{ path: string; content: string }> = [];
+  const files: Array<{ path: string; content: string; diff?: string }> = [];
   let retainedCharacters = 0;
   for (const approvedPath of inventory.paths) {
     const content = await broker.readFile(root, commit, approvedPath);
-    retainedCharacters += approvedPath.length + content.length;
+    const diff = await broker.readDiff?.(root, commit, approvedPath);
+    retainedCharacters += approvedPath.length + content.length + (diff?.length ?? 0);
     if (retainedCharacters > MAX_RETAINED_CHARACTERS) {
       throw new Error("Automatic context evidence exceeds its content limit.");
     }
-    files.push({ path: approvedPath, content });
+    files.push(
+      diff === undefined ? { path: approvedPath, content } : { path: approvedPath, content, diff },
+    );
   }
   const packet = `${JSON.stringify(
     {

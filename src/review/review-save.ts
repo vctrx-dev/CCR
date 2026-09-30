@@ -23,6 +23,9 @@ import { computeWorkingReviewState } from "./review-fingerprint";
  */
 
 const MAX_SUMMARY_CHARACTERS = 500;
+const reviewFingerprintSchema = z
+  .string()
+  .regex(/^sha256:[0-9a-f]{64}$/u, "Review fingerprint is malformed.");
 
 const saveReviewInputSchema = z
   .object({
@@ -37,8 +40,15 @@ const saveReviewInputSchema = z
       .min(1)
       .max(MAX_SUMMARY_CHARACTERS)
       .regex(/^[^\r\n]+$/u, "Summary must be one line."),
+    expectedState: reviewFingerprintSchema.optional(),
+    expectedContext: reviewFingerprintSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    ({ expectedState, expectedContext }) =>
+      (expectedState === undefined) === (expectedContext === undefined),
+    "Pass the expected review state and context fingerprints together.",
+  );
 
 export interface SaveReviewResult {
   path: string;
@@ -50,18 +60,38 @@ function journalTimestamp(now: Date): string {
 }
 
 /**
- * Saves one completed review run. Changes and codebase runs are recorded against the current code
- * and context fingerprints; PR runs are journaled without local fingerprints.
+ * Saves one completed review run. With `expectedState` and `expectedContext` from the reviewer's
+ * pre-discovery `review-state`, changes and codebase runs record exactly those fingerprints and
+ * refuse edits made during the review; without them the current state is recorded for backward
+ * compatibility. PR runs are journaled without local fingerprints.
  *
- * @param input - Untrusted CLI values: scope, dimension IDs, `critical,high,medium,low`, summary.
+ * @param input - Untrusted CLI values: scope, dimension IDs, `critical,high,medium,low`, summary,
+ * and optional expected fingerprints.
  */
 export async function saveReview(
   root: string,
   input: unknown,
   now: Date = new Date(),
 ): Promise<SaveReviewResult> {
-  const { scope, dimensions, counts, summary } = saveReviewInputSchema.parse(input);
+  const { scope, dimensions, counts, summary, expectedState, expectedContext } =
+    saveReviewInputSchema.parse(input);
   const isPullRequest = scope !== "changes" && scope !== "codebase";
+  if (isPullRequest && expectedState !== undefined) {
+    throw new Error("Expected review fingerprints apply only to changes and codebase scopes.");
+  }
+  if (expectedState !== undefined) {
+    const current = await computeWorkingReviewState(root);
+    if (current.fingerprint !== expectedState) {
+      throw new Error(
+        "Review evidence changed since review-state was captured; review the changes or report the review as stale.",
+      );
+    }
+    if (current.contextFingerprint !== expectedContext) {
+      throw new Error(
+        "Review context changed since review-state was captured; reload the context before saving.",
+      );
+    }
+  }
   const changes = isPullRequest ? undefined : await listSafeReviewChanges(root);
   const journal = isPullRequest
     ? await ensurePullRequestJournalEntry(root, parsePullRequestToken(scope))
@@ -95,7 +125,10 @@ export async function saveReview(
   }
   if (isPullRequest) return { path: journal.path, isRecorded: false };
 
-  const state = await computeWorkingReviewState(root);
+  const state =
+    expectedState !== undefined && expectedContext !== undefined
+      ? { fingerprint: expectedState, contextFingerprint: expectedContext }
+      : await computeWorkingReviewState(root);
   await recordWorkingReviewState(root, journal.path, state.fingerprint, state.contextFingerprint);
   return { path: journal.path, isRecorded: true };
 }

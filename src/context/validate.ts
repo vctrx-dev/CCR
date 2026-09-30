@@ -15,6 +15,34 @@ export interface ValidationResult {
   issues: string[];
 }
 
+/** Reports content readiness separately from structural validity; populated is not fact-verified. */
+export async function inspectContextReadiness(root: string) {
+  const validation = await validateContext(root);
+  const unfilledPaths: string[] = [];
+  for (const relativePath of [".ccr/project.md", ".ccr/stakeholders.md"]) {
+    const bounded = await readBoundedTextIfExists(
+      await assertSafeManagedPath(root, relativePath),
+      MAX_CONTEXT_VALIDATION_CHARACTERS,
+    );
+    const content = (bounded?.content ?? "").replaceAll("\r\n", "\n").trim();
+    const template = (CONTEXT_FILES[relativePath] ?? "").trim();
+    const prose = content
+      .replace(/^#+[^\n]*$/gmu, "")
+      .replace(/<!--[\s\S]*?-->/gu, "")
+      .trim();
+    if (content === template || prose.length === 0) unfilledPaths.push(relativePath);
+  }
+  return {
+    ...validation,
+    readiness: !validation.isValid
+      ? "invalid"
+      : unfilledPaths.length > 0
+        ? "unfilled"
+        : "populated",
+    unfilledPaths,
+  };
+}
+
 const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /\bAKIA[0-9A-Z]{16}\b/,
@@ -77,22 +105,6 @@ function isUnsafeReference(reference: string): boolean {
   );
 }
 
-function absoluteClaim(content: string): string | undefined {
-  const prose = content.replace(/```[\s\S]*?```/gu, "");
-  for (const line of prose.split(/\r?\n/u)) {
-    const evidenceCitation = [...line.matchAll(/`([^`\r\n]+)`/gu)].some((match) => {
-      const value = match[1] ?? "";
-      return (
-        !/\s/u.test(value) &&
-        (value.includes("/") || /\.[a-z0-9]+(?::\d+(?:[-,]\d+)*)?$/iu.test(value))
-      );
-    });
-    const match = line.replace(/`[^`\r\n]*`/gu, "").match(/\b(?:all|never|guaranteed)\b/iu)?.[0];
-    if (match && !evidenceCitation) return match;
-  }
-  return undefined;
-}
-
 /** Validates committed CCR context without invoking an LLM or reading repository source. */
 export async function validateContext(root: string): Promise<ValidationResult> {
   const issues: string[] = [];
@@ -124,14 +136,6 @@ export async function validateContext(root: string): Promise<ValidationResult> {
     const content = boundedContent.content;
     if (SECRET_PATTERNS.some((pattern) => pattern.test(content))) {
       issues.push(`${relativePath} contains secret-like content.`);
-    }
-    if ([".ccr/project.md", ".ccr/stakeholders.md"].includes(relativePath)) {
-      const absolute = absoluteClaim(content);
-      if (absolute) {
-        issues.push(
-          `${relativePath} contains an absolute claim (${absolute}); reword or prove it.`,
-        );
-      }
     }
     const requiredHeading = REQUIRED_HEADINGS[relativePath];
     if (requiredHeading && !content.includes(requiredHeading)) {

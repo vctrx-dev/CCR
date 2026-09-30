@@ -42,12 +42,15 @@ needs or circumstances without treating them as fixed group traits. Use roles, n
 personal records. If a role is only possible, say so and explain what needs confirming. Do not assume
 a product has no effect on learners because only instructors have accounts.
 
-Keep technical material out of all context prose, including evidence sections and parenthetical
+Keep technical material out of shared context prose, including evidence sections and parenthetical
 citations: no file paths, line numbers, code names, commands, framework names, technical acronyms,
 or descriptions of internal processing. Read technical sources to establish the facts, then explain
 only what people experience and why it matters. Verify important claims against sources during
 discovery without copying technical citations into the writing or moving them to another file.
 Preserve package-managed metadata needed for continuity; do not expand it into technical prose.
+Journals may retain a short Supporting references section after their plain-language account:
+include only relevant repository paths, check names and outcomes, or a finding label linking human
+clarification to its origin. These references support later verification, not a changed-file inventory.
 A reviewer should never need to
 open a source file or look up a computing term to understand a sentence.
 
@@ -55,9 +58,11 @@ Describe meaningful choices and limits, rather than every setting, status, forma
 rule. Include a detail only when it helps explain someone's activity, access, control, or treatment.
 Use familiar words: teachers can download questions for use in their teaching platform; they can
 revise an answer; someone responsible for running the service may manage accounts. Keep uncertainty
-when the actual process is unknown. Do not merely remove citations from an otherwise technical report.
+when the actual process is unknown. Use sweeping words such as all, never, or guaranteed only when
+evidence supports them; otherwise qualify the claim, for example "in the current version" or
+"usually". Do not merely remove citations from an otherwise technical report.
 
-These files are background for a review, not a list of bugs or a declaration that the product is
+Shared context files are background for a review, not a list of bugs or a declaration that the product is
 fair. Record relevant rules and existing safeguards even when no concern is apparent. Keep possible
 concerns distinct from established facts. Clarification questions belong in the interactive chat,
 not in project.md or stakeholders.md: do not add question lists, Q&A transcripts, or sections such as
@@ -78,6 +83,71 @@ Examples:
   other way to submit. Do not turn it into a general list of UI defects.
 - If a library's eventual users are unknown, describe the people known to use or depend on it and
   state what cannot be established. Do not invent a school, student population, or social impact.`;
+
+/** Shared journal content contract; callers retain their own target selection and write permissions. */
+export const JOURNAL_WRITING_GUIDANCE = `## Journal content
+
+Keep a compact, living account that makes sense without the chat. Use plain language and short
+bullets. Maintain these sections, omitting optional sections when empty:
+- Summary: what was reviewed or requested, the main result, and where the work stands now.
+- Findings and outcomes: one bullet per distinct issue, with a stable label, severity when known,
+  the problem and affected people, current disposition, and the reason or verification supporting
+  that disposition. Distinguish open, questioned, rejected, deferred, changed-but-unverified, and
+  fixed-and-verified. Preserve a short explanation when an earlier finding was corrected.
+- Work and decisions (when useful): follow-up answers, actions actually taken, human choices and
+  their rationale, checks performed and results, and any shared-context updates.
+- Next steps (when useful): unresolved questions, blockers, or remaining checks, not generic advice.
+- Supporting references (when useful): minimal evidence/check references for recovering the basis
+  of important conclusions. Distinguish observed behavior, human-reported practice, and plans.
+
+Summarize every reported issue, not just severity totals. If none were found, state that once with
+any material coverage limit. Update existing bullets rather than copying reports or appending a
+transcript. Remove obsolete placeholders, empty disposition categories, repeated counts in prose,
+and generic process narration. Keep meaningful earlier outcomes and decisions. Preserve the
+package-managed identity, timestamps, review-run headings and metadata; those support freshness
+checks. Use subordinate headings within a review run so its metadata remains in that section.
+Keep the complete entry within CCR's 64,000-character limit; condense repetition before it fills.
+Never record secrets, personal records, raw private discussion, or a changed-file inventory.`;
+
+/** Reused by review and context writers so human review rationale has one promotion policy. */
+export const REVIEW_DECISION_GUIDANCE = `## Human review decisions
+
+decisions.md preserves uncommon human rationale learned in review follow-ups that future reviewers
+would otherwise miss. Append only when instructions.updateDecisionsMd is true and all are true:
+- A human explicitly explains or confirms the rationale in response to a review finding.
+- It establishes a lasting product choice, intended behavior, exception, or outside-the-software
+  practice that could otherwise produce similar findings in future reviews.
+- That rationale is not already adequately represented in project.md, stakeholders.md, or decisions.md.
+
+Capture the smallest reusable rule: what was questioned, the human's choice and reason, where it
+applies, and any important conditions. Attribute human-provided intent or outside practices as such;
+they need not appear in source code to be useful context. Check code claims against evidence and
+preserve contradictions or uncertainty. A bare "false positive" without a reason belongs in the
+journal pending clarification. A fix request, inferred code behavior, review recommendation, or
+accepted unresolved risk alone is not proof of a false positive or a durable decision.
+
+Read existing context before appending; avoid duplicates and preserve human entries. Use CCR's
+append-decision support during interactive follow-up. Choose the destination before writing:
+missing human rationale that explains an intentional review exception belongs in decisions;
+project.md describes enduring product facts and plans, without duplicating that explanation.
+Automatic context updates may carry forward
+only an explicit human review rationale already recorded in the approved journal, never originate
+a decision from a commit or infer human agreement. If the setting is false, retain the rationale in
+the journal, explain that shared decision capture is disabled, show
+\`ccr config set instructions.updateDecisionsMd true\` for a human to run, and offer to append the
+rationale once they enable it.
+
+At the start of every review, read decisions with project and stakeholder context. Apply each rule
+within its stated scope: do not repeat the same resolved finding when the human explanation still
+applies. Reconsider it only when changed behavior, a broken assumption, or new evidence creates a
+materially different concern; explain what changed. Decisions supply context, not blanket immunity
+from review. If the human revises a prior rule, append the clarified scope or superseding rule rather
+than silently rewriting history. Identify the earlier rule clearly and state which conditions changed.
+When decisions approach the storage limit or contradict one another, surface the specific conflict
+and propose a concise reconciliation to the human. Do not silently drop a decision to make room.
+Only an explicit human request to maintain decisions permits a replacement: show the complete diff,
+preserve every still-applicable rationale, retain a short superseded-rule summary and reason, and
+validate before reporting completion. This maintenance permission never authorizes inventing rules.`;
 
 export const CONTEXT_FILES: Readonly<Record<string, string>> = {
   ".ccr/config.json": serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
@@ -138,6 +208,10 @@ Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, and relevant entries in \`.c
 when product purpose, affected people, or consequential decision context is useful.
 Use \`/ccr-context initialize\` for first discovery and \`/ccr-context update\` after durable
 changes. CCR context is advisory; source, tests, and schemas have priority.
+After /ccr-review, follow its session-continuity instructions on each subsequent turn: reread the
+active journal as needed, update the same entry before replying, and carry its path and unresolved
+items through compaction. Load the installed ccr-review skill again if those instructions were lost.
+Use the ccr-context ownership rules to decide whether a durable fact warrants a shared-context edit.
 <!-- ccr:end -->`;
 
 export const IGNORE_BLOCK = `# ccr:start - local context continuity

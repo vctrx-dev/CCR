@@ -12,6 +12,7 @@ import {
   type JournalEntry,
   type JournalResult,
   createJournalFile,
+  formatJournalContinuation,
   readCompleteJournalEntry,
   readSortedJournalNames,
   refreshJournalEntry,
@@ -20,6 +21,7 @@ import {
 } from "./journal-entry";
 import { withJournalIdentityLock, withJournalMutationLock } from "./journal-lock";
 import { type ReviewJournalEntries, readReviewJournalEntriesWhileLocked } from "./journal-recency";
+import { readResolvedContextConfig } from "./privacy";
 
 export type { JournalEntry, JournalResult } from "./journal-entry";
 export { readCompleteJournalEntry } from "./journal-entry";
@@ -84,7 +86,26 @@ async function createJournalEntryWithoutLock(
   if ((await readManagedTextIfExists(root, ".gitignore")) !== undefined) {
     await ensureLocalIgnoreRules(root);
   }
-  return createJournalFile(root, now, directory, committedMetadata);
+  const base = details ? readParentCommit(root, details.commit) : readCurrentCommit(root);
+  const previous =
+    (await findWorkingJournalEntry(root, directory, base)) ??
+    (details === undefined
+      ? await findWorkingJournalEntry(root, directory, readParentCommit(root, base))
+      : undefined) ??
+    (await findCommitJournalEntry(root, base, directory));
+  const created = await createJournalFile(root, now, directory, committedMetadata);
+  if (previous !== undefined) {
+    // Carry human continuity, not old review/assessment receipts, into a new work identity.
+    const summary = formatJournalContinuation(previous.content);
+    const content = await readCompleteJournalEntry(root, created.path);
+    await replaceJournalFileIfUnchanged(
+      root,
+      created.path,
+      content,
+      `${content}\n## Continuation\n\nEarlier work: ${previous.path}\n\nHistorical account; recheck unresolved items against current work.\n\n${summary}\n`,
+    );
+  }
+  return created;
 }
 
 /**
@@ -305,6 +326,20 @@ export async function journalEntryForPullRequest(
 ): Promise<JournalResult | undefined> {
   const entry = await findPullRequestJournalEntry(root, pullRequestNumberSchema.parse(pullRequest));
   return entry === undefined ? undefined : { path: entry.path };
+}
+
+/**
+ * Reads the configured count of repository-wide recent journals other than the target's active
+ * entry. Callers read the active entry separately, so it never consumes a recent-history slot.
+ */
+export async function readRecentJournalEntriesExcludingActive(
+  root: string,
+  target: ReviewJournalTarget,
+): Promise<JournalEntry[]> {
+  const config = await readResolvedContextConfig(root);
+  return (
+    await readReviewJournalEntriesForReview(root, config.context.recentJournalEntries, target)
+  ).continuityEntries;
 }
 
 /** Resolves the active write target and both global journal sets under one mutation barrier. */

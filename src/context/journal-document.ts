@@ -8,6 +8,58 @@ import { z } from "zod";
 export const MAX_JOURNAL_FILE_CHARACTERS = 64_000;
 export const JOURNAL_COMPLETION_PLACEHOLDER = "Needs concise completion.";
 
+const JOURNAL_NARRATIVE_TITLES = [
+  "Summary",
+  "Findings and outcomes",
+  "Next steps",
+  "Work and decisions",
+  "Supporting references",
+] as const;
+
+interface JournalNarrativeSection {
+  title: string;
+  body: string;
+  reviewRun?: string;
+}
+
+/**
+ * Selects living narrative before historical run fallbacks, excluding copied continuations and
+ * completion metadata. Reuse for previews and handoffs; extend the title registry for new sections.
+ * A historical fallback retains its origin so it cannot masquerade as a current finding outcome.
+ */
+export function selectJournalNarrative(content: string): JournalNarrativeSection[] {
+  const sections: JournalNarrativeSection[] = [];
+  const headings = [...content.matchAll(/^(#{2,3}) ([^\r\n]+)\r?$/gmu)];
+  let reviewRun: string | undefined;
+  let isContinuation = false;
+  for (let index = 0; index < headings.length; index += 1) {
+    const heading = headings[index];
+    if (heading === undefined || heading.index === undefined) continue;
+    const title = heading[2] ?? "";
+    if (heading[1] === "##") {
+      isContinuation = title === "Continuation";
+      reviewRun = title.startsWith("Review run") ? title : undefined;
+    }
+    if (isContinuation || !JOURNAL_NARRATIVE_TITLES.some((known) => known === title)) continue;
+    const body = content
+      .slice(heading.index + heading[0].length, headings[index + 1]?.index)
+      .replaceAll(JOURNAL_COMPLETION_PLACEHOLDER, "")
+      .replace(/^<!-- CCR context assessed:.*-->\r?$/gmu, "")
+      .replace(
+        /^- \*\*(?:Scope|Dimensions|Evidence|Finding counts|Outcomes|Reviewed state|Reviewed context|Review status)\*\*:[^\r\n]*\r?$/gmu,
+        "",
+      )
+      .trim();
+    if (body.length > 0) sections.push({ title, body, reviewRun });
+  }
+  return JOURNAL_NARRATIVE_TITLES.flatMap((title) => {
+    const matches = sections.filter((section) => section.title === title);
+    const selected =
+      matches.filter((section) => section.reviewRun === undefined).at(-1) ?? matches.at(-1);
+    return selected === undefined ? [] : [selected];
+  });
+}
+
 const journalPathSchema = z
   .string()
   .min(1)
@@ -45,7 +97,6 @@ export type JournalIdentity =
 
 export interface JournalDocumentInspection {
   commitValues: string[];
-  hasAllOutcomeCategories: boolean;
   hasCanonicalHeading: boolean;
   identity: JournalIdentity;
   outcomes: string;
@@ -139,13 +190,15 @@ export function inspectJournalDocument(content: string): JournalDocumentInspecti
     summaryHeading < 0 || outcomesHeading <= summaryHeading
       ? ""
       : content.slice(summaryHeading + "## Summary".length, outcomesHeading).trim();
-  const outcomes = outcomesHeading < 0 ? "" : content.slice(outcomesHeading).trim();
+  const outcomesStart = outcomesHeading + "## Findings and outcomes".length;
+  const nextSection = content.indexOf("\n## ", outcomesStart);
+  const outcomes =
+    outcomesHeading < 0
+      ? ""
+      : content.slice(outcomesStart, nextSection < 0 ? undefined : nextSection).trim();
   return {
     commitValues: [...content.matchAll(/^- \*\*Commit\*\*: `([^`\r\n]+)`$/gmu)].flatMap((match) =>
       match[1] === undefined ? [] : [match[1]],
-    ),
-    hasAllOutcomeCategories: ["Addressed", "Deferred", "Questioned", "Rejected"].every((category) =>
-      new RegExp(`^- ${category}:\\s*\\S`, "mu").test(outcomes),
     ),
     hasCanonicalHeading: (content.split(/\r?\n/u, 1)[0] ?? "") === "# CCR Journal",
     identity: parseJournalIdentity(content),
@@ -181,7 +234,7 @@ export function isCompletedCommitJournal(
     inspected.commitValues[0] !== commit ||
     inspected.summary.length === 0 ||
     inspected.summary.includes(JOURNAL_COMPLETION_PLACEHOLDER) ||
-    !inspected.hasAllOutcomeCategories
+    inspected.outcomes.length === 0
   );
 }
 
@@ -279,7 +332,7 @@ export function createJournalDocument(
 ): { content: string; timestamp: string } {
   const timestamp = journalTimestamp(now);
   return {
-    content: `# CCR Journal\n\n- **Started**: ${timestamp}\n- **Updated**: ${timestamp}\n${identityMetadata}\n## Summary\n\n${JOURNAL_COMPLETION_PLACEHOLDER}\n\n## Findings and outcomes\n\n- Addressed: none.\n- Deferred: none.\n- Questioned: none.\n- Rejected: none.\n`,
+    content: `# CCR Journal\n\n- **Started**: ${timestamp}\n- **Updated**: ${timestamp}\n${identityMetadata}\n## Summary\n\n${JOURNAL_COMPLETION_PLACEHOLDER}\n\n## Findings and outcomes\n\n`,
     timestamp,
   };
 }

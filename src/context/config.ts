@@ -30,6 +30,10 @@ const instructionsSchema = z
   })
   .strict();
 
+const privacySettingsSchema = z
+  .object({ excludedPaths: z.array(z.string().min(1)).max(100) })
+  .strict();
+
 const publicConfigSchema = z
   .object({
     domain: z.string().trim().min(1).max(80).default("unspecified"),
@@ -47,6 +51,7 @@ const publicConfigSchema = z
       updateAgentsMd: false,
       updateDecisionsMd: false,
     }),
+    privacy: privacySettingsSchema.optional(),
   })
   .strict();
 
@@ -55,7 +60,7 @@ const resolvedConfigSchema = z
     domain: z.string().trim().min(1).max(80),
     hooks: hooksSettingsSchema,
     context: contextSettingsSchema,
-    privacy: z.object({ excludedPaths: z.array(z.string().min(1)).max(100) }).strict(),
+    privacy: privacySettingsSchema,
     instructions: instructionsSchema,
   })
   .strict();
@@ -108,10 +113,12 @@ export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
     maxCompactionPercent: 25,
   },
   privacy: { excludedPaths: [] },
+  // New setups share human-confirmed review rationale so teammates and CI stop re-raising settled
+  // findings. Files written before this key existed keep the schema's opted-out default.
   instructions: {
     updateClaudeMd: false,
     updateAgentsMd: false,
-    updateDecisionsMd: false,
+    updateDecisionsMd: true,
   },
 };
 
@@ -124,6 +131,7 @@ function fromPublicConfig(config: PublicContextConfig): ContextConfig {
     hooks: config.hooks,
     context: config.context,
     instructions: config.instructions,
+    privacy: config.privacy ?? DEFAULT_CONTEXT_CONFIG.privacy,
   });
 }
 
@@ -134,6 +142,8 @@ export function toPublicContextConfig(config: ContextConfig): PublicContextConfi
     hooks: config.hooks,
     context: config.context,
     instructions: config.instructions,
+    // Persist repository-specific restrictions; omitting them would broaden evidence access.
+    ...(config.privacy.excludedPaths.length > 0 ? { privacy: config.privacy } : {}),
   });
 }
 

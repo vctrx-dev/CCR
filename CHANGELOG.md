@@ -7,6 +7,56 @@ contain incompatible changes when they are clearly documented.
 
 ## Unreleased
 
+### Fixed
+
+- Post-commit assessments can target the exact current HEAD with `--commit` on `context review-state`
+  and `context assess`, satisfying the matching post-commit reminder.
+- Journal continuation retains review-run findings and human explanations; long previews prefer
+  living outcomes over obsolete historical statuses.
+- Configuration upgrades and unrelated edits preserve explicit privacy exclusions. PR evidence
+  selection and net diffs use the same immutable comparison to avoid exposing excluded records.
+- `context save-review` accepts `--expected-state` and `--expected-context` from the review's
+  starting `context review-state` and refuses code or context edited during the review, so a review
+  can no longer be recorded as current for code it never examined. `/ccr-review` passes them.
+- `context record-review-state` refuses to re-record a review whose code changed; it can still
+  absorb the review's own shared-context edits so they no longer leave that review stale.
+- Review freshness no longer turns stale because of other journals (another branch, a PR review, or a
+  timestamp refresh) or operational settings such as hooks. It still tracks code, `project.md`,
+  `stakeholders.md`, `decisions.md`, the domain, and privacy exclusions. Reviews recorded before
+  this change report stale once.
+- Context-assessment receipts are kept per branch, so assessing another branch no longer discards a
+  matching receipt. Receipts recorded before this change are not reused; assess once again.
+- Context validation no longer rejects ordinary plain-language words such as "all" or "never",
+  which also made automatic updates fail; context guidance asks writers to qualify sweeping claims.
+
+### Changed
+
+- Separated context assessment from review completion; added evidence-bound `context assess`
+  receipts and readiness reporting. Commit reminders no longer infer assessment from file edits.
+- Active journals remain in review input outside the recent-history limit. Bounded previews preserve
+  current findings and next steps; new work carries historical continuity without old review receipts.
+- Journals may retain minimal supporting references. Explicit human-authorized decision maintenance
+  can reconcile superseded explanations while preserving their rationale.
+- Review sessions maintain a concise journal across human feedback, requested fixes, explanations,
+  and context recovery. Findings retain their status and verification outcomes without empty
+  disposition categories. Follow-up work does not count as a fresh review.
+- Shared decisions capture missing, reusable human rationale from review responses, including
+  explained false positives. Future reviews apply the recorded scope and assumptions before raising
+  the same concern again. Decision capture still requires the existing configuration opt-in.
+- New setups enable `instructions.updateDecisionsMd` so explained review decisions reach teammates
+  and CI. Existing configuration files keep their value; files without the key stay opted out.
+- The post-commit prompt is now `/ccr-context update last commit`; the installed skill owns the
+  update rules instead of a second copy in the hook.
+- `context journals` omits the active entry, which reviews and context updates read separately,
+  so every configured slot shows other history. `PR-<number>` names the active PR entry.
+- Automatic context updates receive each changed file's diff alongside its content, announce that
+  they are running, and let CCR set the journal's `Updated` time after validation.
+- `/ccr-review` reports label findings `F1`, `F2`, and so on, and open with the decisions and earlier
+  findings they applied. Review and context skills name the privacy exclusions they must not read,
+  propose (never apply) `stakeholders.md` edits, record the reviewed PR head, and record a context
+  assessment after local reviews, which removes the duplicate pre-commit reminder.
+- Run `ccr update` after updating the package to refresh managed skills and instruction blocks.
+
 ## 0.10.1 - 2026-09-28 (beta-0.2)
 
 ### Changed

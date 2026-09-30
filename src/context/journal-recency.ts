@@ -100,6 +100,8 @@ async function readReviewJournalEntriesLocked(
 ): Promise<ReviewJournalEntries> {
   const candidates = await readJournalActivityCandidates(root);
   const inputCandidates = candidates.slice(0, recentJournalEntries);
+  const active = candidates.find(({ path }) => path === excludedContinuityPath);
+  if (active !== undefined && !inputCandidates.includes(active)) inputCandidates.unshift(active);
   const continuityCandidates = candidates
     .filter(({ path }) => path !== excludedContinuityPath)
     .slice(0, recentJournalEntries);
