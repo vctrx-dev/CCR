@@ -1,10 +1,14 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
 import { saveReview } from "../../../src/review/review-save";
-import { readStagedReviewFreshness } from "../../../src/review/review-state";
+import {
+  computeWorkingReviewState,
+  readStagedReviewFreshness,
+  recordWorkingReviewState,
+} from "../../../src/review/review-state";
 import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
@@ -63,6 +67,62 @@ describe("save review", () => {
     expect(saved.isRecorded).toBe(false);
     expect(content).toContain("- **Scope**: PR-7");
     expect(content).not.toContain("Review status");
+  });
+
+  it("should refuse to save when code changed after the reviewer captured its state", async () => {
+    const root = await makeRepository();
+    await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+    const reviewed = await computeWorkingReviewState(root);
+    await writeFile(path.join(root, "source.ts"), "export const value = 3;\n", "utf8");
+    const expected = {
+      expectedState: reviewed.fingerprint,
+      expectedContext: reviewed.contextFingerprint,
+    };
+
+    await expect(saveReview(root, { ...input, ...expected }, now)).rejects.toThrow(
+      "changed since review-state was captured",
+    );
+    await expect(readdir(path.join(root, ".ccr/journal"))).rejects.toThrow();
+
+    await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+    const saved = await saveReview(root, { ...input, ...expected }, now);
+    expect(saved.isRecorded).toBe(true);
+    await expect(saveReview(root, { ...input, ...expected, scope: "PR-7" }, now)).rejects.toThrow(
+      "apply only to changes and codebase",
+    );
+  });
+
+  it("should re-record a review after context-only edits but never after code changes", async () => {
+    const root = await makeRepository();
+    await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+    const saved = await saveReview(root, input, now);
+    await runCommand("git", ["add", "--", "source.ts"], { cwd: root });
+    await writeFile(
+      path.join(root, ".ccr/decisions.md"),
+      "- Drafts stay human-reviewed.\n",
+      "utf8",
+    );
+    expect((await readStagedReviewFreshness(root)).status).toBe("stale");
+
+    const contextOnly = await computeWorkingReviewState(root);
+    await recordWorkingReviewState(
+      root,
+      saved.path,
+      contextOnly.fingerprint,
+      contextOnly.contextFingerprint,
+    );
+    expect((await readStagedReviewFreshness(root)).status).toBe("current");
+
+    await writeFile(path.join(root, "source.ts"), "export const value = 3;\n", "utf8");
+    const changedCode = await computeWorkingReviewState(root);
+    await expect(
+      recordWorkingReviewState(
+        root,
+        saved.path,
+        changedCode.fingerprint,
+        changedCode.contextFingerprint,
+      ),
+    ).rejects.toThrow("Code changed since this review was recorded");
   });
 
   it("should reject malformed scope, counts, and multi-line summaries before writing", async () => {

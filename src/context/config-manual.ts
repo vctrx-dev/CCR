@@ -9,12 +9,12 @@ Edit \`.ccr/config.json\` directly or run \`ccr config set <key> <value>\`, then
 | \`domain\` | \`"unspecified"\` | A 1–80 character product-domain label. Initialize can derive it from evidence; later operations leave it alone. |
 | \`hooks.enabled\` | \`true\` | Whether CCR's advisory Git integration is installed. Run \`/ccr-hooks sync\` after enabling or \`/ccr-hooks remove\` after disabling. |
 | \`hooks.checkBeforeCommit\` | \`true\` | Whether the advisory pre-commit check warns about staged work without staged shared context. |
-| \`hooks.autoUpdateContext\` | \`false\` | Whether post-commit automation maintains local CCR continuity. It never stages, commits, pushes, or changes source files. |
-| \`context.recentJournalEntries\` | \`3\` | How many recent journal entries (1–10) context and review read. “Recent” means latest validated \`Updated\` time across all branches; ties use \`Started\`, then path. |
+| \`hooks.autoUpdateContext\` | \`false\` | Whether post-commit automation maintains local CCR continuity. It finishes before the hook returns and can take a few minutes. It never stages, commits, pushes, or changes source files. |
+| \`context.recentJournalEntries\` | \`3\` | How many recent journal entries (1–10) context and review read besides the active entry, which is always read. “Recent” means latest validated \`Updated\` time across all branches; ties use \`Started\`, then path. |
 | \`context.maxCompactionPercent\` | \`25\` | Maximum reduction per \`/ccr-context compact\` run (20–30). |
 | \`instructions.updateClaudeMd\` | \`false\` | Lets \`ccr setup\` maintain CCR's small block in root \`CLAUDE.md\`. |
 | \`instructions.updateAgentsMd\` | \`false\` | Lets \`ccr setup\` maintain CCR's small block in root \`AGENTS.md\`. |
-| \`instructions.updateDecisionsMd\` | \`false\` | Allows one evidence-backed, append-only durable decision during an interactive context or review operation. A finding is not a decision. |
+| \`instructions.updateDecisionsMd\` | \`true\` for new setups; \`false\` when absent from an older file | Allows one append-only, reusable human rationale from review follow-up when missing from shared context. Findings and inferred code behavior are not decisions. |
 
 ## Useful examples
 
@@ -35,5 +35,5 @@ ccr config validate
 
 When enabled, the post-commit hook gives headless Claude only a privacy-filtered commit packet and CCR-owned inputs. It can write only the matching local journal, \`.ccr/project.md\`, and—when the separate decision setting is enabled—one append-only decision. It never edits source code, stages, commits, amends, resets, or pushes. A failed update is non-blocking; use \`/ccr-context update\` manually.
 
-Privacy exclusions are fixed safety defaults, not configuration keys.
+Mandatory privacy exclusions always apply. Optional \`privacy.excludedPaths\` adds up to 100 repository-specific exclusion globs; edit it directly in the JSON configuration. Existing restrictions survive legacy upgrades and unrelated setting changes.
 `;

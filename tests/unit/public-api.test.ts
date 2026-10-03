@@ -16,7 +16,7 @@ describe("public package API", () => {
     expect(resolved.privacy.excludedPaths).toEqual(["private/**"]);
     const serialized = JSON.parse(serializeContextConfig(resolved));
     expect(serialized).toMatchObject({ domain: "unspecified" });
-    expect(serialized).not.toHaveProperty("privacy");
+    expect(serialized.privacy).toEqual({ excludedPaths: ["private/**"] });
   });
 
   it("exposes provider construction and taxonomy validation through the package root", () => {

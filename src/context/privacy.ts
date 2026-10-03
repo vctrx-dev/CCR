@@ -2,7 +2,7 @@ import { approveGitInventory } from "./approved-git-inventory";
 import { parseContextConfig, parseLocalContextConfig, resolveContextConfig } from "./config";
 import type { ContextConfig } from "./config";
 import { assertSafeManagedPath, readBoundedUtf8TextIfExists } from "./files";
-import { readHeadEntries, readIndexEntries, readStagedContextState } from "./git";
+import { readLiveGitInventory } from "./git";
 export {
   type FilteredPaths,
   filterExcludedPaths,
@@ -48,12 +48,20 @@ export async function readResolvedContextConfig(root: string): Promise<ContextCo
 
 /** Returns staged regular-file paths allowed by mandatory and configured privacy settings. */
 export async function readSafeStagedPaths(root: string): Promise<FilteredPaths> {
+  const { included, excluded } = await readSafeStagedInventory(root);
+  return { included, excluded };
+}
+
+/** Shares one approved staged snapshot with live review selection; never cache it across operations. */
+export async function readSafeStagedInventory(root: string) {
   const config = await readResolvedContextConfig(root);
+  const inventory = await readLiveGitInventory(root);
+  const { entries } = inventory;
   const approved = approveGitInventory({
-    baselineEntries: readHeadEntries(root),
-    candidatePaths: readStagedContextState(root).stagedPaths,
-    currentEntries: readIndexEntries(root),
+    baselineEntries: inventory.headEntries,
+    candidatePaths: inventory.stagedPaths,
+    currentEntries: entries,
     excludedPatterns: config.privacy.excludedPaths,
   });
-  return { included: approved.included, excluded: approved.excluded };
+  return { ...inventory, included: approved.included, excluded: approved.excluded, config };
 }

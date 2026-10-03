@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
-import { renderDimensionWorkerPrompt } from "./dimension-worker-prompt";
+import { renderDimensionSection } from "./dimension-worker-prompt";
 import dimensionData from "./dimensions.json";
 
 /**
@@ -62,23 +62,41 @@ export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionReg
   return registry;
 }
 
-/** Renders standalone single-agent dimension prompts; `##` headings are the selector IDs. */
+/** Renders only the JSON-derived middle of the review prompt, using the shared criterion renderer. */
+export function renderReviewDimensionSections(input: unknown): string {
+  const registry = parseReviewDimensionRegistry(input);
+  return registry.dimensions
+    .map((dimension) => `## ${dimension.id}\n\n${renderDimensionSection(dimension)}`)
+    .join("\n\n");
+}
+
+/**
+ * Renders the package/installed Markdown reference from validated JSON. Each dimension and criterion
+ * has a real heading, qualified by IDs so repeated names remain distinguishable. Reviews choose
+ * links from this artifact rather than maintaining a second registry of link targets.
+ */
 export function renderReviewDimensionReference(input: unknown): string {
   const registry = parseReviewDimensionRegistry(input);
-  const prompts = registry.dimensions.map((dimension) => {
-    const prompt = renderDimensionWorkerPrompt(dimension, "the current codebase").trimEnd();
-    return `## ${dimension.id}\n\n\`\`\`\`markdown\n${prompt}\n\`\`\`\``;
+  const sections = registry.dimensions.map((dimension) => {
+    const criteria = dimension.criteria
+      .map(({ id, name, details }) => `### ${dimension.id} / ${id} — ${name}\n\n${details}`)
+      .join("\n\n");
+    return `## ${dimension.id} — ${dimension.name}\n\n${dimension.summary}\n\n${criteria}`;
   });
-  const body = prompts.length
-    ? prompts.join("\n\n")
+  const body = sections.length
+    ? sections.join("\n\n---\n\n")
     : "No review dimensions are configured. Stop and ask the maintainer to populate `src/review/dimensions.json`.";
   return `---
 name: ccr-review-dimensions
-description: Reference copy of the CCR single-agent dimension prompts for people; skills do not load it.
+description: JSON-generated CCR dimensions and criteria for people and finding references.
 ---
 
 ${MANAGED_SKILL_MARKER}
-# CCR dimension prompts
+# CCR dimensions and criteria
+
+Generated from the packaged \`dimensions.json\`. Setup/update installs this reference; edit the JSON,
+not this managed file. Reviews load the live repository taxonomy separately and link only matching
+entries here. Custom entries absent from this packaged reference have no reference target.
 
 ${body}
 `;

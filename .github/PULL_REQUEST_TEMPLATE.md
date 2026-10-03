@@ -1,17 +1,17 @@
 ## Summary
 
-Brief description of the change and what it accomplishes.
+What changes for users or contributors?
 
 ## Related work
 
-Link an issue, decision, research note, or roadmap item when one exists.
+Link relevant issues or decisions, if any.
 
 ## Test plan
 
 - [ ] `pnpm verify` passes
-- [ ] New code has tests
-- [ ] Edge cases considered (empty input, error paths, boundaries)
+- [ ] Behavior changes have regression tests; empty/error/boundary cases covered
+- [ ] User-facing changes update README and user manual
 
 ## Reviewer notes
 
-Any non-obvious design decisions, trade-offs, or areas you want extra scrutiny on.
+Non-obvious trade-offs, limits, or areas needing scrutiny.

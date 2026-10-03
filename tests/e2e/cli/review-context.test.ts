@@ -125,5 +125,5 @@ it("should reuse one journal entry for a pull request through the CLI", async ()
   expect(recent.map(({ path: entryPath }: { path: string }) => entryPath)).toEqual([first.path]);
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "journals", "PR-42"]);
-  expect(JSON.parse(output)).toEqual(recent);
+  expect(JSON.parse(output)).toEqual([]);
 });

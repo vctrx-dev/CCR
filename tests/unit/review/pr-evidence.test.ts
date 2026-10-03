@@ -45,10 +45,12 @@ function createRunner(
         title: "Safe change",
       });
     }
-    if (joined.startsWith("api") && joined.includes("/files?")) {
-      const query = joined.split("?")[1]?.split(" ")[0] ?? "";
-      const page = Number(new URL(`https://example.test/?${query}`).searchParams.get("page"));
-      return JSON.stringify(pages.get(page) ?? []);
+    if (
+      joined.startsWith("api") &&
+      joined.includes("/compare/") &&
+      !joined.includes("application/vnd.github.diff")
+    ) {
+      return JSON.stringify([...pages.values()].flat());
     }
     if (joined.startsWith("api") && joined.includes("/contents/")) {
       return JSON.stringify({
@@ -63,7 +65,7 @@ function createRunner(
   });
 }
 
-it("should accept exactly 200 approved files and probe the correct third page", async () => {
+it("should accept exactly 200 approved files from the same immutable comparison as the patch", async () => {
   const root = await makeRoot();
   const runner = createRunner(
     new Map([
@@ -78,7 +80,9 @@ it("should accept exactly 200 approved files and probe the correct third page", 
   expect(evidence.changedPaths).toHaveLength(200);
   expect(runner).toHaveBeenCalledWith(
     expect.objectContaining({
-      arguments_: expect.arrayContaining([expect.stringContaining("per_page=100&page=3")]),
+      arguments_: expect.arrayContaining([
+        expect.stringContaining(`/compare/${"a".repeat(40)}...${"b".repeat(40)}?per_page=1`),
+      ]),
       root,
     }),
   );
@@ -120,7 +124,29 @@ it("should reject excluded PR paths before requesting the patch", async () => {
   );
   expect(runner).not.toHaveBeenCalledWith(
     expect.objectContaining({
-      arguments_: expect.arrayContaining([expect.stringContaining("/compare/")]),
+      arguments_: expect.arrayContaining(["Accept: application/vnd.github.diff"]),
+    }),
+  );
+});
+
+it("should reject excluded content at the captured revision even when the live PR has removed it", async () => {
+  const root = await makeRoot();
+  const stableRunner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
+  const runner: PullRequestCommandRunner = vi.fn(async (command) => {
+    if (
+      command.arguments_.some((argument) => argument.includes("/compare/")) &&
+      !command.arguments_.includes("Accept: application/vnd.github.diff")
+    ) {
+      return JSON.stringify([metadata("src/file.ts"), metadata("secrets/learner-records.txt")]);
+    }
+    return stableRunner(command);
+  });
+  await expect(readSafePullRequestEvidence(root, 42, runner)).rejects.toThrow(
+    "privacy-excluded paths",
+  );
+  expect(runner).not.toHaveBeenCalledWith(
+    expect.objectContaining({
+      arguments_: expect.arrayContaining(["Accept: application/vnd.github.diff"]),
     }),
   );
 });
@@ -132,4 +158,39 @@ it("should reject an oversized patch before returning evidence", async () => {
   await expect(readSafePullRequestEvidence(root, 42, runner)).rejects.toThrow(
     "safe response limit",
   );
+});
+
+it("should reject a renamed file whose original comparison path was excluded", async () => {
+  const root = await makeRoot();
+  const stableRunner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
+  const runner: PullRequestCommandRunner = vi.fn(async (command) => {
+    if (command.arguments_.includes("--jq")) {
+      return JSON.stringify([
+        { filename: "src/file.ts", previousFilename: "secrets/record.txt", status: "renamed" },
+      ]);
+    }
+    return stableRunner(command);
+  });
+  await expect(readSafePullRequestEvidence(root, 42, runner)).rejects.toThrow(
+    "privacy-excluded paths",
+  );
+  expect(runner).not.toHaveBeenCalledWith(
+    expect.objectContaining({
+      arguments_: expect.arrayContaining(["Accept: application/vnd.github.diff"]),
+    }),
+  );
+});
+
+it("should return only net changes, not intermediate commit patches containing removed records", async () => {
+  const root = await makeRoot();
+  const stableRunner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
+  const runner: PullRequestCommandRunner = async (command) => {
+    if (command.arguments_.includes("Accept: application/vnd.github.patch")) {
+      return "diff --git a/secrets/learner.txt b/secrets/learner.txt\n+SYNTHETIC_PRIVATE_RECORD\n";
+    }
+    return stableRunner(command);
+  };
+  const evidence = await readSafePullRequestEvidence(root, 42, runner);
+  expect(evidence.patch).toContain("src/file.ts");
+  expect(evidence.patch).not.toContain("SYNTHETIC_PRIVATE_RECORD");
 });

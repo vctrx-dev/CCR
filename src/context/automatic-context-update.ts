@@ -11,7 +11,7 @@ export {
   resolveClaudeExecutable,
   runHeadlessClaudeContextUpdate,
 } from "./automatic-context-runner";
-import { DECISIONS_PATH, assertDecisionDocumentAppend, readDecisionDocument } from "./decisions";
+import { assertDecisionDocumentAppend, readDecisionDocument } from "./decisions";
 import {
   MANAGED_LIFECYCLE_LOCK_PATH,
   assertSafeManagedPath,
@@ -20,12 +20,15 @@ import {
   readBoundedUtf8TextIfExists,
   tryAcquireManagedLock,
   writeManagedText,
+  writeManagedTextIfUnchanged,
 } from "./files";
 import { readCurrentCommit, readWorkingTreeFingerprints } from "./git";
 import {
+  assertJournalContentWithinLimit,
   inspectJournalDocument,
   isCompletedCommitJournal,
   isValidJournalTimestamp,
+  refreshJournalActivity,
 } from "./journal-document";
 import { readResolvedContextConfig } from "./privacy";
 import { validateContext } from "./validate";
@@ -192,7 +195,8 @@ export async function runAutomaticContextUpdate(
     assertAutomaticUpdateHead(root, validatedCommit);
     if (completed.includes(validatedCommit)) return { status: "already-updated" };
     const journal = await readAutomaticJournal(root, validatedJournalPath);
-    if (isCompletedCommitJournal(journal.content, validatedCommit, journal.started)) {
+    const assessmentMarker = `<!-- CCR context assessed: ${validatedCommit} -->`;
+    if (journal.content.split(/\r?\n/u).includes(assessmentMarker)) {
       await validateAutomaticUpdate(root, validatedCommit, validatedJournalPath, journal.started);
       return { status: "already-updated" };
     }
@@ -237,6 +241,27 @@ export async function runAutomaticContextUpdate(
       }
     }
     await validateAutomaticUpdate(root, validatedCommit, validatedJournalPath, expectedStarted);
+    // Narrative completion is not evidence that this context-assessment workflow succeeded.
+    // Persist the receipt only after every postcondition, retaining it when bounded state is pruned.
+    const assessedJournal = await readAutomaticJournal(root, validatedJournalPath);
+    // The headless worker has no reliable clock, so CCR owns the activity timestamp.
+    const refreshedJournal = refreshJournalActivity(
+      assessedJournal.content,
+      new Date(),
+      validatedJournalPath,
+    );
+    const assessedContent = `${refreshedJournal.trimEnd()}\n\n${assessmentMarker}\n`;
+    assertJournalContentWithinLimit(assessedContent, validatedJournalPath);
+    if (
+      !(await writeManagedTextIfUnchanged(
+        root,
+        validatedJournalPath,
+        assessedJournal.content,
+        assessedContent,
+      ))
+    ) {
+      throw new Error("Journal changed before context assessment could be recorded.");
+    }
     await writeManagedText(
       root,
       STATE_PATH,

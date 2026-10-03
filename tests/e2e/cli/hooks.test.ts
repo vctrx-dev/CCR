@@ -165,7 +165,7 @@ describe("hooks CLI", () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-unprovenanced-"));
     roots.push(root);
     await runCommand("git", ["init", "--quiet"], { cwd: root });
-    const { io, output, clear } = captureIo(root);
+    const { io, output } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     await writeFile(
       path.join(root, ".git/hooks/pre-commit"),
@@ -251,7 +251,8 @@ describe("hooks CLI", () => {
     const { io, output } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
     expect(output()).toContain("started local journal entry");
-    expect(output()).toContain("Use the ccr-context skill");
+    expect(output()).toContain("Paste this into Claude Code");
+    expect(output()).toContain("  /ccr-context update last commit\n");
   });
 
   it("should run one headless update instead of printing a prompt when opted in", async () => {
@@ -283,6 +284,7 @@ describe("hooks CLI", () => {
     expect(path.normalize(calledRoot)).toBe(path.normalize(root));
     expect(calledCommit).toMatch(/^[a-f0-9]{40}$/);
     expect(output()).toContain("automatic context update completed");
+    expect(output()).toContain("the commit is already saved");
     expect(output()).not.toContain("Paste this into Claude Code");
 
     for (const [status, expected] of [

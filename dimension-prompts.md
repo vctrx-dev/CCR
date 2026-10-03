@@ -24,7 +24,7 @@ how its prompts, defaults, scoring rules, and decisions shape their experience.
 Ask: whose needs are treated as normal? What counts as success or a correct answer? Who has to
 adapt, provide extra proof, or ask for help? Who can question a decision and get it changed?
 
-Look for assumptions the developers may not have noticed. The dimension questions are a starting
+Look for assumptions the developers may not have noticed. The dimension description and questions are a starting
 point, not a complete list of everything that could be wrong. Check every selected dimension and
 its questions, but do not feel you need to find an issue in each one. If you cannot check something
 important, say what is missing. Do not claim to have reviewed code you could not read.
@@ -69,23 +69,9 @@ Do not guess the developer's intentions or claim a community reacted a certain w
 
 Before reporting, look for exceptions, accommodations, other ways to complete the task, and people
 who can correct the outcome. Try to disprove your concern. A missing feature or lack of demographic
-statistics alone is not a finding. If something important is uncertain, ask a question instead.
+statistics alone is not a finding. If something important is uncertain, keep it unconfirmed and
+out of the findings rather than inventing an answer.
 It is completely fine to find no supported inclusivity issues.
-
-### Examples
-
-- An assessment accepts only the source's exact wording. A student who understands the material
-  gives an equally valid explanation and is marked wrong. Check the scoring rule and whether
-  other answers or instructor corrections are allowed before calling this an issue.
-- A required submission button only works with a mouse. A person with a motor disability who uses
-  a keyboard cannot submit their work. Report this if the code confirms the barrier and there is
-  no usable alternative. Explain the blocked action, not just the missing keyboard support.
-- A screen labels people "master" and "slave". Consider what that wording says about those people
-  and who sees it. An isolated internal variable called "master" does not establish the same issue.
-- A slow query alone is a technical bug. A failed submission that gives a learner a penalty with
-  no effective recovery route can qualify. Verify the penalty and available recovery before reporting.
-
-Use these examples to understand the distinction, not as issues to assume exist in this repository.
 
 ## data-system-reliability
 
@@ -231,19 +217,33 @@ Review the code against these criteria:
 
 For supported bugs:
 
-**Finding [severity; dimension-id]:** in plain language, who is harmed, treated unfairly, or excluded and how
+### 1. Short finding title
+
+**Severity:** Critical, High, Medium, or Low
+
+**Dimension / criterion:** applicable dimension and criterion names, or Other — outside current dimensions
+
+In plain language, who is harmed, treated unfairly, or excluded and how.
+
 **Scenario:** a realistic example of how this affects someone; say if it is hypothetical
+
 **Evidence:** relevant file/path, function, rule, or code behavior
 
-Use Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
+Separate consecutive findings with a Markdown horizontal rule (`---`) on its own line, with blank
+lines around it. Number findings 1, 2, 3, and so on, starting at 1 in each completed report. Use
+Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
 and combine duplicates. For accessibility, explain the person's access need and the action they
 cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
 above before reporting it.
 
-For uncertain issues:
+Include supported ethical/inclusivity issues outside the current taxonomy in this same numbered
+list, labeled **Other — outside current dimensions**, with the same severity, scenario, and evidence.
+Do not add a separate other-issues section or include unrelated ordinary engineering defects.
 
-**Question:** what needs to be established before this can be considered an inclusivity bug
-**Context:** the relevant code behavior and why it may matter
+Keep uncertain candidates out of the report. Omit Question/Context sections, unanswered-question
+lists, and trailing observations. Still briefly disclose actual evidence limits; absence of supported
+findings does not establish safety. Put any necessary disclosure before the findings, not in a
+trailing section, and omit routine completion commentary.
 
 If no supported findings exist, say:
 

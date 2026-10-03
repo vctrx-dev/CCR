@@ -48,6 +48,7 @@ export interface UninstallPreview {
 export interface UninstallRemoval {
   expectedContent: string;
   path: string;
+  maximumCharacters?: number;
 }
 
 export interface UninstallModification extends UninstallRemoval {
@@ -103,10 +104,17 @@ export async function previewUninstall(
   const removePaths: string[] = [];
   const removals: UninstallRemoval[] = [];
   for (const artifact of MANAGED_ARTIFACTS) {
-    const existing = await readManagedTextIfExists(root, artifact.path);
+    const existing = await readManagedTextIfExists(root, artifact.path, artifact.maximumCharacters);
     if (shouldRemoveArtifact(artifact, existing, shouldRemoveContext)) {
       removePaths.push(artifact.path);
-      if (existing !== undefined) removals.push({ path: artifact.path, expectedContent: existing });
+      if (existing !== undefined)
+        removals.push({
+          path: artifact.path,
+          expectedContent: existing,
+          ...(artifact.maximumCharacters === undefined
+            ? {}
+            : { maximumCharacters: artifact.maximumCharacters }),
+        });
     }
   }
   const modifyPaths: string[] = [];
@@ -186,7 +194,10 @@ export async function applyUninstall(
       }
       if (suppliedPreview !== undefined) {
         for (const planned of [...suppliedPreview.removals, ...suppliedPreview.modifications]) {
-          if ((await readManagedTextIfExists(root, planned.path)) !== planned.expectedContent) {
+          if (
+            (await readManagedTextIfExists(root, planned.path, planned.maximumCharacters)) !==
+            planned.expectedContent
+          ) {
             throw new Error(`CCR managed file changed after preview: ${planned.path}.`);
           }
         }

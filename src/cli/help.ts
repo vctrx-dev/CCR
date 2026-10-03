@@ -17,7 +17,10 @@ Terminal commands:
   ccr context save-review <scope> <dimensions> <counts> <summary>
                                                  Save a finished review to its journal
   ccr context append-decision <decision>         Append one config-authorized decision
-  ccr context journals [PR-<number>]             Read repository-wide recent journals; PR is ignored
+  ccr context assess <code-fingerprint> <context-fingerprint> <summary>
+                                                  Record an evidence-bound context assessment
+  ccr context journals [PR-<number>]             Read repository-wide recent journals except the active one
+  ccr context dimensions [--json]               Read live repository taxonomy and render review lenses
   ccr context review-pr PR-<number>              Read bounded privacy-filtered PR evidence
   ccr context review-pr-head PR-<number> <files...> Read approved PR head files
   ccr config [validate|defaults]                  Read or validate settings and defaults
@@ -37,6 +40,7 @@ Claude Code skills (run inside Claude Code after setup):
              [all|dimension,...]
 
 Configured dimension IDs: ${configuredDimensions}
+These are packaged defaults; context dimensions reads the current editable .ccr/dimensions.json.
 Blank review arguments default to changes and all dimensions. Add codebase or PR-<number> for
 another scope, then separate multiple dimension IDs with commas.
 `;

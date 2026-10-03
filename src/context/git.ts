@@ -1,5 +1,5 @@
 import type { BoundedGitText } from "./git-process";
-import { runBoundedGit, runGit } from "./git-process";
+import { hashGitWorktreePaths, runBoundedGit, runGit, runGitMetadata } from "./git-process";
 
 export type { BoundedGitText } from "./git-process";
 
@@ -149,26 +149,7 @@ function fingerprintWorktreePaths(
   if (paths.length > 5_000) {
     throw new Error("Working tree has too many paths to fingerprint safely.");
   }
-  return new Map(
-    paths.map((relativePath) => {
-      try {
-        const fingerprint = runGit(
-          root,
-          shouldApplyFilters
-            ? ["hash-object", `--path=${relativePath}`, "--", relativePath]
-            : ["hash-object", "--no-filters", "--", relativePath],
-          200,
-          true,
-        );
-        if (!/^[0-9a-f]{40,64}\n?$/u.test(fingerprint)) {
-          throw new Error("Git returned an invalid worktree fingerprint.");
-        }
-        return [relativePath, fingerprint.trim()];
-      } catch {
-        return [relativePath, "missing"];
-      }
-    }),
-  );
+  return hashGitWorktreePaths(root, paths, shouldApplyFilters);
 }
 
 /** Fingerprints approved paths after Git clean filters for comparison with index blob IDs. */
@@ -193,14 +174,22 @@ export function readIndexEntries(root: string): IndexEntry[] {
   return parseGitEntries(runGit(root, ["ls-files", "--stage", "-z"]), 1);
 }
 
-/** Reads HEAD tree metadata, returning empty for a repository without a first commit. */
-export function readHeadEntries(root: string): IndexEntry[] {
-  try {
-    const output = runGit(root, ["ls-tree", "-r", "-z", "HEAD"], undefined, true);
-    return parseGitEntries(output, 2);
-  } catch {
-    return [];
-  }
+/** Reads independent inventories concurrently with exact NUL-delimited paths and bounded output. */
+export async function readLiveGitInventory(root: string) {
+  const [head, index, staged, unstaged, untracked] = await Promise.all([
+    runGitMetadata(root, ["ls-tree", "-r", "-z", "HEAD"]).catch(() => ""),
+    runGitMetadata(root, ["ls-files", "--stage", "-z"]),
+    runGitMetadata(root, ["diff", "--cached", "--name-only", "-z"]),
+    runGitMetadata(root, ["diff", "--name-only", "-z"]),
+    runGitMetadata(root, ["ls-files", "--others", "--exclude-standard", "-z"]),
+  ]);
+  return {
+    headEntries: parseGitEntries(head, 2),
+    entries: parseGitEntries(index, 1),
+    stagedPaths: parseGitPaths(staged),
+    unstagedPaths: parseGitPaths(unstaged),
+    untrackedPaths: parseGitPaths(untracked),
+  };
 }
 
 /** Reads one commit tree's regular-file and symlink metadata without opening worktree files. */
@@ -214,6 +203,7 @@ export function readCommitChangedPaths(root: string, commit: string): string[] {
     runGit(root, [
       "diff-tree",
       "--root",
+      "--diff-merges=first-parent",
       "--no-commit-id",
       "--name-only",
       "-r",
@@ -224,12 +214,6 @@ export function readCommitChangedPaths(root: string, commit: string): string[] {
   );
 }
 
-/** Reads one immutable blob selected by its index object ID. */
-export function readGitBlob(root: string, oid: string): string {
-  if (!/^[0-9a-f]{40,64}$/u.test(oid)) throw new Error("Invalid Git object ID.");
-  return runGit(root, ["cat-file", "blob", oid]);
-}
-
 /** Reads a bounded immutable blob prefix and identifies non-text content. */
 export function readBoundedGitBlob(
   root: string,
@@ -238,11 +222,6 @@ export function readBoundedGitBlob(
 ): Promise<BoundedGitText> {
   if (!/^[0-9a-f]{40,64}$/u.test(oid)) throw new Error("Invalid Git object ID.");
   return runBoundedGit(root, ["cat-file", "blob", oid], maximumCharacters);
-}
-
-/** Reads the staged diff for one exact path without invoking external diff drivers. */
-export function readStagedDiff(root: string, relativePath: string): string {
-  return runGit(root, ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--", relativePath]);
 }
 
 /** Streams a bounded staged diff prefix without invoking external diff drivers. */
@@ -260,9 +239,34 @@ export async function readBoundedStagedDiff(
   );
 }
 
-/** Reads the unstaged diff for one exact path without invoking external diff drivers. */
-export function readUnstagedDiff(root: string, relativePath: string): string {
-  return runGit(root, ["diff", "--no-ext-diff", "--no-textconv", "--", relativePath]);
+/** Streams a bounded diff of one path against the commit's first parent, or the empty tree. */
+export async function readBoundedCommitDiff(
+  root: string,
+  commit: string,
+  relativePath: string,
+  maximumCharacters: number,
+): Promise<BoundedGitText> {
+  return classifyBoundedGitDiff(
+    await runBoundedGit(
+      root,
+      [
+        "diff-tree",
+        "--root",
+        "--diff-merges=first-parent",
+        "--no-commit-id",
+        "-p",
+        "-r",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        commit,
+        "--",
+        relativePath,
+      ],
+      maximumCharacters,
+    ),
+  );
 }
 
 /** Streams a bounded unstaged diff prefix without invoking external diff drivers. */
@@ -285,7 +289,15 @@ export function readChangedPaths(root: string, count: number): string[] {
   try {
     const output = runGit(
       root,
-      ["log", `-${count}`, "--name-only", "-z", "--pretty=format:", "--no-renames"],
+      [
+        "log",
+        `-${count}`,
+        "--name-only",
+        "-z",
+        "--pretty=format:",
+        "--no-renames",
+        "--diff-merges=first-parent",
+      ],
       1024 * 1024,
       true,
     );

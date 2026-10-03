@@ -7,6 +7,7 @@ import {
   ensureJournalEntryForHead,
   ensurePullRequestJournalEntry,
   ensureWorkingJournalEntry,
+  readRecentJournalEntriesExcludingActive,
 } from "../../../src/context/journal";
 import { computeReviewContextState } from "../../../src/review/review-state";
 import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
@@ -34,7 +35,7 @@ async function makeRepository(): Promise<string> {
   return root;
 }
 
-it("should fingerprint every review input while excluding only the active continuity write", async () => {
+it("should track every journal input while keeping review freshness independent of journals", async () => {
   const root = await makeRepository();
   const prior = await ensureJournalEntryForHead(root, new Date("2026-08-25T01:00:00Z"));
   await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
@@ -50,7 +51,7 @@ it("should fingerprint every review input while excluding only the active contin
     "utf8",
   );
   const afterPrior = await computeReviewContextState(root);
-  expect(afterPrior.contextFingerprint).not.toBe(initial.contextFingerprint);
+  expect(afterPrior.contextFingerprint).toBe(initial.contextFingerprint);
   expect(afterPrior.inputContextFingerprint).not.toBe(initial.inputContextFingerprint);
 
   await writeFile(
@@ -63,7 +64,7 @@ it("should fingerprint every review input while excluding only the active contin
   expect(afterActive.inputContextFingerprint).not.toBe(afterPrior.inputContextFingerprint);
 });
 
-it("should fingerprint repository-wide recent journals while excluding the selected PR target", async () => {
+it("should keep PR review freshness stable when other journals change", async () => {
   const root = await makeRepository();
   const journal = await ensurePullRequestJournalEntry(root, 42, new Date("2026-08-25T01:00:00Z"));
   const other = await ensurePullRequestJournalEntry(root, 43, new Date("2026-08-26T01:00:00Z"));
@@ -76,7 +77,7 @@ it("should fingerprint repository-wide recent journals while excluding the selec
   );
 
   const afterOther = await computeReviewContextState(root, 42);
-  expect(afterOther.contextFingerprint).not.toBe(initial.contextFingerprint);
+  expect(afterOther.contextFingerprint).toBe(initial.contextFingerprint);
   expect(afterOther.inputContextFingerprint).not.toBe(initial.inputContextFingerprint);
 
   await writeFile(
@@ -139,7 +140,7 @@ it("should target HEAD rather than a stale working journal after changes are rev
     "utf8",
   );
   const afterWorking = await computeReviewContextState(root);
-  expect(afterWorking.contextFingerprint).not.toBe(initial.contextFingerprint);
+  expect(afterWorking.contextFingerprint).toBe(initial.contextFingerprint);
   expect(afterWorking.inputContextFingerprint).not.toBe(initial.inputContextFingerprint);
 
   await writeFile(
@@ -150,4 +151,72 @@ it("should target HEAD rather than a stale working journal after changes are rev
   const afterHead = await computeReviewContextState(root);
   expect(afterHead.contextFingerprint).toBe(afterWorking.contextFingerprint);
   expect(afterHead.inputContextFingerprint).not.toBe(afterWorking.inputContextFingerprint);
+});
+
+it("should keep freshness bound to shared context and review-relevant settings only", async () => {
+  const root = await makeRepository();
+  const initial = await computeReviewContextState(root);
+
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      hooks: { ...DEFAULT_CONTEXT_CONFIG.hooks, autoUpdateContext: true },
+      context: { ...DEFAULT_CONTEXT_CONFIG.context, recentJournalEntries: 5 },
+    }),
+    "utf8",
+  );
+  const afterOperationalSettings = await computeReviewContextState(root);
+  expect(afterOperationalSettings.contextFingerprint).toBe(initial.contextFingerprint);
+
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      privacy: { excludedPaths: ["learner-records/**"] },
+    }),
+    "utf8",
+  );
+  const afterPrivacy = await computeReviewContextState(root);
+  expect(afterPrivacy.contextFingerprint).not.toBe(initial.contextFingerprint);
+
+  await writeFile(path.join(root, ".ccr/decisions.md"), "- Drafts stay human-reviewed.\n", "utf8");
+  const afterDecision = await computeReviewContextState(root);
+  expect(afterDecision.contextFingerprint).not.toBe(afterPrivacy.contextFingerprint);
+});
+
+it("should list recent journals without spending a slot on the active entry", async () => {
+  const root = await makeRepository();
+  const prior = await ensureJournalEntryForHead(root, new Date("2026-08-25T01:00:00Z"));
+  await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+  const active = await ensureWorkingJournalEntry(root, new Date("2026-08-27T01:00:00Z"));
+
+  const recent = await readRecentJournalEntriesExcludingActive(root, { kind: "working" });
+
+  expect(recent.map(({ path: entryPath }) => entryPath)).toEqual([prior.path]);
+  expect(recent.map(({ path: entryPath }) => entryPath)).not.toContain(active.path);
+});
+
+it("should fingerprint the extra continuity journal when the active entry occupies a recent slot", async () => {
+  const root = await makeRepository();
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      context: { ...DEFAULT_CONTEXT_CONFIG.context, recentJournalEntries: 1 },
+    }),
+  );
+  const prior = await ensurePullRequestJournalEntry(root, 41, new Date("2026-08-25T01:00:00Z"));
+  await ensurePullRequestJournalEntry(root, 42, new Date("2026-08-26T01:00:00Z"));
+  const before = await computeReviewContextState(root, 42);
+  const supplied = await readRecentJournalEntriesExcludingActive(root, {
+    kind: "pull-request",
+    pullRequest: 42,
+  });
+  expect(supplied.map(({ path: journalPath }) => journalPath)).toEqual([prior.path]);
+  await writeFile(path.join(root, prior.path), `${supplied[0]?.content}\nCorrected outcome.\n`);
+
+  const after = await computeReviewContextState(root, 42);
+  expect(after.inputContextFingerprint).not.toBe(before.inputContextFingerprint);
+  expect(after.contextFingerprint).toBe(before.contextFingerprint);
 });
