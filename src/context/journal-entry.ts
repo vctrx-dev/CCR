@@ -217,19 +217,6 @@ export async function refreshJournalEntry(
   return { path: entry.path, content };
 }
 
-/** Refreshes activity metadata for one journal selected by path. */
-export async function refreshJournalPath(
-  root: string,
-  relativePath: string,
-  now: Date,
-): Promise<void> {
-  await refreshJournalEntry(
-    root,
-    { path: relativePath, content: await readCompleteJournalEntry(root, relativePath) },
-    now,
-  );
-}
-
 /** Creates one date-named journal skeleton with collision-safe suffix allocation. */
 export async function createJournalFile(
   root: string,

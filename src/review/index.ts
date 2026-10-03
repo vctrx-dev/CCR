@@ -12,6 +12,8 @@ export type { ReviewDimensionRegistry } from "./dimensions.js";
 export {
   parseReviewDimensionRegistry,
   renderReviewDimensionReference,
+  renderReviewDimensionSections,
   REVIEW_DIMENSIONS,
   REVIEW_DIMENSION_REFERENCE,
 } from "./dimensions.js";
+export { readReviewDimensionRegistry } from "./dimension-file.js";

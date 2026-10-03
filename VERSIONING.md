@@ -1,23 +1,18 @@
-# Versioning and Release Notes
+# Releases
 
-`package.json` is the source of truth for the CCR version. Git release tags use the corresponding
-`vMAJOR.MINOR.PATCH` form.
+`package.json` is the version source. Use SemVer: PATCH fixes, MINOR compatible additions, MAJOR
+incompatible changes; before 1.0, incompatible changes increment MINOR. Ordinary development does
+not bump versions.
 
-## Preparing a release
+1. Choose the version from `CHANGELOG.md` → `Unreleased`; update package/lockfile metadata together.
+2. Move relevant entries under `## MAJOR.MINOR.PATCH - YYYY-MM-DD`. Include user effects, migration,
+   compatibility changes, and known limits; link issues/PRs when available. Use Added/Changed/Fixed/
+   Removed/Security sections as needed.
+3. Run `pnpm verify` and `pnpm test:changed:print`; complete the [AGENTS.md](AGENTS.md) checklist.
+4. Merge release preparation through `dev` → `stage` → `main`.
+5. Create immutable `vMAJOR.MINOR.PATCH` from the validated `main` commit. The publish workflow checks
+   tag/version agreement and ancestry, verifies again, and uses npm trusted publishing.
 
-1. Decide the next version from the user-visible changes under `Unreleased` in `CHANGELOG.md`.
-2. Update `package.json` and the lockfile to the same version.
-3. Move the applicable changelog entries into `## MAJOR.MINOR.PATCH - YYYY-MM-DD`.
-4. Include migration instructions, known limitations, and compatibility changes when applicable.
-5. Run the complete self-review checklist from `AGENTS.md`.
-6. Merge the release-preparation change through the normal branch flow into `main`.
-7. Create the immutable tag `vMAJOR.MINOR.PATCH` from the validated commit.
-
-## Release-note quality
-
-Write for users rather than for the implementation history. Group entries under `Added`, `Changed`,
-`Fixed`, `Removed`, and `Security` as applicable. Every entry should explain the observable effect.
-Link an issue or pull request when one exists.
-
-Do not publish an empty release note, silently omit a breaking change, move an existing release tag,
-or edit the notes for an already published version without recording the correction.
+A release is complete only after validation, arrival on `main`, and its matching tag. Never move/reuse
+a published tag, omit breaking changes, or publish empty notes. Fix a release with a new version;
+record corrections rather than silently rewriting published history.

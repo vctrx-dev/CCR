@@ -1,61 +1,60 @@
 # Changelog
 
-Notable user-visible changes to CCR are recorded here.
-
-This project follows [Semantic Versioning](https://semver.org/). Until `1.0.0`, a minor release may
-contain incompatible changes when they are clearly documented.
+User-visible changes and migrations. Before 1.0, incompatible changes increment MINOR.
+See [VERSIONING.md](VERSIONING.md); published release history is retained below.
 
 ## Unreleased
 
+## 0.11.0 - 2026-10-02 (beta-0.2)
+
+### Added
+
+- Editable `.ccr/dimensions.json`, the `@vctrx/ccr/dimensions.json` export, and
+  `context dimensions [--json]`. Reviews reload local taxonomy without changing surrounding guidance
+  or reporting. Update refreshes untouched defaults, preserves customization, and tracks taxonomy
+  in review freshness. Uninstall preserves it unless shared-context removal is explicit.
+
 ### Fixed
 
-- Post-commit assessments can target the exact current HEAD with `--commit` on `context review-state`
-  and `context assess`, satisfying the matching post-commit reminder.
-- Journal continuation retains review-run findings and human explanations; long previews prefer
-  living outcomes over obsolete historical statuses.
-- Configuration upgrades and unrelated edits preserve explicit privacy exclusions. PR evidence
-  selection and net diffs use the same immutable comparison to avoid exposing excluded records.
-- `context save-review` accepts `--expected-state` and `--expected-context` from the review's
-  starting `context review-state` and refuses code or context edited during the review, so a review
-  can no longer be recorded as current for code it never examined. `/ccr-review` passes them.
-- `context record-review-state` refuses to re-record a review whose code changed; it can still
-  absorb the review's own shared-context edits so they no longer leave that review stale.
-- Review freshness no longer turns stale because of other journals (another branch, a PR review, or a
-  timestamp refresh) or operational settings such as hooks. It still tracks code, `project.md`,
-  `stakeholders.md`, `decisions.md`, the domain, and privacy exclusions. Reviews recorded before
-  this change report stale once.
-- Context-assessment receipts are kept per branch, so assessing another branch no longer discards a
-  matching receipt. Receipts recorded before this change are not reused; assess once again.
-- Context validation no longer rejects ordinary plain-language words such as "all" or "never",
-  which also made automatic updates fail; context guidance asks writers to qualify sweeping claims.
+- Literal Git filenames prevent approved wildcard-like paths from exposing excluded diffs. Merge
+  evidence/reminders use the first parent; PR approval and net diffs share one immutable comparison.
+- Lock reclamation protects replacement owners; live locks do not expire with duration. Config errors
+  omit input excerpts, and upgrades/unrelated edits preserve privacy exclusions.
+- Input-context hashes include every supplied recent journal and the active entry. Freshness ignores
+  journal activity and operational settings but still tracks code and shared review context. Existing
+  review records become stale once after this change.
+- `save-review --expected-state/--expected-context` refuses inputs changed during review;
+  `record-review-state` refuses changed code while permitting the review's own context updates.
+- Context assessments are branch-specific. `review-state` and `assess` accept `--commit` for exact
+  current HEAD; older receipts are not reused, so assess once again.
+- Journal previews/continuation retain current findings, human explanations, and next steps. Context
+  validation accepts ordinary words such as "all" and "never" without treating them as unsupported claims.
+- Updated the development-tool URI parser override and test runner to patched versions.
 
 ### Changed
 
-- Separated context assessment from review completion; added evidence-bound `context assess`
-  receipts and readiness reporting. Commit reminders no longer infer assessment from file edits.
-- Active journals remain in review input outside the recent-history limit. Bounded previews preserve
-  current findings and next steps; new work carries historical continuity without old review receipts.
-- Journals may retain minimal supporting references. Explicit human-authorized decision maintenance
-  can reconcile superseded explanations while preserving their rationale.
-- Review sessions maintain a concise journal across human feedback, requested fixes, explanations,
-  and context recovery. Findings retain their status and verification outcomes without empty
-  disposition categories. Follow-up work does not count as a fresh review.
-- Shared decisions capture missing, reusable human rationale from review responses, including
-  explained false positives. Future reviews apply the recorded scope and assumptions before raising
-  the same concern again. Decision capture still requires the existing configuration opt-in.
-- New setups enable `instructions.updateDecisionsMd` so explained review decisions reach teammates
-  and CI. Existing configuration files keep their value; files without the key stay opted out.
-- The post-commit prompt is now `/ccr-context update last commit`; the installed skill owns the
-  update rules instead of a second copy in the hook.
-- `context journals` omits the active entry, which reviews and context updates read separately,
-  so every configured slot shows other history. `PR-<number>` names the active PR entry.
-- Automatic context updates receive each changed file's diff alongside its content, announce that
-  they are running, and let CCR set the journal's `Updated` time after validation.
-- `/ccr-review` reports label findings `F1`, `F2`, and so on, and open with the decisions and earlier
-  findings they applied. Review and context skills name the privacy exclusions they must not read,
-  propose (never apply) `stakeholders.md` edits, record the reviewed PR head, and record a context
-  assessment after local reviews, which removes the duplicate pre-commit reminder.
-- Run `ccr update` after updating the package to refresh managed skills and instruction blocks.
+- Review reports use headings numbered from 1 and horizontal separators, omit trailing questions/
+  observations, and include supported out-of-taxonomy ethical issues as `Other` in the same list.
+  Matching dimension/criterion names link to a JSON-generated Markdown reference installed by
+  setup/update and shipped at `dist/review/dimensions.md`; custom unmatched names remain unlinked.
+  Refresh installed skills with `ccr update`. Criteria and discovery standards are unchanged.
+- Bounded worktree-hash batches and operation-local commit approvals reduce repeated work without
+  caching permission across operations.
+- Context assessment/readiness is separate from completed reviews; arbitrary file edits are not
+  assessments. Local reviews record an assessment to avoid duplicate pre-commit reminders.
+- Session follow-ups maintain stable finding labels, reasons, verification, and minimal supporting
+  references without claiming fresh review. New work carries history but not old completion receipts.
+- Decisions capture missing reusable human rationale. New setups enable `updateDecisionsMd`;
+  existing values are preserved and absent older keys stay off. Explicit human maintenance may
+  reconcile superseded rules while preserving their rationale.
+- `context journals` excludes the active entry, which is always read separately; the PR token selects
+  that active entry, not a PR-only history. The post-commit fallback is `/ccr-context update last commit`.
+- Automation announces itself, supplies file diffs/content, and lets CCR set `Updated` after validation.
+- Reports open with `Context applied`. Skills respect privacy, propose rather than apply
+  stakeholder edits, and retain the reviewed PR head. Run `ccr update` after package upgrades.
+- Removed confirmed unused private helpers/imports. Typecheck rejects unused source locals/parameters;
+  public APIs and test-only safety helpers remain intact. Docs now separate quick start, reference,
+  tests, and contributor rules without repeated walkthroughs.
 
 ## 0.10.1 - 2026-09-28 (beta-0.2)
 

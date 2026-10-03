@@ -113,7 +113,6 @@ describe("runAutomaticContextUpdate", () => {
 
   it("should recognize successful automation after bounded state pruning", async () => {
     const root = await makeAutomationRoot();
-    const commit = commitFor(root);
     const runClaude = vi.fn(() => completeJournal(root));
     await runUpdate(root, runClaude);
     runClaude.mockClear();

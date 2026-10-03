@@ -19,6 +19,8 @@ import {
   readRecentJournalEntriesExcludingActive,
 } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
+import { readReviewDimensionRegistry } from "../review/dimension-file";
+import { renderReviewDimensionSections } from "../review/dimensions";
 import {
   hasSafeReviewChanges,
   listSafeReviewChanges,
@@ -36,6 +38,20 @@ import { findCliRepositoryRoot } from "./io";
 /** Registers privacy-filtered evidence, local continuity inspection, and opt-in decision commands. */
 export function registerContextInspectionCommands(context: Command, io: CliIo): void {
   const root = () => findCliRepositoryRoot(io);
+  context
+    .command("dimensions")
+    .description(
+      "Render review lenses from current repository JSON, or packaged defaults when absent",
+    )
+    .option("--json", "return the validated effective taxonomy instead of rendered prompt sections")
+    .action(async (options: { json?: boolean }) => {
+      const registry = await readReviewDimensionRegistry(root());
+      io.write(
+        options.json
+          ? `${JSON.stringify(registry, null, 2)}\n`
+          : `${renderReviewDimensionSections(registry) || "No review dimensions are configured."}\n`,
+      );
+    });
   context
     .command("assess <code-fingerprint> <context-fingerprint> <summary>")
     .description("Record a completed context assessment against unchanged evidence")

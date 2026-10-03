@@ -181,7 +181,7 @@ function migrateLegacyConfig(config: z.infer<typeof legacyConfigSchema>): Contex
 
 /** Parses the minimal format and migrates supported legacy files in memory. */
 export function parseContextConfig(input: string): ContextConfig {
-  const value: unknown = JSON.parse(input);
+  const value = parseConfigJson(input);
   const current = publicConfigSchema.safeParse(value);
   if (current.success) return fromPublicConfig(current.data);
 
@@ -192,7 +192,17 @@ export function parseContextConfig(input: string): ContextConfig {
 
 /** Parses the intentionally limited set of per-developer overrides. */
 export function parseLocalContextConfig(input: string): LocalContextConfig {
-  return localConfigSchema.parse(JSON.parse(input));
+  return localConfigSchema.parse(parseConfigJson(input));
+}
+
+function parseConfigJson(input: string): unknown {
+  try {
+    const value: unknown = JSON.parse(input);
+    return value;
+  } catch {
+    // Node's SyntaxError may include private input excerpts; never retain it as a cause.
+    throw new Error("CCR configuration must be valid JSON.");
+  }
 }
 
 /** Merges local restrictions without allowing team exclusions to be removed. */

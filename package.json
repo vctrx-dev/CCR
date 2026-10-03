@@ -1,6 +1,6 @@
 {
   "name": "@vctrx/ccr",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "private": false,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.32.0",
@@ -36,7 +36,8 @@
       "types": "./dist/review/index.d.ts",
       "import": "./dist/review/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./dimensions.json": "./dist/review/dimensions.json"
   },
   "files": ["dist", "README.md", "USER_MANUAL.md", "TEST.md", "LICENSE"],
   "publishConfig": {
@@ -70,7 +71,7 @@
   "pnpm": {
     "overrides": {
       "esbuild": "0.28.1",
-      "fast-uri": "3.1.6",
+      "fast-uri": "3.1.8",
       "js-yaml": "4.3.2"
     },
     "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "husky"]
@@ -82,7 +83,7 @@
     "@biomejs/biome": "^1.9.4",
     "@commitlint/cli": "^21.2.2",
     "@types/node": "^24.0.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "commander": "^15.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.1.0",
@@ -90,7 +91,7 @@
     "tsup": "^8.5.1",
     "typescript": "^5.6.0",
     "vite": "^8.2.1",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "zod": "^4.4.3"
   }
 }

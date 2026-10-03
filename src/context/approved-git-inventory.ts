@@ -39,7 +39,8 @@ export function approveGitInventory({
     const normalized = normalizeRepositoryPath(candidate);
     return regularPaths.has(normalized) && !unsafePaths.has(normalized);
   });
-  const modeExcluded = filtered.included.filter((candidate) => !included.includes(candidate));
+  const includedPaths = new Set(included);
+  const modeExcluded = filtered.included.filter((candidate) => !includedPaths.has(candidate));
   const entriesByPath = new Map<string, IndexEntry>();
   for (const entry of currentEntries) {
     if (entry.mode.startsWith("100") && !entriesByPath.has(entry.path)) {

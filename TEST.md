@@ -1,53 +1,43 @@
-# Test CCR in a Real Repository
+# Testing CCR
 
-This runbook validates the packaged CCR developer workflow in a disposable or recoverable target
-repository. It covers managed context reads and writes, all review scopes, freshness recording,
-advisory and automatic hooks, concurrency, privacy, bounded evidence, and cleanup.
+Use automated gates for deterministic behavior and disposable repositories for real Claude/GitHub
+workflows. Package smoke proves installation integrity, not model review quality.
 
-> Run commits, malformed-state cases, races, and artificial defects only in a disposable clone.
-> Back up existing `.ccr/`, `.claude/skills/`, instruction files, and hook configuration first.
+## Automated checks
 
-## 1. Install the package
+From the CCR checkout:
 
-For a published-release smoke test, install the exact registry version rather than a local folder or
-tarball:
+```bash
+pnpm install
+pnpm verify
+pnpm test:changed:print
+```
 
-```powershell
-cd D:\Code\your-test-repository
-npm install --save-dev @vctrx/ccr@VERSION
-npx --no-install ccr -v
-npx --no-install ccr -version
+`verify` runs tracked-file safety, audit, typecheck, lint, coverage, build, and packed-install smoke.
+Typecheck rejects unused source imports, locals, and parameters. Individual suites are
+`pnpm test:unit`, `pnpm test:integration`, and `pnpm test:e2e`; use `pnpm test:coverage` for thresholds.
+Never weaken a gate or coverage threshold to pass a change.
+
+Tests exercise observable behavior through stable boundaries. Reuse temporary Git helpers in
+`tests/helpers/test-environment.ts`. Parsers, privacy, filesystem/Git bounds, lifecycle operations,
+locks, and orchestration need behavioral coverage. Prompt prose and specific taxonomy wording/IDs
+must not use snapshots or exact-string assertions; validate schema, packaging, and model behavior.
+
+For dead-code cleanup, trace runtime, test, tooling, and public-export callers. Keep useful safety
+coverage and published APIs; zero internal callers alone is insufficient. Current strict flags cover
+source, not the test tree.
+
+## Install a real package
+
+> Use a disposable clone for commits, malformed state, races, and artificial defects. Back up CCR
+> context, skills, instructions, and hooks before testing an existing target.
+
+For release testing, install `@vctrx/ccr@VERSION`. For an unpublished build, run `npm pack` after
+verification and install the resulting tarball—not the source folder—in the target repository:
+
+```bash
+npm install --save-dev /path/to/vctrx-ccr-VERSION.tgz
 npx --no-install ccr --version
-```
-
-For pre-release package validation, build and pack from the CCR repository:
-
-From the CCR repository:
-
-```powershell
-cd D:\Code\ccr
-pnpm build
-$packageName = npm pack --silent
-$packagePath = Join-Path (Get-Location) $packageName
-```
-
-In the disposable target repository:
-
-```powershell
-cd D:\Code\your-test-repository
-npm install --save-dev $packagePath
-npx --no-install ccr -v
-npx --no-install ccr -version
-npx --no-install ccr --version
-```
-
-The version must match `package.json` in CCR.
-
-## 2. Validate setup, update, and uninstall boundaries
-
-Preview before every managed lifecycle operation:
-
-```powershell
 npx --no-install ccr config init --dry-run
 npx --no-install ccr config init
 npx --no-install ccr setup --dry-run
@@ -56,439 +46,177 @@ npx --no-install ccr setup
 npx --no-install ccr context validate
 ```
 
-The repeated write must be idempotent. Existing human-owned configuration, project, stakeholder,
-decision, journal, private, and unrelated instruction content must remain intact. After upgrading the
-package, run `ccr update --dry-run` before `ccr update`; only package-managed assets and marked blocks
-may change.
+Check the version against the tested manifest; `-v` and `-version` must agree. Repeated setup must be
+idempotent. Existing human-owned config, context, journals, private state, and unrelated instruction
+content must survive. Upgrade the package, preview `ccr update`, then apply it and inspect the diff.
 
-The automated lifecycle tests overlap setup, config initialization, config mutation, and uninstall
-calls in one process. They require token-owned operation locks and per-file compare-and-swap or
-conditional deletion, so a file changed after preview is never overwritten or removed. Use this
-disposable-repository runbook for the CLI update route, interrupted multi-file operations,
-process-level races, and platform-specific races.
+### Taxonomy checks
 
-The uninstall race fixture also starts from a preview with no local state, creates a journal while
-apply is waiting, and requires both the journal and `.gitignore` continuity block to survive.
+1. Confirm setup creates parseable `.ccr/dimensions.json` matching packaged defaults.
+2. Edit a dimension/criterion and run `ccr context dimensions` and `--json`. Both must reflect the
+   current file without setup/rebuild; the next skill review must use the edit.
+3. Update a customized file: preserve it. Update an untouched older default: refresh it. Ordinary
+   uninstall preserves taxonomy; explicit context removal deletes it.
+4. Test missing, empty, malformed, oversized, non-UTF-8, and symlink input. Only absence falls back;
+   empty taxonomy stops review; invalid input fails closed without private excerpts.
+5. Confirm taxonomy edits change review freshness and the raw JSON export is packaged. Surrounding
+   review guidance and reporting must remain unchanged by taxonomy edits. The packaged
+   `dist/review/dimensions.md` and installed reference must match the JSON-derived Markdown.
 
-## 3. Validate context reads, writes, and privacy
+## Context and evidence
 
-Open Claude Code and run:
+In Claude Code, initialize, verify, supply an addition, and update context. Check:
 
-```text
-/ccr-context initialize
-/ccr-context verify
-/ccr-context addition
-/ccr-context update
-```
+- Initialization asks unresolved project/stakeholder questions before finalizing. Clarified facts
+  become plain-language prose; skipped facts remain honest limits, with no transcript/question backlog.
+- Project context describes people and consequential rules, not implementation inventories.
+  Include indirectly affected roles and existing safeguards; do not invent populations or impacts.
+- Stakeholders are writable only during initialization. Technical-only refactors stay in journals;
+  durable changes to people's activities update project context.
+- Decisions preserve human entries and require the separate append opt-in. Bare disagreement or
+  code-derived policy is not reusable human rationale.
+- Configuration approval and the one-time untouched default-domain exception are respected.
 
-Repeat representative operations with obvious unique spelling mistakes, such as
-`/ccr-context initailize`, `/ccr-context verfiy`, `/ccr-hooks statsu`, and
-`/ccr-review codbase privacy-data-protection`. Each must normalize to the single intended installed choice and
-continue without asking for corrected spelling. Then try an unrelated or ambiguous token; it must
-show valid choices, ask at most one focused question, and make no review or repository write. Confirm
-that PR numbers, paths, config keys and values, flags, terminal commands, and free-form addition text
-are preserved exactly rather than fuzzy-corrected.
+Use `context files`, `recent`, `shared .ccr/project.md`, and `journals` to inspect the broker. Follow
+`nextCursor` when paths are omitted. `journals PR-123` excludes that PR's active entry but still selects
+history repository-wide; it is not a PR history filter.
 
-Confirm these ownership rules:
+Test staged/unstaged divergence, approved untracked files, deletions, renames, binary/malformed UTF-8,
+symlinks, submodules, secrets, wildcard-like filenames, and oversized input. Excluded/private content
+must never be returned. Truncation/deletion/binary markers must be explicit. Config syntax errors
+must not quote private input. Merge evidence uses the first parent; root commits use the empty tree.
 
-- `project.md` explains purpose, people's activities, rules affecting them, and known limits in plain
-  language. Source references support claims without turning the document into a technical inventory.
-- `stakeholders.md` explains roles, goals, activities, access needs, effects, and who can challenge
-  decisions, including people without accounts. It is populated during initialization and read-only later.
-- Try a teacher-only tool whose outputs reach learners, a service with a documented appeal process,
-  and a library with no known downstream audience. Check for indirect stakeholders, existing safeguards,
-  and honest unknowns respectively. Reject invented populations, harms, or architecture summaries.
-- Repeat after a technical-only refactor: shared context should stay unchanged. A later change to
-  who can correct a decision should update the relevant project explanation with source evidence.
-- `decisions.md` remains human-owned and changes only through the explicit configuration opt-in.
-- local journals are branch- or PR-specific and remain under ignored `.ccr/journal/`.
-- `ccr context journals` returns the configured repository-wide count ordered by validated
-  `Updated`, even when an older filename from another branch or PR was amended most recently.
-- a not-yet-migrated journal with one valid `Timestamp` uses that value for recency; activity-looking
-  examples below `## Summary` do not affect ordering.
-- secrets, mandatory excluded paths, symlinks, submodules, and private worktree content never appear
-  in broker output or shared context.
-
-Exercise the read-only broker from the terminal:
-
-```powershell
-npx --no-install ccr context files
-npx --no-install ccr context recent
-npx --no-install ccr context shared .ccr/project.md
-npx --no-install ccr context journals
-npx --no-install ccr context journals PR-123
-```
-
-The two journal commands must return the same global result; the optional PR token is accepted only
-for v0.7 compatibility and never scopes recency.
-
-When a listing reports `omittedCount`, continue with its exact `nextCursor`. Bounded text must carry
-an explicit truncation marker. Binary, deleted, symlink, submodule, excluded, malformed UTF-8, and
-oversized cases must fail closed or return their documented omission marker; they must never be
-silently interpreted as empty text.
-
-## 4. Validate review selection
-
-For initialization, also try an unclear audience, conflicting product descriptions, and an outside
-support process. Expect focused questions in the same chat before final context is written. Answer
-one question, clarify a second, and explicitly skip a third. Check that answers appear as ordinary
-context prose, skipped facts remain honestly limited, and neither project.md nor stakeholders.md
-contains a question backlog or raw Q&A. If no reply is supplied, initialization should pause.
-
-The bundled dimensions are:
-
-- `data-system-reliability`
-- `alignment-with-teaching-learning`
-- `fairness-non-discrimination`
-- `inclusion-accessibility`
-- `transparency-explainability`
-- `privacy-data-protection`
-- `human-control-review`
-
-Run representative valid forms:
+## Review scopes and selection
 
 ```text
 /ccr-review
-/ccr-review all
 /ccr-review changes privacy-data-protection
 /ccr-review codebase human-control-review, privacy-data-protection
-/ccr-review PR-123 fairness-non-discrimination, privacy-data-protection
+/ccr-review PR-123 fairness-non-discrimination
 ```
 
-Also try unrelated scopes and IDs that are not minor unique misspellings, `PR-0`, duplicate IDs,
-empty comma items, `all` mixed with IDs, and a third positional argument. Each invalid request must
-stop before investigation or journal writes and show the valid scopes and installed IDs.
-
-Every review runs in one agent without subagents or delegation. It assesses every selected dimension
-and criterion, forms concrete ethical-impact hypotheses, and checks evidence and counterevidence.
-It must not turn routine engineering faults into findings merely by assigning a dimension. Verify
-that accessibility barriers include an access need, blocked action or unequal participation burden,
-concrete scenario, and a check for equivalent routes. Eventual completion does not rule out a barrier.
-Check failure recovery and privacy protection against their criteria and concrete human consequences.
-The same agent deduplicates and verifies candidates before reporting.
-
-### Qualitatively evaluate stakeholder-impact review
-
-See [review calibration](docs/review-calibration.md) in the source checkout for the saved-session
-diagnosis, accepted/excluded contrasts, and a tool-restricted Claude test command. The normal
-`test:prompt` command still prints only the first dimension and starts no model call.
-
-#### Quick prompt iteration
-
-Check cross-item consistency: a finding cannot assert that nobody can act on feedback while an open
-question asks whether an external process acts on it. The whole unsupported claim becomes a question.
-Evidence should establish both the rule and its consequential use; a status label or absence of an
-endpoint alone is insufficient. Internal verification notes must not appear in the compact response.
-
-Dimension 1 targets evaluation of benefit. Check that the reviewer traces actual reliance on a signal,
-not simply a quality label; identifies a rule excluding experience, not merely missing student accounts;
-and considers human correction without requiring model retraining. Test a selection rule that excludes
-unsuccessful participants from a benefit claim, paired with a version that includes their experience.
-The concern should narrow or disappear when the selection mechanism is removed. Keep this evaluation
-case outside the prompt used in the target repository.
-
-For each trial, keep the target commit and local changes fixed and use a fresh ordinary conversation.
-Record the prompt used separately so instruction changes can be compared. Look for product rules
-that confuse operational success with human benefit, discount affected perspectives, reward a signal
-at people's expense, or prevent contrary evidence from changing practice. Retain the documented cases
-below as evaluation material, not examples to paste into the test prompt.
-
-For a contrast, use a synthetic rule that treats compliance as benefit even when declining is penalized.
-Check whether the reviewer finds the evidence problem, then narrows or withdraws the claim when an
-alternative allows refusal without penalty and lets affected people challenge the judgment. In a second
-case, provide only a file allowlist and recorded failure statuses: expect no fairness finding without
-an additional supported behavioral mechanism. Do not count silence alone as successful discovery.
-
-Reject impossible scenarios: five requested items of each of three types cannot yield twelve items
-that are almost all of one type through deletion alone. Missing type-level diagnostics plus unknown
-generation skew is an investigation lead, not a severity-rated finding. Check stored question types
-and human review before accepting claims that a requested-versus-delivered mix is unknowable.
-
-Check discovery breadth: the reviewer should map distinct consequential decisions before selecting
-findings, rather than repeatedly inspect answer storage alone. Uninspected material-selection workflows
-remain unknown, not inapplicable. Behavioral investigation leads must identify an evidenced rule, a
-missing fact, and a neutral question; they must not fabricate testimony or become technical bug lists.
-
-Regression from the ReQUESTA experiment: a partial-generation count with log-only failure reasons
-must not become a fairness finding without an evidenced harmful decision pattern. A single stored
-answer is insufficient to establish unfair grading when downstream scoring is unknown. Export-only
-products still affect learners; lack of student accounts does not make downstream impact inapplicable.
-Require the requested finding fields and top-level dimension ID rather than generic inline bug cards.
-The response should contain only compact findings/scenarios/evidence and useful questions/context.
-Check that removing the coverage report does not remove criterion assessment or hide material unknowns.
-If the host shows tool activity automatically, distinguish that interface output from model-authored prose.
-
-Run `pnpm test:prompt` (or `npm run test:prompt`) in the CCR source checkout. It prints a standalone
-codebase review prompt using only the first dimension in `src/review/dimensions.json`, with all its
-criteria rendered as numbered questions. Copy the whole output into a fresh Claude Code
-conversation in the target repository. The review requests read-only work without skills or journals.
-
-Edit `src/review/impact-review-guidance.ts` for the discovery method, or
-`src/review/dimension-worker-prompt.ts` for the shared structure/output. Edit
-`src/review/dimensions.json` for dimension summaries and criteria. Rerun the command after each edit; it loads source directly,
-never stale `dist`. The skill uses the same single-agent guidance. Its scope selection and continuity
-workflow remain separate and are not exercised by this experiment. For all dimensions, paste
-`dimension-prompts.md` into the target repository's fresh conversation; it performs no writes.
-
-For clean clipboard output on PowerShell: `pnpm --silent test:prompt | Set-Clipboard`.
-Generation calls no LLM; only pasting the result into Claude Code consumes model usage.
-
-Evaluate the installed skill in fresh sessions against small product cases, not prose assertions.
-Record model, package version, loaded skill, evidence scope, and outputs; repeat to expose variation.
-Use these contrasts without supplying the expected outcome to the reviewer:
-
-- A functioning assessment accepts source agreement as the sole correctness rule: seek the premise
-  equating source fidelity with understanding, a defensible counterexample, and evidence anchors.
-- An adaptive path restricts tasks after early low scores and cannot gather disconfirming evidence:
-  seek the self-reinforcing placement mechanism. Add periodic reassessment in a paired case and check
-  that the same claim is withdrawn or narrowed.
-- An allocation rule rewards prior participation: test whether prior access becomes future entitlement.
-  Include an alternative where participation is demonstrably relevant to the stated allocation purpose.
-- Syntax failures, upload races, and rendering defects alone: expect no assumption finding.
-- A required action is unavailable to a keyboard-only user with a disability: expect an inclusion
-  finding with the blocked task and evidence. Add a working equivalent route and check that the
-  blanket exclusion claim disappears. Cosmetic differences alone should produce no finding.
-- User-facing terminology depicts people as subordinate or stereotyped: examine audience and meaning.
-  Contrast an isolated internal identifier; reject keyword-only claims or invented community reactions.
-- A local appeal control is absent but a documented downstream review exists: reject a blanket absence
-  claim. When downstream authority is unknown, expect an open question rather than a confirmed defect.
-
-Score supported assumption discovery, technical false positives, invented consequences, counterevidence
-handling, and honest unknowns. Package tests establish installation integrity, not review quality.
-
-Also test a dialect-sensitive answer rule with equal subject understanding. Contrast subject assessment
-with an explicitly justified language-conventions assessment. Check that the reviewer distinguishes
-these purposes, avoids equating race with dialect, and never invents measured racial disparities.
-Use intersecting circumstances (such as shared-device access and evening work), not demographic labels
-alone. A correct report explains the product mechanism rather than attributing traits to a group.
-
-Use a target product and supplied context that support the relevant premise. The review should surface
-or explicitly assess these product-level concerns when repository evidence supports them:
-
-1. A source's worldview becomes assessment authority because uploaded material is treated as neutral
-   ground truth without a way to identify perspective, contested claims, or omitted viewpoints.
-2. Automated question generation optimizes for answerability rather than defensible learning because
-   it never establishes a learning objective, reasoning level, or evidence of understanding.
-3. Unequal outcomes can persist because responsible people have no feedback loop to discover patterns
-   of confusion, misrepresentation, or disadvantage across learner contexts or cohorts.
-4. Learners carry the whole burden of contesting consequential automated assessment because they have
-   no route to understand, challenge, or correct an answer's authority.
-
-For each supported positive case, expect a report that names affected roles and power relationship,
-the relevant behavior, a credible harm pathway, repository evidence, and what remains uncertain.
-Include technical constraints that block participation; do not reject a valid exclusion finding just
-because fixing the implementation would remove it.
-
-Use this negative control: a CSV-download filename sanitizer permits Windows reserved names such as
-`CON.csv`. Unless the target evidence shows a specific product-level stakeholder harm, CCR must reject
-it as a standalone technical/UI defect rather than relabel it as inclusion or data-system-reliability.
-
-## 5. Validate every review scope
-
-For `changes`, create staged, unstaged, untracked, deleted, binary, and privacy-excluded cases. The
-review may use normal repository tools to understand the changed behavior and its surrounding flow,
-but must not inspect excluded content.
-
-For `codebase`, run:
-
-```text
-/ccr-review codebase all
-```
-
-It must page through the safe Git index, trace complete behaviors, and overlay current approved live
-changes. It must not fall back to a changed-lines-only review.
-
-For a disposable pull request, run `/ccr-review PR-<number> all`. It must establish immutable GitHub
-base/head evidence without checkout, fetch, branch mutation, or local-worktree substitution. It may
-use normal read-only GitHub and repository research to understand the PR's surrounding product flow.
-A PR over any metadata, 200-path, 512-KiB patch, 128-KiB per-head-file, eight-head-file, or 2-MiB combined
-limit should report the helper's bounded-packet condition; confirm the review can still use appropriate
-read-only evidence rather than silently treating the partial packet as complete.
-
-Every confirmed finding includes these qualities:
-
-```text
-**Finding [severity]:** concise description of the inclusivity bug and who may be affected
-**Scenario:** one realistic or hypothetical example
-**Evidence:** relevant file/path, function, rule, or code behavior
-```
-
-Questions use only `**Question:**` and `**Context:**`, without severity. No intros, coverage tables, inspected-file lists, rejected candidates, or closing offers.
-An absent acknowledgement checkbox alone does not prove generation certifies correctness; missing local
-student records alone do not prove the absence of instructor-mediated recourse. Verify these distinctions.
-
-The review reports no fix or remediation and changes no source, tests, configuration, branches, or
-worktrees. Only its bounded continuity writes are allowed.
-
-## 6. Validate continuity and freshness
-
-Check context assessment separately: `context validate` must identify untouched templates as
-unfilled, and populated prose must not claim factual verification. Record an assessment using the
-current `context review-state` fingerprints and `context assess`; unchanged-context decisions should
-suppress the corresponding reminder, while changed code or shared context invalidates that receipt.
-An arbitrary config edit must not count as assessment. A completed review narrative must not skip
-the first automatic context update, and a failed write-boundary check must remain retryable.
-
-Continue a clean-HEAD review into edits and a partial commit. Check the new working journal links
-the previous account without inheriting review receipts. Put the active journal outside the recent
-selection and place current findings after a long history: input must still expose the active entry,
-current findings and next steps, with omissions marked. Inspect full entries for supporting detail.
-
-For decision maintenance, explicitly request reconciliation of conflicting historical rules. Verify
-the proposed diff preserves applicable human rationale, identifies superseded assumptions, and
-does not treat routine project compaction as permission to rewrite decisions.
-
-After a successful changes or codebase review, inspect its journal. The latest `## Review run` must
-contain exactly one non-empty Scope, Dimensions, Evidence, Finding counts, and Outcomes record, plus:
-
-```text
-- **Reviewed state**: `sha256:...`
-- **Reviewed context**: `sha256:...`
-- **Review status**: current
-```
-
-The summary placeholder must be gone. `Started` remains immutable; `Updated` advances monotonically.
-Same-day allocation uses numeric filename suffixes without collisions, repeated work on one semantic
-state reuses one journal, and different commits or PRs stay isolated.
-
-Then test each freshness transition:
-
-1. Change approved code after review: pre-commit warns and post-commit marks the review stale.
-2. Change resolved config, project, stakeholder, decision, any recent-journal input, or an existing
-   active journal returned to the reviewer: the input-context fingerprint changes even when code is
-   unchanged. The continuity fingerprint alone excludes the active target so CCR's own later write
-   remains valid.
-3. Change code or context during review: recording fails and the skill reports the review as stale.
-4. Try recording a PR, older branch, older `HEAD`, placeholder, incomplete, malformed, duplicate-
-   metadata, oversized, or concurrently edited journal: recording must fail without overwriting it.
-5. Add a second review-run section: only the latest section is recorded or marked stale.
-
-## 7. Validate advisory hooks
-
-In Claude Code:
-
-```text
-/ccr-hooks sync
-/ccr-hooks status
-```
-
-With `hooks.autoUpdateContext: false`, create a harmless commit and confirm:
-
-- pre-commit and post-commit remain advisory;
-- no hook invokes an LLM, rewrites or stages files, retries Git, or blocks for stale context;
-- a missing/incomplete commit journal prints the correct manual update prompt;
-- a failed prior update remains retryable on the next post-commit invocation;
-- missing or malformed `.ccr/config.json` fails visibly instead of disabling hooks silently.
-
-Also try an oversized, NUL-containing, and malformed-UTF-8 shared and local configuration file. Each
-must fail visibly before parsing or retaining the complete file. Restore valid configuration before
-continuing.
-
-## 8. Validate review continuity and automatic post-commit context
-
-### Review-session continuity evaluation
-
-In a disposable repository with refreshed skills, run these same-session checks in Claude Code:
-
-1. Review a change with several distinct supported findings. Read the journal alone: each finding,
-   impact, disposition, and next action should be understandable without the conversation.
-2. Explain why two findings are false positives using an intentional draft-only workflow and an
-   outside human review process. With decision capture enabled and that rationale absent from
-   context, expect a scoped decision with the human's reason; retain every other finding. Repeat
-   with capture disabled, already-documented rationale, and bare disagreement without a reason.
-3. Request a fix, then ask an explanation question. Both turns should amend the same entry. A check
-   that cannot run leaves the fix unverified; neither turn creates a fresh completed review.
-4. Review unchanged work again: apply the human rationale without repeating the resolved findings.
-   Then change the workflow to publish final results automatically: reconsider supported concerns
-   and explain which condition of the prior decision changed.
-5. Compact and resume the conversation. Reload the active journal and relevant shared context,
-   preserve finding labels and pending checks, and avoid duplicate decisions or journal entries.
-
-These are behavioral model evaluations, not exact-string or snapshot tests of shipped prose.
-
-### Automatic worker
-
-This section requires an installed and authenticated Claude Code CLI:
-
-```powershell
-npx --no-install ccr config set hooks.autoUpdateContext true
-```
-
-Create a disposable commit containing additions, a deletion or rename, and a binary file. Confirm:
-
-- CCR binds evidence to the exact lowercase 40- or 64-hex current `HEAD` and stops if `HEAD` moves;
-- excluded paths and unsafe Git modes do not enter the evidence packet;
-- additions, both sides of renames, deletions, truncation, and binary markers remain explicit;
-- packet construction stops above 200 approved paths, 200,000 retained characters, or a 512,000-byte
-  final JSON packet;
-- the temporary bounded packet exists only under ignored `.ccr/private/` and is removed after normal
-  success and failure; packet tampering, an unavailable cleanup lock, or abrupt termination must fail
-  closed and can leave an ignored packet for manual removal;
-- headless Claude has only `Read` and `Edit`, reads only approved `.ccr` inputs, and has no shell,
-  task, glob, grep, MCP, settings, hook, raw-source, Git, or session-persistence capability;
-- writes can reach only the exact journal and `.ccr/project.md`, plus at most one normalized,
-  nonduplicate decision append when the opt-in is true; replacement, deletion, multiple/multiline,
-  padded, blank, malformed, duplicate, or oversized decision edits fail closed; `config.json`,
-  `stakeholders.md`, other journals, private state, source, ignored
-  outside files, and untracked directories remain unchanged;
-- a successful journal preserves `Started`, advances a valid UTC `Updated`, matches the exact commit,
-  contains a real summary and substantive findings/outcomes without requiring empty categories;
-- automation leaves changes unstaged, creates no commit, records bounded idempotency state only after
-  validation, and does not rerun an already-complete journal even after old state entries are pruned;
-- failure exposes no raw provider response, remains non-blocking, attempts conditional temporary
-  evidence cleanup, and prints the manual fallback.
-
-Concurrent invocations must produce one active run. A recent incomplete lock stays owned; a dead,
-expired, or legacy stale lock is reclaimed atomically; releasing an old owner must never remove a
-replacement owner's lock.
-
-## 9. Run automated edge and package gates
-
-From CCR:
-
-```powershell
-pnpm test:unit
-pnpm test:integration
-pnpm test:e2e
-pnpm test:coverage
-pnpm verify
-pnpm test:changed:print
-```
-
-The automated regression suite covers empty and malformed inputs, accepted 40/64-hex object IDs,
-binary and invalid UTF-8 boundaries, oversized blobs/diffs/path inventories/state, privacy
-exclusions, deletions, renames, symlinks, unborn/stale `HEAD`, retry and duplicate execution,
-same-process races, stale locks, compare-and-swap conflicts, multiple review sections, and cleanup
-after success and failure. The manual sections above remain required for real SHA-256 repositories,
-submodule fixtures, detached-HEAD workflows, process-level/platform-specific races, live Claude and
-GitHub integrations, and model behavior across every review scope. Do not weaken a gate or coverage
-threshold.
-
-For contributor refactors, test through the stable façade first, then add a focused test beside a new
-policy boundary when its behavior is independently meaningful. Reuse
-`createTemporaryGitRepository` and `createTemporaryRootRegistry` from
-`tests/helpers/test-environment.ts` instead of repeating temporary-directory initialization and
-cleanup. A structural extraction is complete only when the original façade tests, `pnpm run audit`,
-type checking, coverage, build, and package smoke all remain green.
-
-## 10. Cleanup
-
-Remove hook integration first:
-
-```text
-/ccr-hooks remove
-/ccr-hooks status
-```
-
-Then preview and apply uninstall:
-
-```powershell
-npx --no-install ccr uninstall --dry-run
-npx --no-install ccr uninstall
-# Disposable repository only:
-npx --no-install ccr uninstall --remove-context
-```
-
-Confirm CCR removes only package-managed artifacts and marked blocks, preserves unrelated and
-human-owned content by default, and rejects a supplied preview if any planned file changed. Remove
-the packed tarball and disposable clone when their evidence is no longer needed.
+Use effective IDs from `ccr context dimensions --json`. Test a unique minor misspelling, an ambiguous
+token, invalid scope/ID, `PR-0`, duplicates, empty comma items, mixed `all`, and extra arguments.
+Unique skill-argument typos normalize; invalid/ambiguous input stops before review or journal writes.
+PR numbers, paths, config values, flags, terminal commands, and free-form additions never change.
+
+| Scope | Expected evidence |
+|---|---|
+| Changes | Approved staged, unstaged, and untracked work plus relevant surrounding flow |
+| Codebase | Complete safe Git index with approved live overlays, not changed lines only |
+| PR | Immutable GitHub base/head comparison and approved head content; no checkout, fetch, or local-worktree substitution |
+
+PR helper limits include 200 paths, a 512-KiB patch, 128-KiB per head file, eight head files, and
+2 MiB combined evidence. On partial evidence, report the limit and material unknowns rather than
+claiming complete coverage. Read-only investigation must still honor privacy exclusions.
+
+## Model evaluation and prompt iteration
+
+Run `pnpm test:prompt` in CCR to print a read-only standalone review of the first source dimension.
+For PowerShell clipboard output: `pnpm --silent test:prompt | Set-Clipboard`. Generation uses current
+source, not stale `dist`, and calls no model. Paste into a fresh conversation in the target repository.
+For all dimensions, use `dimension-prompts.md`. Neither experiment exercises skill continuity.
+
+Edit shared discovery guidance in `src/review/impact-review-guidance.ts`, prompt structure in
+`src/review/dimension-worker-prompt.ts`, and taxonomy in `src/review/dimensions.json`. Keep target
+commit/changes fixed; record model, package version, prompt/skill, evidence scope, and outputs. Repeat
+fresh sessions to expose variation. Keep expected outcomes out of the prompt supplied to the model.
+
+Evaluate supported impact discovery, false positives, counterevidence, and honest uncertainty:
+
+| Case | Expected contrast |
+|---|---|
+| Source agreement is the sole correctness rule | Find the learning/authority premise only with consequential-use evidence |
+| Early low scores restrict future tasks | Examine self-reinforcing placement; reassessment narrows or removes the claim |
+| Prior participation controls allocation | Check whether prior access becomes entitlement; relevant-purpose evidence can justify the rule |
+| Required exam task blocks keyboard access | Identify access need, task, consequence, and evidence; an equivalent route changes the conclusion |
+| A documented downstream appeal exists | Reject blanket “no recourse”; unknown downstream authority becomes a question |
+| Dialect-sensitive answer rule | Distinguish subject knowledge from justified language assessment; invent no racial disparities |
+| File allowlists, error statuses, upload races, or filename defects alone | No ethical finding without a supported human-impact mechanism |
+
+Also assess source worldview, answerability replacing learning goals, undiscoverable unequal outcomes,
+and one-way assessment authority when the target supports those hypotheses. Learners can be affected
+without accounts. Missing records or a single stored answer do not prove unfair grading. Scenarios
+must be logically possible and findings must not contradict unresolved questions.
+
+One agent covers all selected criteria, checks counterevidence, and deduplicates findings. Reports
+use `Context applied`, headings numbered from 1, horizontal rules between findings, severity,
+dimension/criterion names, `Scenario`, and `Evidence`. Supported out-of-taxonomy ethical findings
+stay in that list as `Other — outside current dimensions`. Check matching name links open the exact
+Markdown reference section, not JSON; unmatched custom names stay unlinked. No trailing Question/
+Context section or observations; uncertain claims stay unconfirmed in the journal. No authored
+progress narration, coverage tables, file inventories, rejected candidates, or unsolicited fixes.
+Host-rendered tool activity is separate. “No supported inclusivity bugs found.” is valid, not proof
+of safety. Repeat with several findings, a mixture of mapped/unmapped findings, and no supported
+findings; verify prior journal identities survive display renumbering.
+
+## Continuity and freshness
+
+After review, inspect the journal's scope, dimensions, evidence, counts, outcomes, and state/context
+fingerprints. The summary placeholder must be gone. Confirm stable filenames, immutable `Started`,
+advancing `Updated`, collision-safe same-day suffixes, and separate commit/PR identities.
+
+1. Amend feedback and requested fixes in the same account; keep finding labels, rationale, checks,
+   and next steps. Follow-up turns are not newly completed reviews.
+2. Supply scoped human rationale for false positives. Capture it only when enabled and absent;
+   bare disagreement asks for clarification. Re-review applies it while assumptions hold.
+3. Continue a clean-tree review through edits/partial commit. Link the previous account without
+   inheriting receipts. Session compaction/resumption reloads context and the active journal.
+4. Put the active journal outside the recent count and current findings after long history. Both
+   remain visible in bounded inputs; omissions are marked. Recency uses validated global activity,
+   not filenames or branch identity. Valid legacy timestamps remain supported.
+5. Change approved code or freshness context: the prior review becomes stale. Change only another
+   journal or operational settings: freshness stays unchanged, but supplied-input hashes change.
+   Test same-length journal edits with unchanged filesystem timestamps.
+6. Change code/context during review: expected-state recording refuses it. Re-recording the review's
+   own context edits requires unchanged code; old-branch/HEAD, PR, incomplete, malformed, oversized,
+   placeholder, duplicate-metadata, or concurrently edited journals are refused. Only the latest
+   review-run section receives state updates.
+7. Assess local work and exact HEAD separately using matching `review-state`/`assess` arguments.
+   Receipts are per branch, reject changed evidence, and do not imply review completion. Validity
+   and populated readiness do not imply verified facts; arbitrary config edits are not assessments.
+8. Explicit decision-maintenance requests preserve applicable rationale and superseded history.
+   Ordinary project compaction never authorizes rewriting decisions.
+
+## Hooks and automatic updates
+
+Run `/ccr-hooks sync` and `status` in a disposable target. Default hooks must stay advisory, invoke
+no model, leave source unstaged, and print the manual update prompt for incomplete commit context.
+Failed updates remain retryable. Missing, malformed, oversized, NUL-containing, or invalid UTF-8
+configuration fails visibly rather than silently disabling checks.
+
+For automation, use authenticated Claude Code and explicitly enable `hooks.autoUpdateContext`.
+Create additions, a deletion/rename, and binary/excluded files. Check:
+
+- Exact 40/64-hex current HEAD, first-parent diffs, literal paths, approved modes, and explicit
+  omission markers. HEAD/policy changes stop the operation-local reader.
+- At most 200 approved paths, 200,000 retained characters, and 512,000 final packet bytes.
+- Only restricted `Read`/`Edit`; reads are approved CCR inputs/packet, writes exact journal/project
+  plus one enabled normalized nonduplicate decision supported by recorded human rationale.
+- No source, config, stakeholder, other-journal, unauthorized ignored-path, Git, hook/settings,
+  shell, search, task, MCP, or session-persistence access.
+- Journal identity and structure validate; CCR advances `Updated`. Completion is recorded only
+  after unchanged HEAD, valid context, and no unauthorized edits. No staging/commits/pushes.
+- Successful work is not rerun even after state pruning. Failures remain non-blocking/retryable,
+  disclose no raw upstream content, and print the manual fallback.
+- Packet cleanup is attempted on normal success/failure. Tampering, lock contention, or abrupt
+  termination fails closed and may leave an ignored packet for manual removal.
+
+Race checks must produce one active run, preserve live locks regardless of duration, safely reclaim
+dead owners/old empty containers, and never let stale observers or releases displace replacement
+owners. Ambiguous containers remain untouched.
+
+## Lifecycle races and cleanup
+
+Overlap setup, update, config mutation, automatic work, journal creation, and uninstall. Conditional
+writes must preserve changed-after-preview files. A journal created while uninstall waits must remain
+ignored. Rerun interrupted partial operations safely. Native hook restoration preserves original
+bytes; unknown/invalid framework provenance blocks ownership claims.
+
+Automated fixtures cover deterministic cases. Still test real SHA-256 repositories, submodules,
+detached HEAD, process/platform races, live integrations, and model behavior manually when relevant.
+
+Remove hooks with `/ccr-hooks remove`, then preview/apply `ccr uninstall`. Ordinary removal preserves
+shared context and local continuity; `--remove-context` removes shared context only. Unrelated files
+and human edits must survive. Delete disposable clones/tarballs only when their evidence is no longer
+needed. See [USER_MANUAL.md](USER_MANUAL.md) for ownership and troubleshooting.

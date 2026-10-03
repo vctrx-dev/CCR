@@ -6,7 +6,6 @@ import { MANAGED_LIFECYCLE_LOCK_PATH, tryAcquireManagedLock } from "../../../src
 import {
   createTemporaryGitRepository,
   createTemporaryRootRegistry,
-  runCommand,
 } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();

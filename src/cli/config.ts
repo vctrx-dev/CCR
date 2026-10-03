@@ -11,7 +11,7 @@ import { applyConfigSetup } from "../context/setup";
 import type { SetupAction } from "../context/setup";
 import type { CliIo } from "./index";
 import { findCliRepositoryRoot, writeCliLines } from "./io";
-import { formatHeading, formatStatus, formatSuccess, formatTone } from "./output";
+import { formatHeading, formatSuccess, formatTone } from "./output";
 
 interface MutationOptions {
   dryRun?: boolean;

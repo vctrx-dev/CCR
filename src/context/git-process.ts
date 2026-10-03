@@ -17,10 +17,15 @@ export interface BoundedGitText {
 const DEFAULT_GIT_BUFFER_BYTES = 16 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 
+function literalPathArguments(args: string[]): string[] {
+  // check-ignore already treats its inputs as literal paths and rejects pathspec magic.
+  return args[0] === "check-ignore" ? args : ["--literal-pathspecs", ...args];
+}
+
 /** Bounded metadata reads may contain NUL path separators; unlike evidence, retain those bytes. */
 export async function runGitMetadata(root: string, args: string[]): Promise<string> {
   try {
-    const result = await execFileAsync("git", args, {
+    const result = await execFileAsync("git", literalPathArguments(args), {
       cwd: root,
       encoding: "utf8",
       maxBuffer: DEFAULT_GIT_BUFFER_BYTES,
@@ -39,14 +44,66 @@ export function runGit(
   args: string[],
   maxBuffer = DEFAULT_GIT_BUFFER_BYTES,
   shouldSuppressErrors = false,
+  input?: string,
 ): string {
-  return execFileSync("git", args, {
+  if (input !== undefined && Buffer.byteLength(input, "utf8") > 1_048_576) {
+    throw new Error("Git input exceeded its safe limit.");
+  }
+  return execFileSync("git", literalPathArguments(args), {
     cwd: root,
     encoding: "utf8",
     maxBuffer,
-    stdio: shouldSuppressErrors ? ["ignore", "pipe", "ignore"] : undefined,
+    timeout: 30_000,
+    input,
+    stdio: shouldSuppressErrors
+      ? [input === undefined ? "ignore" : "pipe", "pipe", "ignore"]
+      : undefined,
     windowsHide: true,
   });
+}
+
+/** Hashes bounded batches of exact filenames; failed batches split to isolate missing paths. */
+export function hashGitWorktreePaths(
+  root: string,
+  paths: string[],
+  shouldApplyFilters: boolean,
+): Map<string, string> {
+  const fingerprints = new Map<string, string>();
+  const readBatch = (batch: string[]): void => {
+    try {
+      // --stdin-paths uses Git's quoted-path syntax, not shell parsing or pathspec matching.
+      const output = runGit(
+        root,
+        ["hash-object", ...(shouldApplyFilters ? [] : ["--no-filters"]), "--stdin-paths"],
+        batch.length * 66,
+        true,
+        `${batch.map((file) => JSON.stringify(file)).join("\n")}\n`,
+      );
+      const hashes = output.trimEnd().split("\n");
+      if (
+        hashes.length !== batch.length ||
+        hashes.some((hash) => !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(hash))
+      ) {
+        throw new Error("Git returned invalid worktree fingerprints.");
+      }
+      for (const [index, file] of batch.entries()) {
+        fingerprints.set(file, hashes[index] ?? "missing");
+      }
+    } catch {
+      if (batch.length === 1) {
+        const file = batch[0];
+        if (file !== undefined) fingerprints.set(file, "missing");
+        return;
+      }
+      const midpoint = Math.floor(batch.length / 2);
+      readBatch(batch.slice(0, midpoint));
+      readBatch(batch.slice(midpoint));
+    }
+  };
+  for (let offset = 0; offset < paths.length; offset += 128) {
+    readBatch(paths.slice(offset, offset + 128));
+  }
+  return fingerprints;
 }
 
 /**
@@ -62,7 +119,7 @@ export function runBoundedGit(
     throw new Error("Bounded Git reads require a positive safe character limit.");
   }
   return new Promise((resolve, reject) => {
-    const child = spawn("git", args, {
+    const child = spawn("git", literalPathArguments(args), {
       cwd: root,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,

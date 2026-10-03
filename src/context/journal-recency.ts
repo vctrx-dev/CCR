@@ -53,6 +53,8 @@ function hasSameJournalSnapshot(
   left: JournalActivityCandidate[],
   right: JournalActivityCandidate[],
 ): boolean {
+  // Same-length edits can leave filesystem timestamps unchanged, so rehash every journal rather
+  // than trusting metadata or retaining a cache between operations.
   return (
     left.length === right.length &&
     left.every((candidate, index) => {
@@ -99,18 +101,13 @@ async function readReviewJournalEntriesLocked(
   excludedContinuityPath?: string,
 ): Promise<ReviewJournalEntries> {
   const candidates = await readJournalActivityCandidates(root);
-  const inputCandidates = candidates.slice(0, recentJournalEntries);
   const active = candidates.find(({ path }) => path === excludedContinuityPath);
-  if (active !== undefined && !inputCandidates.includes(active)) inputCandidates.unshift(active);
   const continuityCandidates = candidates
     .filter(({ path }) => path !== excludedContinuityPath)
     .slice(0, recentJournalEntries);
-  const uniqueCandidates = [
-    ...new Map(
-      [...inputCandidates, ...continuityCandidates].map((candidate) => [candidate.path, candidate]),
-    ).values(),
-  ];
-  const formatted = await formatSelectedEntries(root, uniqueCandidates);
+  const inputCandidates =
+    active === undefined ? continuityCandidates : [active, ...continuityCandidates];
+  const formatted = await formatSelectedEntries(root, inputCandidates);
   if (!hasSameJournalSnapshot(candidates, await readJournalActivityCandidates(root))) {
     throw new Error("Journal set changed during recency selection; retry the operation.");
   }

@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
+import { readReviewDimensionRegistry } from "../review/dimension-file";
 import { parseContextConfig } from "./config";
 import { assertSafeManagedPath, readBoundedTextIfExists } from "./files";
 import { readContextConfigText } from "./privacy";
@@ -118,6 +119,13 @@ export async function validateContext(root: string): Promise<ValidationResult> {
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : "unknown validation error";
     issues.push(`.ccr/config.json is invalid: ${detail}`);
+  }
+  try {
+    await readReviewDimensionRegistry(root);
+  } catch {
+    issues.push(
+      ".ccr/dimensions.json is invalid; use ccr context dimensions to inspect validation details.",
+    );
   }
 
   for (const relativePath of Object.keys(CONTEXT_FILES).filter((file) => file.endsWith(".md"))) {

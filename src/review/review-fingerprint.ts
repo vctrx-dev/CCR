@@ -16,6 +16,7 @@ import {
 } from "../context/git";
 import { type ReviewJournalTarget, readReviewJournalEntriesForReview } from "../context/journal";
 import { readResolvedContextConfig } from "../context/privacy";
+import { readReviewDimensionRegistry } from "./dimension-file";
 import { hasSafeReviewChanges, listSafeReviewChanges } from "./evidence";
 
 /**
@@ -59,6 +60,7 @@ async function computeReviewContextStateForTarget(
   target: ReviewJournalTarget,
 ): Promise<ReviewContextState> {
   const config = await readResolvedContextConfig(root);
+  const dimensions = await readReviewDimensionRegistry(root);
   const contextEntries = await Promise.all(
     REVIEW_CONTEXT_PATHS.map(
       async (relativePath): Promise<[string, "missing"] | [string, "present", string]> => {
@@ -91,10 +93,12 @@ async function computeReviewContextStateForTarget(
   return {
     contextFingerprint: hashCanonical({
       contextEntries,
+      dimensions,
       reviewSettings: { domain: config.domain, privacy: config.privacy },
     }),
     inputContextFingerprint: hashCanonical({
       config,
+      dimensions,
       contextEntries,
       journalEntries: canonicalEntries(journals.inputEntries),
     }),

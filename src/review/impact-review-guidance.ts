@@ -58,5 +58,6 @@ Do not guess the developer's intentions or claim a community reacted a certain w
 
 Before reporting, look for exceptions, accommodations, other ways to complete the task, and people
 who can correct the outcome. Try to disprove your concern. A missing feature or lack of demographic
-statistics alone is not a finding. If something important is uncertain, ask a question instead.
+statistics alone is not a finding. If something important is uncertain, keep it unconfirmed and
+out of the findings rather than inventing an answer.
 It is completely fine to find no supported inclusivity issues.`;

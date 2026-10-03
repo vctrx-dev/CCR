@@ -1,9 +1,4 @@
-import {
-  type SafePathList,
-  listSafeCommitPaths,
-  readSafeCommitDiff,
-  readSafeCommitFile,
-} from "./broker";
+import { type SafePathList, createSafeCommitEvidenceReader } from "./broker";
 
 /**
  * Bounded immutable evidence assembly for headless continuity updates. Extend the broker rather
@@ -24,11 +19,17 @@ export interface AutomaticContextEvidenceBroker {
   readDiff?(root: string, commit: string, file: string): Promise<string>;
 }
 
-const DEFAULT_EVIDENCE_BROKER: AutomaticContextEvidenceBroker = {
-  listPaths: listSafeCommitPaths,
-  readFile: readSafeCommitFile,
-  readDiff: readSafeCommitDiff,
-};
+async function createDefaultEvidenceBroker(
+  root: string,
+  commit: string,
+): Promise<AutomaticContextEvidenceBroker> {
+  const snapshot = await createSafeCommitEvidenceReader(root, commit);
+  return {
+    listPaths: (_root, _commit, after) => snapshot.listPaths(after),
+    readFile: (_root, _commit, file) => snapshot.readFile(file),
+    readDiff: (_root, _commit, file) => snapshot.readDiff(file),
+  };
+}
 
 async function readAllApprovedPaths(
   root: string,
@@ -73,14 +74,15 @@ async function readAllApprovedPaths(
 export async function buildAutomaticContextEvidencePacket(
   root: string,
   commit: string,
-  broker: AutomaticContextEvidenceBroker = DEFAULT_EVIDENCE_BROKER,
+  broker?: AutomaticContextEvidenceBroker,
 ): Promise<string> {
-  const inventory = await readAllApprovedPaths(root, commit, broker);
+  const scopedBroker = broker ?? (await createDefaultEvidenceBroker(root, commit));
+  const inventory = await readAllApprovedPaths(root, commit, scopedBroker);
   const files: Array<{ path: string; content: string; diff?: string }> = [];
   let retainedCharacters = 0;
   for (const approvedPath of inventory.paths) {
-    const content = await broker.readFile(root, commit, approvedPath);
-    const diff = await broker.readDiff?.(root, commit, approvedPath);
+    const content = await scopedBroker.readFile(root, commit, approvedPath);
+    const diff = await scopedBroker.readDiff?.(root, commit, approvedPath);
     retainedCharacters += approvedPath.length + content.length + (diff?.length ?? 0);
     if (retainedCharacters > MAX_RETAINED_CHARACTERS) {
       throw new Error("Automatic context evidence exceeds its content limit.");

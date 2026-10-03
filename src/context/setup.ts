@@ -29,6 +29,7 @@ export interface SetupChange {
   action: SetupAction;
   content: string;
   expectedContent: string | undefined;
+  maximumCharacters?: number;
 }
 
 export interface SetupPreview {
@@ -77,6 +78,8 @@ function planArtifactChange(artifact: ManagedArtifact, existing: string | undefi
   else if (setupPolicy === "preserve-existing") action = "preserve";
   else if (existing === content) action = "unchanged";
   else if (setupPolicy === "upgrade-if-marked" && skillOwnership === "package") action = "modify";
+  else if (setupPolicy === "upgrade-if-unmodified" && artifact.isUnmodified?.(existing) === true)
+    action = "modify";
   else action = "preserve";
 
   return {
@@ -84,6 +87,9 @@ function planArtifactChange(artifact: ManagedArtifact, existing: string | undefi
     action,
     content: setupPolicy === "preserve-existing" && existing !== undefined ? existing : content,
     expectedContent: existing,
+    ...(artifact.maximumCharacters === undefined
+      ? {}
+      : { maximumCharacters: artifact.maximumCharacters }),
   };
 }
 
@@ -96,7 +102,11 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
   );
   const managedEntries = await Promise.all(
     MANAGED_ARTIFACTS.map(async (artifact): Promise<SetupChange> => {
-      const existing = await readManagedTextIfExists(root, artifact.path);
+      const existing = await readManagedTextIfExists(
+        root,
+        artifact.path,
+        artifact.maximumCharacters,
+      );
       return planArtifactChange(artifact, existing);
     }),
   );
@@ -128,7 +138,7 @@ export async function applySetup(
     }
     for (const change of preview.changes) {
       if (change.action === "unchanged" || change.action === "preserve") continue;
-      const current = await readManagedTextIfExists(root, change.path);
+      const current = await readManagedTextIfExists(root, change.path, change.maximumCharacters);
       if (current !== change.expectedContent) {
         throw new Error(`CCR managed file changed after preview: ${change.path}.`);
       }

@@ -114,7 +114,7 @@ it("should preserve a replacement lock when an earlier owner releases", async ()
   await secondRelease?.();
 });
 
-it("should reclaim an over-age live lock without letting its former owner release the replacement", async () => {
+it("should keep an over-age live lock exclusive until its owner releases", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-aged-lock-files-"));
   roots.push(root);
   const relativePath = ".ccr/private/test.lock";
@@ -132,10 +132,11 @@ it("should reclaim an over-age live lock without letting its former owner releas
   );
 
   const replacementRelease = await tryAcquireManagedLock(root, relativePath);
-  expect(replacementRelease).toBeTypeOf("function");
+  expect(replacementRelease).toBeUndefined();
   await firstRelease?.();
-  await expect(tryAcquireManagedLock(root, relativePath)).resolves.toBeUndefined();
-  await replacementRelease?.();
+  const nextRelease = await tryAcquireManagedLock(root, relativePath);
+  expect(nextRelease).toBeTypeOf("function");
+  await nextRelease?.();
 });
 
 it.each(["token-directory", "incomplete-directory", "legacy-file"] as const)(

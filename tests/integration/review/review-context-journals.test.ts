@@ -196,3 +196,27 @@ it("should list recent journals without spending a slot on the active entry", as
   expect(recent.map(({ path: entryPath }) => entryPath)).toEqual([prior.path]);
   expect(recent.map(({ path: entryPath }) => entryPath)).not.toContain(active.path);
 });
+
+it("should fingerprint the extra continuity journal when the active entry occupies a recent slot", async () => {
+  const root = await makeRepository();
+  await writeFile(
+    path.join(root, ".ccr/config.json"),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      context: { ...DEFAULT_CONTEXT_CONFIG.context, recentJournalEntries: 1 },
+    }),
+  );
+  const prior = await ensurePullRequestJournalEntry(root, 41, new Date("2026-08-25T01:00:00Z"));
+  await ensurePullRequestJournalEntry(root, 42, new Date("2026-08-26T01:00:00Z"));
+  const before = await computeReviewContextState(root, 42);
+  const supplied = await readRecentJournalEntriesExcludingActive(root, {
+    kind: "pull-request",
+    pullRequest: 42,
+  });
+  expect(supplied.map(({ path: journalPath }) => journalPath)).toEqual([prior.path]);
+  await writeFile(path.join(root, prior.path), `${supplied[0]?.content}\nCorrected outcome.\n`);
+
+  const after = await computeReviewContextState(root, 42);
+  expect(after.inputContextFingerprint).not.toBe(before.inputContextFingerprint);
+  expect(after.contextFingerprint).toBe(before.contextFingerprint);
+});

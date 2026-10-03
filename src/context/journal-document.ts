@@ -84,7 +84,6 @@ const pullRequestTokenSchema = z
   .transform((value) => Number(value.slice(3)))
   .pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
 const JOURNAL_SUMMARY_PATTERN = /^## Summary\r?$/mu;
-const JOURNAL_STARTED_PATTERN = /^- \*\*Started\*\*: ([^\r\n]+)$/mu;
 const JOURNAL_UPDATED_PATTERN = /^- \*\*Updated\*\*: ([^\r\n]+)$/mu;
 const LEGACY_JOURNAL_TIMESTAMP_PATTERN = /^- \*\*Timestamp\*\*: ([^\r\n]+)$/mu;
 

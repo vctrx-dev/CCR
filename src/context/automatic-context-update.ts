@@ -11,7 +11,7 @@ export {
   resolveClaudeExecutable,
   runHeadlessClaudeContextUpdate,
 } from "./automatic-context-runner";
-import { DECISIONS_PATH, assertDecisionDocumentAppend, readDecisionDocument } from "./decisions";
+import { assertDecisionDocumentAppend, readDecisionDocument } from "./decisions";
 import {
   MANAGED_LIFECYCLE_LOCK_PATH,
   assertSafeManagedPath,

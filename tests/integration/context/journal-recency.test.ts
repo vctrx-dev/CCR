@@ -42,7 +42,17 @@ it("should include an older active journal without displacing recent history or 
   const recent = await withJournalMutationLock(root, () =>
     readReviewJournalEntriesWhileLocked(root, 3, paths[3]),
   );
-  expect(recent.inputEntries.map((entry) => entry.path)).toEqual([paths[3], paths[2], paths[1]]);
+  expect(recent.inputEntries.map((entry) => entry.path)).toEqual([
+    paths[3],
+    paths[2],
+    paths[1],
+    paths[0],
+  ]);
+  expect(recent.continuityEntries.map((entry) => entry.path)).toEqual([
+    paths[2],
+    paths[1],
+    paths[0],
+  ]);
 });
 
 it("should apply the configured count after repository-wide Updated ordering", async () => {

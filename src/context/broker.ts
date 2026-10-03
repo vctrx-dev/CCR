@@ -101,6 +101,7 @@ async function safeCommitFiles(
 ): Promise<{
   entriesByPath: Map<string, ReturnType<typeof readCommitEntries>[number]>;
   result: SafeCommitInventory;
+  config: Awaited<ReturnType<typeof readResolvedContextConfig>>;
 }> {
   const validated = validateCurrentCommit(root, commit);
   const config = await readResolvedContextConfig(root);
@@ -117,6 +118,7 @@ async function safeCommitFiles(
   const paths = sortUniqueRepositoryPaths(approved.included);
   validateCurrentCommit(root, validated);
   return {
+    config,
     entriesByPath: approved.entriesByPath,
     result: {
       paths,
@@ -208,8 +210,75 @@ export async function listSafeCommitPaths(
   commit: string,
   after?: string,
 ): Promise<SafePathList> {
-  const safe = (await safeCommitFiles(root, commit)).result;
-  return boundedPathPage(safe.paths, safe.excludedCount, after);
+  return (await createSafeCommitEvidenceReader(root, commit)).listPaths(after);
+}
+
+/** One operation's immutable approval snapshot; never retain a reader across separate operations. */
+export interface SafeCommitEvidenceReader {
+  listPaths(after?: string): Promise<SafePathList>;
+  readFile(candidate: string): Promise<string>;
+  readDiff(candidate: string): Promise<string>;
+}
+
+/**
+ * Shares one approved commit inventory across a bounded evidence assembly. Every read checks HEAD
+ * and resolved configuration before and after content access; changed policy invalidates the reader.
+ * Extend this operation-scoped reader for batching instead of caching approval between operations.
+ */
+export async function createSafeCommitEvidenceReader(
+  root: string,
+  commit: string,
+): Promise<SafeCommitEvidenceReader> {
+  const safe = await safeCommitFiles(root, commit);
+  const approvedPaths = new Set(safe.result.paths);
+  const expectedConfig = JSON.stringify(safe.config);
+  const assertCurrent = async (): Promise<void> => {
+    if (JSON.stringify(await readResolvedContextConfig(root)) !== expectedConfig) {
+      throw new Error("Commit evidence configuration changed during the operation.");
+    }
+    validateCurrentCommit(root, commit);
+  };
+  const readApproved = async (
+    candidate: string,
+    read: (normalized: string) => Promise<string>,
+  ): Promise<string> => {
+    const normalized = normalizeRepositoryPath(candidate);
+    if (!approvedPaths.has(normalized)) {
+      throw new Error("Path is not an approved changed file for the current commit.");
+    }
+    await assertCurrent();
+    const content = await read(normalized);
+    await assertCurrent();
+    return content;
+  };
+  return {
+    async listPaths(after) {
+      await assertCurrent();
+      return boundedPathPage(safe.result.paths, safe.result.excludedCount, after);
+    },
+    readFile: (candidate) =>
+      readApproved(candidate, async (normalized) => {
+        const entry = safe.entriesByPath.get(normalized);
+        return entry === undefined
+          ? "[CCR file deleted in current commit]\n"
+          : renderRepositoryBlob(root, entry.oid);
+      }),
+    readDiff: (candidate) =>
+      readApproved(candidate, async (normalized) => {
+        const bounded = await readBoundedCommitDiff(
+          root,
+          commit,
+          normalized,
+          MAX_EVIDENCE_CHARACTERS,
+        );
+        if (bounded.isBinary) return "[CCR binary commit diff omitted]\n";
+        return truncateEvidence(bounded.content, {
+          isTruncated: bounded.isTruncated,
+          marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
+          maximumCharacters: MAX_EVIDENCE_CHARACTERS,
+        });
+      }),
+  };
 }
 
 /** Reads one privacy-approved changed blob from the exact immutable current commit. */
@@ -218,18 +287,7 @@ export async function readSafeCommitFile(
   commit: string,
   candidate: string,
 ): Promise<string> {
-  const normalized = normalizeRepositoryPath(candidate);
-  const safe = await safeCommitFiles(root, commit);
-  if (!safe.result.paths.includes(normalized)) {
-    throw new Error("Path is not an approved changed file for the current commit.");
-  }
-  const entry = safe.entriesByPath.get(normalized);
-  const content =
-    entry === undefined
-      ? "[CCR file deleted in current commit]\n"
-      : await renderRepositoryBlob(root, entry.oid);
-  validateCurrentCommit(root, commit);
-  return content;
+  return (await createSafeCommitEvidenceReader(root, commit)).readFile(candidate);
 }
 
 /**
@@ -241,19 +299,7 @@ export async function readSafeCommitDiff(
   commit: string,
   candidate: string,
 ): Promise<string> {
-  const normalized = normalizeRepositoryPath(candidate);
-  const safe = await safeCommitFiles(root, commit);
-  if (!safe.result.paths.includes(normalized)) {
-    throw new Error("Path is not an approved changed file for the current commit.");
-  }
-  const bounded = await readBoundedCommitDiff(root, commit, normalized, MAX_EVIDENCE_CHARACTERS);
-  validateCurrentCommit(root, commit);
-  if (bounded.isBinary) return "[CCR binary commit diff omitted]\n";
-  return truncateEvidence(bounded.content, {
-    isTruncated: bounded.isTruncated,
-    marker: `[CCR truncated at ${MAX_EVIDENCE_CHARACTERS} characters]`,
-    maximumCharacters: MAX_EVIDENCE_CHARACTERS,
-  });
+  return (await createSafeCommitEvidenceReader(root, commit)).readDiff(candidate);
 }
 
 /** Reads one approved index blob, never a newer unstaged worktree version. */

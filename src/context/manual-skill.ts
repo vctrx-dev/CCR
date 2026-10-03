@@ -24,9 +24,10 @@ ${SKILL_ARGUMENT_NORMALIZATION}
    - \`.claude/skills/ccr-context/SKILL.md\`
    - \`.claude/skills/ccr-hooks/SKILL.md\`
    - \`.claude/skills/ccr-review/SKILL.md\`
-4. For review selectors or criteria, read
-   \`.claude/skills/ccr/references/dimensions.md\`. Use its
-   current registry order and IDs; do not rely on an example or a remembered dimension list.
+4. For review selectors or criteria, run the installed CCR command \`ccr context dimensions\`
+   (or \`npx --no-install ccr context dimensions\` locally). It reads current \`.ccr/dimensions.json\`
+   or packaged defaults when absent. Use its current order and IDs; the packaged dimensions.md is
+   only a default preview. Report invalid JSON rather than relying on an example or remembered list.
 5. For a project-specific setting question, read the resolved configuration and consult
    \`.ccr/config-manual.md\` when present. Treat \`.ccr/config.json\` as human-owned, except that
    \`/ccr-context initialize\` may conditionally replace its untouched \`domain: "unspecified"\`

@@ -17,7 +17,6 @@ import {
   readSortedJournalNames,
   refreshJournalEntry,
   replaceJournalFileIfUnchanged,
-  writeJournalFile,
 } from "./journal-entry";
 import { withJournalIdentityLock, withJournalMutationLock } from "./journal-lock";
 import { type ReviewJournalEntries, readReviewJournalEntriesWhileLocked } from "./journal-recency";
@@ -119,15 +118,6 @@ export async function createJournalEntry(
   details?: JournalDetails,
 ): Promise<JournalResult> {
   return withJournalMutationLock(root, () => createJournalEntryWithoutLock(root, now, details));
-}
-
-/** Writes a complete journal while excluding uninstall's local-continuity decision. */
-export async function writeCompleteJournalEntry(
-  root: string,
-  relativePath: string,
-  content: string,
-): Promise<void> {
-  await withJournalMutationLock(root, () => writeJournalFile(root, relativePath, content));
 }
 
 /**

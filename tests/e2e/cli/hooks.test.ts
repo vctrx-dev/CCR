@@ -165,7 +165,7 @@ describe("hooks CLI", () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-unprovenanced-"));
     roots.push(root);
     await runCommand("git", ["init", "--quiet"], { cwd: root });
-    const { io, output, clear } = captureIo(root);
+    const { io, output } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
     await writeFile(
       path.join(root, ".git/hooks/pre-commit"),

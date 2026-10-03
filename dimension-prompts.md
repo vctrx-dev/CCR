@@ -69,7 +69,8 @@ Do not guess the developer's intentions or claim a community reacted a certain w
 
 Before reporting, look for exceptions, accommodations, other ways to complete the task, and people
 who can correct the outcome. Try to disprove your concern. A missing feature or lack of demographic
-statistics alone is not a finding. If something important is uncertain, ask a question instead.
+statistics alone is not a finding. If something important is uncertain, keep it unconfirmed and
+out of the findings rather than inventing an answer.
 It is completely fine to find no supported inclusivity issues.
 
 ## data-system-reliability
@@ -216,19 +217,33 @@ Review the code against these criteria:
 
 For supported bugs:
 
-**Finding [severity; dimension-id]:** in plain language, who is harmed, treated unfairly, or excluded and how
+### 1. Short finding title
+
+**Severity:** Critical, High, Medium, or Low
+
+**Dimension / criterion:** applicable dimension and criterion names, or Other — outside current dimensions
+
+In plain language, who is harmed, treated unfairly, or excluded and how.
+
 **Scenario:** a realistic example of how this affects someone; say if it is hypothetical
+
 **Evidence:** relevant file/path, function, rule, or code behavior
 
-Use Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
+Separate consecutive findings with a Markdown horizontal rule (`---`) on its own line, with blank
+lines around it. Number findings 1, 2, 3, and so on, starting at 1 in each completed report. Use
+Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
 and combine duplicates. For accessibility, explain the person's access need and the action they
 cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
 above before reporting it.
 
-For uncertain issues:
+Include supported ethical/inclusivity issues outside the current taxonomy in this same numbered
+list, labeled **Other — outside current dimensions**, with the same severity, scenario, and evidence.
+Do not add a separate other-issues section or include unrelated ordinary engineering defects.
 
-**Question:** what needs to be established before this can be considered an inclusivity bug
-**Context:** the relevant code behavior and why it may matter
+Keep uncertain candidates out of the report. Omit Question/Context sections, unanswered-question
+lists, and trailing observations. Still briefly disclose actual evidence limits; absence of supported
+findings does not establish safety. Put any necessary disclosure before the findings, not in a
+trailing section, and omit routine completion commentary.
 
 If no supported findings exist, say:
 
