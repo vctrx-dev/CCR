@@ -50,6 +50,52 @@ it("should warn when staged review evidence changed after the latest recorded re
   expect(output).toContain("/ccr-review changes");
 }, 30_000);
 
+it("should refuse CLI save-review for code edited after the captured review state", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-save-review-expected-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  let output = "";
+  const io = {
+    cwd: root,
+    write(message: string) {
+      output += message;
+    },
+  };
+  await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+  await writeFile(path.join(root, "source.ts"), "export const value = 1;\n", "utf8");
+  await runCommand("git", ["add", "--", ".ccr", ".gitignore", "source.ts"], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
+  await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+  output = "";
+  await createCli(io).parseAsync(["node", "ccr", "context", "review-state"]);
+  const captured = JSON.parse(output);
+  await writeFile(path.join(root, "source.ts"), "export const value = 3;\n", "utf8");
+  const save = [
+    "node",
+    "ccr",
+    "context",
+    "save-review",
+    "changes",
+    "all",
+    "0,0,0,0",
+    "No supported issues.",
+    "--expected-state",
+    captured.fingerprint,
+    "--expected-context",
+    captured.contextFingerprint,
+  ];
+
+  await expect(createCli(io).parseAsync(save)).rejects.toThrow(
+    "changed since review-state was captured",
+  );
+  await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+  output = "";
+  await createCli(io).parseAsync(save);
+  expect(output).toContain("Review saved to");
+}, 30_000);
+
 it("should warn and mark stale when only shared context changes after review", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-stale-context-review-"));
   roots.push(root);

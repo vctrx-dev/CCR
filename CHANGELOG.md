@@ -1,11 +1,62 @@
 # Changelog
 
-Notable user-visible changes to CCR are recorded here.
-
-This project follows [Semantic Versioning](https://semver.org/). Until `1.0.0`, a minor release may
-contain incompatible changes when they are clearly documented.
+User-visible changes and migrations. Before 1.0, incompatible changes increment MINOR.
+See [VERSIONING.md](VERSIONING.md); published release history is retained below.
 
 ## Unreleased
+
+## 0.11.0 - 2026-10-02 (beta-0.2)
+
+### Added
+
+- Editable `.ccr/dimensions.json`, the `@vctrx/ccr/dimensions.json` export, and
+  `context dimensions [--json]`. Reviews reload local taxonomy without changing surrounding guidance
+  or reporting. Update refreshes untouched defaults, preserves customization, and tracks taxonomy
+  in review freshness. Uninstall preserves it unless shared-context removal is explicit.
+
+### Fixed
+
+- Literal Git filenames prevent approved wildcard-like paths from exposing excluded diffs. Merge
+  evidence/reminders use the first parent; PR approval and net diffs share one immutable comparison.
+- Lock reclamation protects replacement owners; live locks do not expire with duration. Config errors
+  omit input excerpts, and upgrades/unrelated edits preserve privacy exclusions.
+- Lock publication treats a concurrently removed empty container as contention and preserves any
+  replacement creator, avoiding intermittent missing-file failures during stale-lock recovery.
+- Input-context hashes include every supplied recent journal and the active entry. Freshness ignores
+  journal activity and operational settings but still tracks code and shared review context. Existing
+  review records become stale once after this change.
+- `save-review --expected-state/--expected-context` refuses inputs changed during review;
+  `record-review-state` refuses changed code while permitting the review's own context updates.
+- Context assessments are branch-specific. `review-state` and `assess` accept `--commit` for exact
+  current HEAD; older receipts are not reused, so assess once again.
+- Journal previews/continuation retain current findings, human explanations, and next steps. Context
+  validation accepts ordinary words such as "all" and "never" without treating them as unsupported claims.
+- Updated the development-tool URI parser override and test runner to patched versions.
+
+### Changed
+
+- Review reports use headings numbered from 1 and horizontal separators, omit trailing questions/
+  observations, and include supported out-of-taxonomy ethical issues as `Other` in the same list.
+  Matching dimension/criterion names link to a JSON-generated Markdown reference installed by
+  setup/update and shipped at `dist/review/dimensions.md`; custom unmatched names remain unlinked.
+  Refresh installed skills with `ccr update`. Criteria and discovery standards are unchanged.
+- Bounded worktree-hash batches and operation-local commit approvals reduce repeated work without
+  caching permission across operations.
+- Context assessment/readiness is separate from completed reviews; arbitrary file edits are not
+  assessments. Local reviews record an assessment to avoid duplicate pre-commit reminders.
+- Session follow-ups maintain stable finding labels, reasons, verification, and minimal supporting
+  references without claiming fresh review. New work carries history but not old completion receipts.
+- Decisions capture missing reusable human rationale. New setups enable `updateDecisionsMd`;
+  existing values are preserved and absent older keys stay off. Explicit human maintenance may
+  reconcile superseded rules while preserving their rationale.
+- `context journals` excludes the active entry, which is always read separately; the PR token selects
+  that active entry, not a PR-only history. The post-commit fallback is `/ccr-context update last commit`.
+- Automation announces itself, supplies file diffs/content, and lets CCR set `Updated` after validation.
+- Reports open with `Context applied`. Skills respect privacy, propose rather than apply
+  stakeholder edits, and retain the reviewed PR head. Run `ccr update` after package upgrades.
+- Removed confirmed unused private helpers/imports. Typecheck rejects unused source locals/parameters;
+  public APIs and test-only safety helpers remain intact. Docs now separate quick start, reference,
+  tests, and contributor rules without repeated walkthroughs.
 
 ## 0.10.1 - 2026-09-28 (beta-0.2)
 

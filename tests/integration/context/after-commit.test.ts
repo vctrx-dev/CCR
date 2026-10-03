@@ -4,7 +4,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AFTER_COMMIT_PROMPT, runAfterCommitCheck } from "../../../src/context/after-commit";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
-import { ensureWorkingJournalEntry, readRecentJournalEntries } from "../../../src/context/journal";
+import {
+  ensureJournalEntryForHead,
+  ensureWorkingJournalEntry,
+  readRecentJournalEntries,
+} from "../../../src/context/journal";
 import {
   computeWorkingReviewState,
   recordWorkingReviewState,
@@ -40,9 +44,7 @@ describe("runAfterCommitCheck", () => {
     expect(result.journalCreated).toBe(true);
     expect(result.journalPath).toMatch(/^\.ccr\/journal\/main-[0-9a-f]{8}\/.*\.md$/);
     expect(result.shouldWarn).toBe(true);
-    expect(result.prompt).toBeTruthy();
-    expect(result.prompt).toContain("decisions.md");
-    expect(result.prompt).toContain("stakeholders.md read-only");
+    expect(result.prompt).toBe("/ccr-context update last commit");
 
     const journalPath = result.journalPath;
     if (journalPath === undefined) throw new Error("Expected a journal path.");
@@ -233,7 +235,66 @@ describe("runAfterCommitCheck", () => {
 
     const nextWorking = await ensureWorkingJournalEntry(root);
     expect(nextWorking.path).not.toBe(working.path);
+    const nextContent = await readFile(path.join(root, nextWorking.path), "utf8");
+    expect(nextContent).toContain(working.path);
+    expect(nextContent).toContain("Reviewed approved repository evidence.");
+    expect(nextContent).not.toContain("**Review status**");
+    expect(nextContent).not.toContain("## Review run");
+    const committedContent = await readFile(path.join(root, result.journalPath ?? ""), "utf8");
+    expect(committedContent).toContain(working.path);
+    expect(committedContent).toContain("Reviewed approved repository evidence.");
+    expect(await ensureWorkingJournalEntry(root)).toEqual(nextWorking);
   }, 30_000);
+
+  it("should carry bounded human continuity from clean HEAD through edits and commit", async () => {
+    const root = await makeRepository();
+    await commitPath(root, "main.py", "print('base')\n");
+    const head = await ensureJournalEntryForHead(root);
+    const target = path.join(root, head.path);
+    await writeFile(
+      target,
+      (await readFile(target, "utf8")).replace(
+        "Needs concise completion.",
+        `People need a clear next step. ${"x".repeat(5_000)}TAIL`,
+      ),
+    );
+    await writeFile(path.join(root, "main.py"), "print('edited')\n");
+    const working = await ensureWorkingJournalEntry(root);
+    const content = await readFile(path.join(root, working.path), "utf8");
+    expect(content).toContain(head.path);
+    expect(content).toContain("People need a clear next step.");
+    expect(content).not.toContain("TAIL");
+    expect(content.length).toBeLessThan(4_000);
+    expect(content).not.toContain("**Commit**");
+    await runCommand("git", ["add", "main.py"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "edit"], { cwd: root });
+    const result = await runAfterCommitCheck(root);
+    expect(result.journalPath).toBe(working.path);
+    expect(result.reviewStatus).toBe("unrecorded");
+    expect(await readFile(path.join(root, working.path), "utf8")).toContain(
+      "People need a clear next step.",
+    );
+  }, 30_000);
+
+  it("should carry review-run findings and human explanations without completion receipts", async () => {
+    const root = await makeRepository();
+    await commitPath(root, "main.py", "print('base')\n");
+    const head = await ensureJournalEntryForHead(root);
+    const target = path.join(root, head.path);
+    await writeFile(
+      target,
+      `${(await readFile(target, "utf8")).replace("Needs concise completion.", "Reviewed participation.")}\n## Review run — 2026-09-01T12:00:00Z\n- **Scope**: codebase\n- **Reviewed state**: \`sha256:${"a".repeat(64)}\`\n- **Review status**: current\n\n### Findings and outcomes\nF7 questioned: educator confirms paper submissions are accepted.\n\n### Work and decisions\nHuman explanation: this accommodates learners without reliable connectivity.\n\n### Next steps\nCheck learners can discover the paper route.\n`,
+    );
+    await writeFile(path.join(root, "main.py"), "print('edited')\n");
+    const working = await ensureWorkingJournalEntry(root);
+    const content = await readFile(path.join(root, working.path), "utf8");
+    expect(content).toContain("F7 questioned");
+    expect(content).toContain("without reliable connectivity");
+    expect(content).toContain("Check learners can discover the paper route.");
+    expect(content).toContain(head.path);
+    expect(content).not.toContain("**Reviewed state**");
+    expect(content).not.toContain("**Review status**");
+  });
 
   it("should create committed metadata and not prompt for a context-only commit", async () => {
     const root = await makeRepository();

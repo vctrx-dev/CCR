@@ -2,28 +2,33 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  parseReviewDimensionRegistry,
+  renderReviewDimensionReference,
+} from "../dist/review/index.js";
 
 const root = process.cwd();
 const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-const reviewRegistry = JSON.parse(
+const reviewSource = JSON.parse(
   readFileSync(path.join(root, "src", "review", "dimensions.json"), "utf8"),
 );
-if (
-  typeof reviewRegistry !== "object" ||
-  reviewRegistry === null ||
-  !("dimensions" in reviewRegistry) ||
-  !Array.isArray(reviewRegistry.dimensions) ||
-  !reviewRegistry.dimensions.every(
-    (dimension) =>
-      typeof dimension === "object" &&
-      dimension !== null &&
-      "id" in dimension &&
-      typeof dimension.id === "string",
-  )
-) {
-  throw new Error("Review dimension registry has an invalid shape.");
-}
+const reviewRegistry = parseReviewDimensionRegistry(reviewSource);
 const reviewDimensionIds = reviewRegistry.dimensions.map((dimension) => dimension.id);
+const inspectionSource = readFileSync(
+  path.join(root, "src", "cli", "context-inspection.ts"),
+  "utf8",
+);
+const inspectionCommands = [...inspectionSource.matchAll(/\.command\("([^" ]+)/gu)].map(
+  (match) => match[1],
+);
+const inspectionOptions = [
+  ...inspectionSource.matchAll(/\.command\("([^" ]+)[\s\S]*?(?=\n {2}context\b|$)/gu),
+].flatMap((command) =>
+  [...command[0].matchAll(/\.option\("([^" ]+)/gu)].map((option) => ({
+    command: command[1],
+    option: option[1],
+  })),
+);
 const configManualSource = readFileSync(
   path.join(root, "src", "context", "config-manual.ts"),
   "utf8",
@@ -42,6 +47,7 @@ if (!packageExports || typeof packageExports !== "object" || !("." in packageExp
 const publicExportFiles = Object.entries(packageExports)
   .filter(([entry]) => entry !== "./package.json")
   .flatMap(([entry, target]) => {
+    if (typeof target === "string" && entry.endsWith(".json")) return [target.slice(2)];
     if (typeof target !== "object" || target === null) {
       throw new Error("Programmatic package exports must declare import and type targets.");
     }
@@ -176,7 +182,14 @@ try {
     throw new Error("Installed CLI help is incomplete or stale.");
   }
   const installedContextHelp = runInstalled(installedBin, ["context", "--help"], consumer);
+  for (const { command, option } of inspectionOptions) {
+    const commandHelp = runInstalled(installedBin, ["context", command, "--help"], consumer);
+    if (!commandHelp.includes(option)) {
+      throw new Error(`Installed context ${command} help is missing ${option}.`);
+    }
+  }
   for (const command of [
+    ...inspectionCommands,
     "commit-changes",
     "commit-read",
     "journals",
@@ -199,7 +212,7 @@ try {
   );
   if (
     !installedJournalHelp.includes("Usage: ccr context journals [options] [pull-request]") ||
-    !installedJournalHelp.includes("legacy PR token does not scope results")
+    !installedJournalHelp.includes("except the active entry")
   ) {
     throw new Error("Installed journal help has stale compatibility or recency guidance.");
   }
@@ -216,7 +229,8 @@ try {
     esmSdkCheckPath,
     `import { createAsuAimlProviderConfig } from "@vctrx/ccr";
 import { DEFAULT_CONTEXT_CONFIG, resolveContextConfig } from "@vctrx/ccr/context";
-import { parseReviewDimensionRegistry } from "@vctrx/ccr/review";
+import { parseReviewDimensionRegistry, readReviewDimensionRegistry, renderReviewDimensionSections } from "@vctrx/ccr/review";
+import dimensionsJson from "@vctrx/ccr/dimensions.json" with { type: "json" };
 
 const provider = createAsuAimlProviderConfig({ apiKey: "test-key", model: "gpt-5.2" });
 const config = resolveContextConfig(DEFAULT_CONTEXT_CONFIG, {
@@ -233,6 +247,11 @@ const registry = parseReviewDimensionRegistry({
 
 if (provider.model !== "gpt-5.2" || config.privacy.excludedPaths[0] !== "private/**" || registry.dimensions[0]?.id !== "quality") {
   throw new Error("Installed ESM SDK exports are incomplete.");
+}
+const packaged = parseReviewDimensionRegistry(dimensionsJson);
+const effective = await readReviewDimensionRegistry(process.cwd());
+if (JSON.stringify(packaged) !== JSON.stringify(effective) || typeof renderReviewDimensionSections(registry) !== "string") {
+  throw new Error("Installed taxonomy data or runtime SDK exports are incomplete.");
 }
 `,
     "utf8",
@@ -302,8 +321,8 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   if (!existsSync(decisionsPath) || readFileSync(decisionsPath, "utf8") !== "") {
     throw new Error("setup did not create an empty decisions document.");
   }
-  if (installedConfig.instructions?.updateDecisionsMd !== false) {
-    throw new Error("Generated configuration did not default decision updates to false.");
+  if (installedConfig.instructions?.updateDecisionsMd !== true) {
+    throw new Error("Generated configuration did not default decision updates to true.");
   }
   if (installedConfig.hooks?.autoUpdateContext !== false) {
     throw new Error("Generated configuration did not default automatic context updates to false.");
@@ -331,13 +350,40 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   if (!existsSync(reviewSkillPath) || !existsSync(dimensionsPath)) {
     throw new Error("setup did not install the data-driven review skill and dimensions.");
   }
-  const dimensionsReference = readFileSync(dimensionsPath, "utf8");
-  for (const dimension of reviewRegistry.dimensions) {
-    const expected = [`## ${dimension.id}`, `### Dimension: ${dimension.name}`];
-    for (const criterion of dimension.criteria) expected.push(criterion.name, criterion.details);
-    if (expected.some((text) => !dimensionsReference.includes(text))) {
-      throw new Error("Installed dimensions reference does not match the packaged registry.");
-    }
+  const packagedReferencePath = path.join(
+    consumer,
+    "node_modules",
+    packageJson.name,
+    "dist",
+    "review",
+    "dimensions.md",
+  );
+  const expectedReference = renderReviewDimensionReference(reviewRegistry);
+  if (
+    !existsSync(packagedReferencePath) ||
+    readFileSync(packagedReferencePath, "utf8") !== expectedReference ||
+    readFileSync(dimensionsPath, "utf8") !== expectedReference
+  ) {
+    throw new Error(
+      "Packaged and installed Markdown taxonomy must match the JSON-derived reference.",
+    );
+  }
+  const taxonomyPath = path.join(scripted, ".ccr", "dimensions.json");
+  const installedTaxonomy = JSON.parse(
+    runInstalled(installedBin, ["context", "dimensions", "--json"], scripted),
+  );
+  const exportedTaxonomy = JSON.parse(
+    readFileSync(
+      path.join(consumer, "node_modules", packageJson.name, "dist", "review", "dimensions.json"),
+      "utf8",
+    ),
+  );
+  if (
+    !existsSync(taxonomyPath) ||
+    JSON.stringify(installedTaxonomy) !== JSON.stringify(reviewRegistry) ||
+    JSON.stringify(exportedTaxonomy) !== JSON.stringify(reviewSource)
+  ) {
+    throw new Error("Installed JSON taxonomy does not match the shipped source of truth.");
   }
   if (
     !existsSync(ignorePath) ||
@@ -357,6 +403,16 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     readFileSync(journalPath, "utf8") !== "# Local continuity\n"
   ) {
     throw new Error("package update did not preserve user-owned CCR context and local continuity.");
+  }
+  const customTaxonomy = JSON.stringify({ dimensions: [] });
+  writeFileSync(taxonomyPath, customTaxonomy);
+  runInstalled(installedBin, ["update"], scripted);
+  if (
+    readFileSync(taxonomyPath, "utf8") !== customTaxonomy ||
+    JSON.parse(runInstalled(installedBin, ["context", "dimensions", "--json"], scripted)).dimensions
+      .length !== 0
+  ) {
+    throw new Error("Package update replaced a customized taxonomy or ignored live JSON edits.");
   }
 
   process.stdout.write(

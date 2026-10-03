@@ -270,6 +270,35 @@ describe("buildAutomaticContextEvidencePacket", () => {
     ).rejects.toThrow("Automatic context evidence exceeds its content limit.");
   });
 
+  it("should retain each approved file's diff and count it toward the content limit", async () => {
+    const broker: AutomaticContextEvidenceBroker = {
+      ...createSinglePageBroker(["grade.ts"], async () => "export const pass = 60;\n"),
+      async readDiff(_root, _commit, file) {
+        return `diff for ${file}: -50 +60`;
+      },
+    };
+
+    const packet = JSON.parse(
+      await buildAutomaticContextEvidencePacket("C:/repository", COMMIT, broker),
+    );
+
+    expect(packet.files).toEqual([
+      {
+        path: "grade.ts",
+        content: "export const pass = 60;\n",
+        diff: "diff for grade.ts: -50 +60",
+      },
+    ]);
+    await expect(
+      buildAutomaticContextEvidencePacket("C:/repository", COMMIT, {
+        ...broker,
+        async readDiff() {
+          return "x".repeat(MAX_RETAINED_CHARACTERS);
+        },
+      }),
+    ).rejects.toThrow("Automatic context evidence exceeds its content limit.");
+  });
+
   it("should fail closed before retaining an oversized evidence packet", async () => {
     const broker: AutomaticContextEvidenceBroker = {
       async listPaths() {

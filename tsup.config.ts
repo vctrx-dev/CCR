@@ -1,6 +1,7 @@
-import { rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsup";
+import { REVIEW_DIMENSION_REFERENCE } from "./src/review/dimensions";
 
 // Array configs build concurrently, so clean once before workers can race over the shared directory.
 rmSync(fileURLToPath(new URL("./dist", import.meta.url)), { force: true, recursive: true });
@@ -14,6 +15,19 @@ export default defineConfig([
     noExternal: ["picomatch", "zod"],
     clean: false,
     outDir: "dist",
+    onSuccess: async () => {
+      // Refresh the raw data on builds and watch rebuilds, independently of bundled imports.
+      mkdirSync(fileURLToPath(new URL("./dist/review", import.meta.url)), { recursive: true });
+      copyFileSync(
+        fileURLToPath(new URL("./src/review/dimensions.json", import.meta.url)),
+        fileURLToPath(new URL("./dist/review/dimensions.json", import.meta.url)),
+      );
+      writeFileSync(
+        fileURLToPath(new URL("./dist/review/dimensions.md", import.meta.url)),
+        REVIEW_DIMENSION_REFERENCE,
+        "utf8",
+      );
+    },
   },
   {
     entry: {

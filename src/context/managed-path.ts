@@ -13,7 +13,12 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { isFileNotFound, readBoundedTextIfExists, readTextIfExists } from "./bounded-text";
+import {
+  isFileNotFound,
+  readBoundedTextIfExists,
+  readBoundedUtf8TextIfExists,
+  readTextIfExists,
+} from "./bounded-text";
 
 /**
  * Repository-contained filesystem operations. Managed writers build on this boundary so path
@@ -129,12 +134,19 @@ export async function createManagedTextExclusive(
   }
 }
 
-/** Safely reads an optional managed text file after containment and symlink checks. */
+/** Safely reads managed text; an optional bound rejects oversized or non-UTF-8 input before retention. */
 export async function readManagedTextIfExists(
   root: string,
   relativePath: string,
+  maximumCharacters?: number,
 ): Promise<string | undefined> {
-  return readTextIfExists(await assertSafeManagedPath(root, relativePath));
+  const target = await assertSafeManagedPath(root, relativePath);
+  if (maximumCharacters === undefined) return readTextIfExists(target);
+  const bounded = await readBoundedUtf8TextIfExists(target, maximumCharacters);
+  if (bounded?.isTruncated)
+    throw new Error(`Managed text exceeds its character limit: ${relativePath}`);
+  if (bounded?.isBinary) throw new Error(`Managed text must be valid UTF-8: ${relativePath}`);
+  return bounded?.content;
 }
 
 /** Enumerates one safe managed directory without retaining entries beyond the caller's bound. */

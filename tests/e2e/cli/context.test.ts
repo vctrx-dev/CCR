@@ -48,7 +48,12 @@ describe("context CLI", () => {
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "context", "validate"]);
-    expect(output).toContain("CCR context is valid");
+    expect(output).toContain("structural checks passed");
+    expect(output).toContain("unfilled");
+    expect(output).toContain("not verified");
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "context", "status"]);
+    expect(output).toContain("Readiness: unfilled");
 
     await writeFile(path.join(root, "source.txt"), "changed\n", "utf8");
     await runCommand("git", ["add", "--", "source.txt"], { cwd: root });

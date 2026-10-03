@@ -6,7 +6,6 @@ import { MANAGED_LIFECYCLE_LOCK_PATH, tryAcquireManagedLock } from "../../../src
 import {
   createTemporaryGitRepository,
   createTemporaryRootRegistry,
-  runCommand,
 } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
@@ -27,7 +26,7 @@ describe("configuration CLI", () => {
     expect(output).toContain('"checkBeforeCommit": true');
     expect(output).toContain('"enabled": true');
     expect(output).toContain('"autoUpdateContext": false');
-    expect(output).toContain('"updateDecisionsMd": false');
+    expect(output).toContain('"updateDecisionsMd": true');
     expect(output).not.toContain('"schemaVersion"');
     expect(output).not.toContain('"discovery"');
     expect(output).not.toContain('"privacy"');
@@ -257,7 +256,7 @@ describe("configuration CLI", () => {
           "config",
           "set",
           "instructions.updateDecisionsMd",
-          "true",
+          "false",
         ]),
       ).rejects.toThrow(/managed lifecycle is busy/i);
     } finally {
@@ -266,6 +265,6 @@ describe("configuration CLI", () => {
     expect(
       JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).instructions
         .updateDecisionsMd,
-    ).toBe(false);
+    ).toBe(true);
   });
 });

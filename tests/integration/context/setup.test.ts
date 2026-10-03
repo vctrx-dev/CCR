@@ -155,7 +155,7 @@ describe("CCR setup", () => {
       autoUpdateContext: false,
     });
     expect(upgraded.discovery).toBeUndefined();
-    expect(upgraded.privacy).toBeUndefined();
+    expect(upgraded.privacy).toEqual({ excludedPaths: [".env*"] });
   });
 
   it("should update config without depending on unrelated managed files", async () => {

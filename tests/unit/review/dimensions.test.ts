@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { parseReviewDimensionRegistry } from "../../../src/review/dimensions";
+import {
+  parseReviewDimensionRegistry,
+  renderReviewDimensionReference,
+} from "../../../src/review/dimensions";
 
 describe("review dimension registry", () => {
+  it("should render a reference artifact only from valid registry input", () => {
+    expect(typeof renderReviewDimensionReference({ dimensions: [] })).toBe("string");
+    expect(() => renderReviewDimensionReference(null)).toThrow();
+    expect(() => renderReviewDimensionReference({ dimensions: [{}] })).toThrow();
+  });
+
   it("should preserve case-sensitive research criterion IDs while validating their syntax", () => {
     const makeRegistry = (id: string) => ({
       dimensions: [

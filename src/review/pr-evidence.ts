@@ -35,7 +35,9 @@ const pullRequestFileSchema = z.object({
   previousFilename: z.string().min(1).max(4_096).nullable(),
   status: z.string().min(1).max(64),
 });
-const pullRequestFilePageSchema = z.array(pullRequestFileSchema).max(100);
+// GitHub returns up to 300 comparison files on the first page, even when commits are paginated.
+// Our 200-path limit is below that ceiling, so a truncated inventory can never be accepted.
+const comparisonFilesSchema = z.array(pullRequestFileSchema).max(300);
 const headResponseSchema = z.object({
   content: z.string().max(MAX_HEAD_RESPONSE_BYTES),
   encoding: z.literal("base64"),
@@ -120,23 +122,24 @@ function parseJson(output: string): unknown {
   }
 }
 
-async function readPullRequestPage(
+async function readComparisonFiles(
   repository: string,
-  pullRequest: number,
-  page: number,
+  metadata: PullRequestMetadata,
   runner: ScopedRunner,
-): Promise<z.infer<typeof pullRequestFilePageSchema>> {
+): Promise<z.infer<typeof comparisonFilesSchema>> {
   const output = await readBoundedGitHubOutput(
     runner,
     [
       "api",
-      `repos/${repository}/pulls/${pullRequest}/files?per_page=100&page=${page}`,
+      `repos/${repository}/compare/${metadata.baseRefOid}...${metadata.headRefOid}?per_page=1`,
       "--jq",
-      "[.[] | {filename, status, previousFilename: (.previous_filename // null)}]",
+      "[.files[] | {filename, status, previousFilename: (.previous_filename // null)}]",
     ],
     MAX_FILE_PAGE_BYTES,
   );
-  return pullRequestFilePageSchema.parse(parseJson(output));
+  const files = comparisonFilesSchema.parse(parseJson(output));
+  if (files.length > 200) throw new Error("Pull request exceeds 200 changed paths.");
+  return files;
 }
 
 interface PullRequestSelection {
@@ -174,14 +177,7 @@ async function resolvePullRequestSelection(
   const metadata = pullRequestSchema.parse(parseJson(metadataOutput));
   if (metadata.number !== pullRequest) throw new Error("GitHub returned a different pull request.");
 
-  const first = await readPullRequestPage(repository, pullRequest, 1, runner);
-  const second =
-    first.length === 100 ? await readPullRequestPage(repository, pullRequest, 2, runner) : [];
-  if (second.length === 100) {
-    const third = await readPullRequestPage(repository, pullRequest, 3, runner);
-    if (third.length > 0) throw new Error("Pull request exceeds 200 changed paths.");
-  }
-  const files = [...first, ...second];
+  const files = await readComparisonFiles(repository, metadata, runner);
   const config = await readResolvedContextConfig(root);
   const evidencePaths = files.flatMap(({ filename, previousFilename }) =>
     previousFilename === null ? [filename] : [filename, previousFilename],
@@ -215,7 +211,9 @@ export async function readSafePullRequestEvidence(
     [
       "api",
       "-H",
-      "Accept: application/vnd.github.patch",
+      // Net diff matches the approved comparison inventory; a patch series can include
+      // intermediate files that were removed before the captured head.
+      "Accept: application/vnd.github.diff",
       `repos/${selection.repository}/compare/${selection.metadata.baseRefOid}...${selection.metadata.headRefOid}`,
     ],
     MAX_PATCH_BYTES,

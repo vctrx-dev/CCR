@@ -39,13 +39,13 @@ it("should expose privacy-filtered staged paths through the inspection CLI", asy
 
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "validate"]);
-  expect(output).toContain("CCR context is valid");
+  expect(output).toContain("structural checks passed");
 
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "context", "status"]);
   expect(output).toContain("Staged repository files: yes");
   expect(output).toContain("Staged shared context: yes");
-  expect(output).toContain("No context warning");
+  expect(output).toContain("Warning: context might need updating.");
 });
 
 it("should read current shared context before it is committed and reject non-context files", async () => {
@@ -71,7 +71,7 @@ it("should read current shared context before it is committed and reject non-con
   ).rejects.toThrow(/approved shared context/i);
 });
 
-it("should append a decision only after the human enables the config opt-in", async () => {
+it("should append a decision only while the human keeps the config opt-in enabled", async () => {
   const root = await createTemporaryGitRepository(roots, "ccr-decisions-cli-");
   let output = "";
   const io = {
@@ -81,6 +81,18 @@ it("should append a decision only after the human enables the config opt-in", as
     },
   };
   await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
+  expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).toContain(
+    '"updateDecisionsMd": true',
+  );
+  await createCli(io).parseAsync([
+    "node",
+    "ccr",
+    "config",
+    "set",
+    "instructions.updateDecisionsMd",
+    "false",
+    "--apply",
+  ]);
 
   await expect(
     createCli(io).parseAsync([

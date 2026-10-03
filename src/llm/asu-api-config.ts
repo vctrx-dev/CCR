@@ -10,9 +10,6 @@ const ASU_DEFAULTS = {
   outputCostPer1MUsd: 15,
 } as const;
 
-/** Default model provider identifier sent in query requests. */
-export const DEFAULT_ASU_MODEL_PROVIDER = ASU_DEFAULTS.modelProvider;
-
 const httpsUrlSchema = z
   .string()
   .url()

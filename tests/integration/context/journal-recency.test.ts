@@ -3,10 +3,57 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
-import { readRecentJournalEntries } from "../../../src/context/journal-recency";
+import { withJournalMutationLock } from "../../../src/context/journal-lock";
+import {
+  readRecentJournalEntries,
+  readReviewJournalEntriesWhileLocked,
+} from "../../../src/context/journal-recency";
 import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
+
+it("should include an older active journal without displacing recent history or copying it into continuity", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-active-memory-"));
+  roots.push(root);
+  await mkdir(path.join(root, ".ccr/journal/main"), { recursive: true });
+  const paths: string[] = [];
+  for (const day of [20, 21, 22, 23]) {
+    const relativePath = `.ccr/journal/main/2026-08-${day}.md`;
+    paths.push(relativePath);
+    await writeFile(
+      path.join(root, relativePath),
+      `# CCR Journal\n\n- **Started**: 2026-08-${day}T01:00:00Z\n- **Updated**: 2026-08-${day}T01:00:00Z\n\n## Summary\nMemory ${day}.\n`,
+    );
+  }
+  const result = await withJournalMutationLock(root, () =>
+    readReviewJournalEntriesWhileLocked(root, 3, paths[0]),
+  );
+  expect(result.inputEntries.map((entry) => entry.path)).toEqual([
+    paths[0],
+    paths[3],
+    paths[2],
+    paths[1],
+  ]);
+  expect(result.continuityEntries.map((entry) => entry.path)).toEqual([
+    paths[3],
+    paths[2],
+    paths[1],
+  ]);
+  const recent = await withJournalMutationLock(root, () =>
+    readReviewJournalEntriesWhileLocked(root, 3, paths[3]),
+  );
+  expect(recent.inputEntries.map((entry) => entry.path)).toEqual([
+    paths[3],
+    paths[2],
+    paths[1],
+    paths[0],
+  ]);
+  expect(recent.continuityEntries.map((entry) => entry.path)).toEqual([
+    paths[2],
+    paths[1],
+    paths[0],
+  ]);
+});
 
 it("should apply the configured count after repository-wide Updated ordering", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-recency-"));

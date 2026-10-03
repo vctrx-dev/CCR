@@ -7,24 +7,43 @@ import { STAKEHOLDER_IMPACT_REVIEW_STANDARD } from "./impact-review-guidance";
 
 type ReviewDimension = ReviewDimensionRegistry["dimensions"][number];
 
-/** Shared reporting contract; evidence and uncertainty stay separate from supported findings. */
+/** Shared readable report contract; unsupported claims stay out of the findings list. */
 export const REVIEW_REPORT_FORMAT = `### Output
+
+Begin with one **Context applied:** line naming the recorded decisions and earlier open findings
+that shaped this review, or \`none\`.
 
 For supported bugs:
 
-**Finding [severity; dimension-id]:** in plain language, who is harmed, treated unfairly, or excluded and how
+### 1. Short finding title
+
+**Severity:** Critical, High, Medium, or Low
+
+**Dimension / criterion:** applicable dimension and criterion names, or Other — outside current dimensions
+
+In plain language, who is harmed, treated unfairly, or excluded and how.
+
 **Scenario:** a realistic example of how this affects someone; say if it is hypothetical
+
 **Evidence:** relevant file/path, function, rule, or code behavior
 
-Use Critical, High, Medium, or Low based on the impact on people. Put the most severe issues first
-and combine duplicates. For accessibility, explain the person's access need and the action they
+Separate consecutive findings with a Markdown horizontal rule (\`---\`) on its own line, with blank
+lines around it. Number findings 1, 2, 3, and so on, starting at 1 in each completed report. Keep
+stable journal finding identities for follow-ups even when display numbers change. Use Critical,
+High, Medium, or Low based on the impact on people. Put the
+most severe issues first and combine duplicates. For accessibility, explain the person's access need and the action they
 cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
 above before reporting it.
 
-For uncertain issues:
+Include supported ethical/inclusivity issues outside the current taxonomy in this same numbered
+list, labeled **Other — outside current dimensions**, with the same severity, scenario, and evidence.
+Do not add a separate other-issues section or include unrelated ordinary engineering defects.
 
-**Question:** what needs to be established before this can be considered an inclusivity bug
-**Context:** the relevant code behavior and why it may matter
+Keep uncertain candidates out of the report and retain material unknowns in the journal when one is
+being maintained. Omit Question/Context sections, unanswered-question lists, and trailing observations.
+Still briefly disclose actual evidence limits or failed continuity writes; absence of supported
+findings does not establish safety. Put any necessary disclosure before the findings, not in a
+trailing section, and omit routine completion commentary.
 
 If no supported findings exist, say:
 

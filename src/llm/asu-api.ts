@@ -9,7 +9,6 @@ import type {
 
 export {
   createAsuAimlProviderConfig,
-  DEFAULT_ASU_MODEL_PROVIDER,
   estimateCostUsd,
   readAsuAimlProviderConfig,
 } from "./asu-api-config.js";

@@ -58,20 +58,6 @@ Do not guess the developer's intentions or claim a community reacted a certain w
 
 Before reporting, look for exceptions, accommodations, other ways to complete the task, and people
 who can correct the outcome. Try to disprove your concern. A missing feature or lack of demographic
-statistics alone is not a finding. If something important is uncertain, ask a question instead.
-It is completely fine to find no supported inclusivity issues.
-
-### Examples
-
-- An assessment accepts only the source's exact wording. A student who understands the material
-  gives an equally valid explanation and is marked wrong. Check the scoring rule and whether
-  other answers or instructor corrections are allowed before calling this an issue.
-- A required submission button only works with a mouse. A person with a motor disability who uses
-  a keyboard cannot submit their work. Report this if the code confirms the barrier and there is
-  no usable alternative. Explain the blocked action, not just the missing keyboard support.
-- A screen labels people "master" and "slave". Consider what that wording says about those people
-  and who sees it. An isolated internal variable called "master" does not establish the same issue.
-- A slow query alone is a technical bug. A failed submission that gives a learner a penalty with
-  no effective recovery route can qualify. Verify the penalty and available recovery before reporting.
-
-Use these examples to understand the distinction, not as issues to assume exist in this repository.`;
+statistics alone is not a finding. If something important is uncertain, keep it unconfirmed and
+out of the findings rather than inventing an answer.
+It is completely fine to find no supported inclusivity issues.`;

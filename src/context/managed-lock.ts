@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
-import { lstat, mkdir, readdir, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { isFileNotFound, readBoundedTextIfExists } from "./bounded-text";
@@ -8,13 +8,12 @@ import { assertSafeManagedPath } from "./managed-path";
 
 /**
  * Token-owned repository lock boundary. Callers may attempt immediate acquisition or use the
- * bounded retry wrapper; stale reclamation remains identity-checked inside this module.
+ * bounded retry wrapper. Reclamation removes only an observed token and empty containers, never
+ * renames a mutable lock path. Live owners retain exclusivity regardless of operation duration.
  */
 
 const INCOMPLETE_LOCK_GRACE_MS = 5_000;
-const MAX_MANAGED_LOCK_AGE_MS = 15 * 60_000;
 const LOCK_OWNER_FILE_PATTERN = /^([a-f0-9-]{36})\.owner\.json$/u;
-const STALE_LOCK_MARKER = "stale lock quarantine\n";
 const MANAGED_WRITE_LOCK_GROUP = ".ccr/private/managed-write-locks";
 
 /** Shared lock for setup, uninstall, configuration initialization, and context automation. */
@@ -35,6 +34,8 @@ interface ManagedLockOwner {
 interface ManagedLockObservation {
   identity: string;
   isStale: boolean;
+  isDirectory: boolean;
+  ownerFile?: string;
 }
 
 function ignoreError(): undefined {
@@ -49,11 +50,13 @@ function isTransientLockObservationError(error: unknown): boolean {
   );
 }
 
-async function unlinkIfExists(target: string): Promise<void> {
+async function unlinkIfExists(target: string): Promise<boolean> {
   try {
     await unlink(target);
+    return true;
   } catch (error: unknown) {
     if (!isFileNotFound(error)) throw error;
+    return false;
   }
 }
 
@@ -111,23 +114,26 @@ function managedLockIdentity(target: string, details: Stats): string {
     .digest("hex");
 }
 
-async function isObservedManagedLockStale(target: string, details: Stats): Promise<boolean> {
+async function inspectManagedLockOwner(
+  target: string,
+  details: Stats,
+): Promise<{ isStale: boolean; ownerFile?: string }> {
   if (details.isFile()) {
     const existing = await readBoundedTextIfExists(target, 300).catch(() => undefined);
     const owner = existing?.isTruncated
       ? undefined
       : parseManagedLockOwner(existing?.content ?? "", "legacy-lock-owner");
-    return owner === undefined
-      ? Date.now() - details.mtimeMs > INCOMPLETE_LOCK_GRACE_MS
-      : !isProcessAlive(owner.pid) || Date.now() - owner.createdAt > MAX_MANAGED_LOCK_AGE_MS;
+    return {
+      isStale: owner !== undefined && !isProcessAlive(owner.pid),
+    };
   }
-  if (!details.isDirectory()) return false;
+  if (!details.isDirectory()) return { isStale: false };
   let entries: Dirent[];
   try {
     entries = await readdir(target, { withFileTypes: true });
   } catch (error: unknown) {
-    if (isFileNotFound(error)) return true;
-    if (isTransientLockObservationError(error)) return false;
+    if (isFileNotFound(error)) return { isStale: true };
+    if (isTransientLockObservationError(error)) return { isStale: false };
     throw error;
   }
   if (entries.length === 1) {
@@ -143,14 +149,16 @@ async function isObservedManagedLockStale(target: string, details: Stats): Promi
           ? undefined
           : parseManagedLockOwner(existing?.content ?? "", token);
         if (owner !== undefined) {
-          return (
-            !isProcessAlive(owner.pid) || Date.now() - owner.createdAt > MAX_MANAGED_LOCK_AGE_MS
-          );
+          return { isStale: !isProcessAlive(owner.pid), ownerFile: entry.name };
         }
+        // A partially written token may belong to a paused live creator; age cannot prove death.
+        return { isStale: false };
       }
     }
   }
-  return Date.now() - details.mtimeMs > INCOMPLETE_LOCK_GRACE_MS;
+  return {
+    isStale: entries.length === 0 && Date.now() - details.mtimeMs > INCOMPLETE_LOCK_GRACE_MS,
+  };
 }
 
 async function observeManagedLock(target: string): Promise<ManagedLockObservation | undefined> {
@@ -162,49 +170,46 @@ async function observeManagedLock(target: string): Promise<ManagedLockObservatio
     throw error;
   }
   const identity = managedLockIdentity(target, details);
-  const isStale = await isObservedManagedLockStale(target, details);
+  const owner = await inspectManagedLockOwner(target, details);
   try {
     if (managedLockIdentity(target, await lstat(target)) !== identity) return undefined;
   } catch (error: unknown) {
     if (isFileNotFound(error)) return undefined;
     throw error;
   }
-  return { identity, isStale };
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await lstat(target);
-    return true;
-  } catch (error: unknown) {
-    if (isFileNotFound(error)) return false;
-    throw error;
-  }
+  return { identity, ...owner, isDirectory: details.isDirectory() };
 }
 
 async function reclaimManagedLock(
   target: string,
   observation: ManagedLockObservation,
-): Promise<string | undefined> {
-  const quarantine = `${target}.ccr-stale-${observation.identity}`;
+): Promise<boolean> {
   try {
-    await rename(target, quarantine);
+    if (observation.isDirectory) {
+      // The unique owner filename is the fencing token: an old observation cannot unlink a
+      // replacement owner's metadata. rmdir also refuses to remove a nonempty replacement.
+      if (
+        observation.ownerFile !== undefined &&
+        !(await unlinkIfExists(path.join(target, observation.ownerFile)))
+      )
+        return false;
+      await rmdir(target);
+    } else {
+      // New locks are directories, which unlink cannot remove if a legacy file was replaced.
+      await unlink(target);
+    }
+    return true;
   } catch (error: unknown) {
-    if (isFileNotFound(error)) return undefined;
-    if (await pathExists(quarantine)) return undefined;
+    if (isFileNotFound(error)) return false;
     if (
       error instanceof Error &&
       "code" in error &&
       ["EACCES", "EEXIST", "EISDIR", "ENOTDIR", "ENOTEMPTY", "EPERM"].includes(String(error.code))
     ) {
-      return undefined;
+      return false;
     }
     throw error;
   }
-  if ((await lstat(quarantine)).isDirectory()) {
-    await writeFile(path.join(quarantine, ".ccr-stale-lock"), STALE_LOCK_MARKER, "utf8");
-  }
-  return quarantine;
 }
 
 /**
@@ -232,7 +237,8 @@ async function removeEmptyManagedWriteLockGroup(root: string, target: string): P
 /**
  * Atomically acquires a repository-contained, token-owned local lock. An absent result means a
  * live owner or a recently created incomplete owner holds it. Release cannot remove a replacement
- * owner's lock, and dead or old incomplete locks are reclaimed through an atomic rename.
+ * owner's lock. Dead token owners and old empty locks are reclaimed without moving a live lock;
+ * ambiguous containers are left untouched for human repair.
  */
 export async function tryAcquireManagedLock(
   root: string,
@@ -256,12 +262,10 @@ export async function tryAcquireManagedLock(
     }
   };
   let isAcquired = await createLockDirectory();
-  let quarantine: string | undefined;
   if (!isAcquired) {
     const observation = await observeManagedLock(target);
     if (observation === undefined || !observation.isStale) return undefined;
-    quarantine = await reclaimManagedLock(target, observation);
-    if (quarantine === undefined) return undefined;
+    if (!(await reclaimManagedLock(target, observation))) return undefined;
     isAcquired = await createLockDirectory();
     if (!isAcquired) return undefined;
   }
@@ -271,20 +275,25 @@ export async function tryAcquireManagedLock(
     await writeFile(
       ownerPath,
       `${JSON.stringify({ token, pid: process.pid, createdAt: Date.now() })}\n`,
-      "utf8",
+      { encoding: "utf8", flag: "wx" },
     );
-  } catch (error: unknown) {
-    await unlink(ownerPath).catch(ignoreError);
-    const didRemoveLock = await rmdir(target)
-      .then(() => true)
-      .catch(() => false);
-    if (didRemoveLock && quarantine !== undefined) {
-      await rm(quarantine, { recursive: true, force: true }).catch(ignoreError);
+    const owners = await readdir(target);
+    if (owners.length !== 1 || owners[0] !== `${token}.owner.json`) {
+      // A delayed incomplete creator may resume in a replacement directory. Only its sole
+      // token can establish acquisition; remove our token without touching the other owner.
+      await unlinkIfExists(ownerPath);
+      return undefined;
     }
+  } catch (error: unknown) {
+    // Stale empty-container reclamation can race publication. Without our token, this path
+    // may already belong to a replacement creator; leave its container for that creator.
+    const didRemoveOwner = await unlinkIfExists(ownerPath).catch(ignoreError);
+    if (didRemoveOwner) await rmdir(target).catch(ignoreError);
+    if (isFileNotFound(error)) return undefined;
     throw error;
   }
   return async () => {
-    await unlinkIfExists(ownerPath);
+    if (!(await unlinkIfExists(ownerPath))) return;
     let didRemoveLock = false;
     try {
       await rmdir(target);
@@ -297,9 +306,6 @@ export async function tryAcquireManagedLock(
       ) {
         throw error;
       }
-    }
-    if (didRemoveLock && quarantine !== undefined) {
-      await rm(quarantine, { recursive: true, force: true });
     }
     if (didRemoveLock) await removeEmptyManagedWriteLockGroup(root, target);
   };

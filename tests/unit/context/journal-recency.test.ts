@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
 const journalReads = vi.hoisted(() => new Map<string, number>());
+const changes = vi.hoisted(() => ({ shouldPromote: true }));
 const selectedPath = ".ccr/journal/a/2026-08-27.md";
 const promotedPath = ".ccr/journal/b/2026-08-26.md";
 
@@ -14,6 +15,10 @@ vi.mock("../../../src/context/journal-entry", () => ({
     const readCount = (journalReads.get(relativePath) ?? 0) + 1;
     journalReads.set(relativePath, readCount);
     if (relativePath === promotedPath) {
+      if (!changes.shouldPromote) {
+        const content = journal("2026-08-27T04:00:00Z");
+        return readCount === 1 ? content : content.replace("Completed", "Corrected");
+      }
       return journal(readCount === 1 ? "2026-08-27T04:00:00Z" : "2026-08-27T06:00:00Z");
     }
     return journal("2026-08-27T05:00:00Z");
@@ -33,6 +38,14 @@ import { readRecentJournalEntries } from "../../../src/context/journal-recency";
 
 beforeEach(() => {
   journalReads.clear();
+  changes.shouldPromote = true;
+});
+
+it("should reject same-length unselected journal edits even when activity and file revisions are unchanged", async () => {
+  changes.shouldPromote = false;
+  await expect(readRecentJournalEntries("repository")).rejects.toThrow(
+    "Journal set changed during recency selection",
+  );
 });
 
 it("should reject an unselected journal promoted during recency selection", async () => {

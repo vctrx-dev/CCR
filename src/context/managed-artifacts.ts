@@ -1,3 +1,10 @@
+import { REVIEW_DIMENSIONS_PATH } from "../review/dimension-file";
+import { REVIEW_DIMENSIONS } from "../review/dimensions";
+import {
+  MAX_MANAGED_JSON_CHARACTERS,
+  isUnmodifiedJsonArtifact,
+  serializeUpgradableJsonArtifact,
+} from "./managed-json";
 import { CCR_SKILL_RESOURCES } from "./skill-resources";
 import { CCR_SKILLS, MANAGED_SKILL_MARKER } from "./skills";
 import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
@@ -10,7 +17,11 @@ import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
 /** Identifies an artifact's purpose for reporting and future feature selection. */
 export type ManagedArtifactKind = "config" | "context" | "skill";
 /** Controls how setup treats an artifact that already exists. */
-export type SetupPolicy = "create-only" | "preserve-existing" | "upgrade-if-marked";
+export type SetupPolicy =
+  | "create-only"
+  | "preserve-existing"
+  | "upgrade-if-marked"
+  | "upgrade-if-unmodified";
 /** Controls the bounded condition under which uninstall may remove an artifact. */
 export type UninstallPolicy = "preserve" | "remove-if-marked" | "remove-with-context";
 
@@ -21,6 +32,10 @@ export interface ManagedArtifact {
   path: string;
   setupPolicy: SetupPolicy;
   uninstallPolicy: UninstallPolicy;
+  /** Upgrade predicate for payload-owned artifacts; absent predicates fail closed. */
+  isUnmodified?: (content: string) => boolean;
+  /** Optional bound honored throughout lifecycle previews and current-content checks. */
+  maximumCharacters?: number;
 }
 
 export type BlockSetupCondition = "always" | "updateAgentsMd" | "updateClaudeMd";
@@ -50,6 +65,15 @@ const contextArtifacts: readonly ManagedArtifact[] = Object.entries(CONTEXT_FILE
  */
 export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
   ...contextArtifacts,
+  {
+    content: serializeUpgradableJsonArtifact(REVIEW_DIMENSIONS),
+    kind: "context",
+    path: REVIEW_DIMENSIONS_PATH,
+    setupPolicy: "upgrade-if-unmodified",
+    uninstallPolicy: "remove-with-context",
+    isUnmodified: isUnmodifiedJsonArtifact,
+    maximumCharacters: MAX_MANAGED_JSON_CHARACTERS,
+  },
   ...[...CCR_SKILLS, ...CCR_SKILL_RESOURCES].map(({ content, path }) => ({
     content,
     kind: "skill" as const,
