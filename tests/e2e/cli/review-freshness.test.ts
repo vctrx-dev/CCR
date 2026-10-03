@@ -46,8 +46,7 @@ it("should warn when staged review evidence changed after the latest recorded re
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "hooks", "pre-commit"]);
 
-  expect(output).toContain("staged review evidence or shared context differs");
-  expect(output).toContain("/ccr-review changes");
+  expect(output).toBe("CCR: staged code changed after the last /ccr-review.\n");
 }, 30_000);
 
 it("should refuse CLI save-review for code edited after the captured review state", async () => {
@@ -127,11 +126,57 @@ it("should warn and mark stale when only shared context changes after review", a
   await runCommand("git", ["add", "--", ".ccr/project.md"], { cwd: root });
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "hooks", "pre-commit"]);
-  expect(output).toContain("staged review evidence or shared context differs");
+  expect(output).toBe("CCR: staged code changed after the last /ccr-review.\n");
 
   await runCommand("git", ["commit", "--quiet", "-m", "docs: update context"], { cwd: root });
   output = "";
   await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
-  expect(output).toContain("review is now marked stale");
+  expect(output).toBe("");
   expect(await readFile(journalTarget, "utf8")).toContain("**Review status**: stale");
+}, 30_000);
+
+it("should stay quiet when the commit holds only reviewed files and other work stays uncommitted", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-hooks-subset-review-"));
+  roots.push(root);
+  await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+  await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+  await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+  let output = "";
+  const run = async (args: string[]) => {
+    output = "";
+    await createCli({
+      cwd: root,
+      write(message: string) {
+        output += message;
+      },
+    }).parseAsync(["node", "ccr", ...args]);
+    return output;
+  };
+  await run(["setup"]);
+  await writeFile(path.join(root, "source.ts"), "export const value = 1;\n", "utf8");
+  await runCommand("git", ["add", "."], { cwd: root });
+  await runCommand("git", ["commit", "--quiet", "-m", "test: seed"], { cwd: root });
+  await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
+  await writeFile(path.join(root, "scratch.txt"), "personal notes\n", "utf8");
+  const state = JSON.parse(await run(["context", "review-state"]));
+  const saveArgs = ["context", "save-review", "changes", "all", "0,0,0,0", "No issues."];
+  const expected = [
+    "--expected-state",
+    state.fingerprint,
+    "--expected-context",
+    state.contextFingerprint,
+  ];
+  const journalPath = (await run([...saveArgs, ...expected]))
+    .replace("Review saved to ", "")
+    .trim()
+    .replace(/\.$/u, "");
+  await run(["context", "assess", state.fingerprint, state.contextFingerprint, "No change."]);
+  await runCommand("git", ["add", "--", "source.ts"], { cwd: root });
+
+  expect(await run(["hooks", "pre-commit"])).toBe("");
+  await runCommand("git", ["commit", "--quiet", "-m", "feat: value"], { cwd: root });
+  expect(await run(["hooks", "post-commit"])).toBe("");
+  const journal = await readFile(path.join(root, journalPath), "utf8");
+  expect(journal).toContain("**Commit**:");
+  expect(journal).toContain("**Review status**: current");
 }, 30_000);

@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { parseJournalIdentity, readJournalActivity } from "./journal-document";
+import {
+  parseJournalIdentity,
+  readJournalActivity,
+  selectJournalNarrative,
+} from "./journal-document";
 import {
   type JournalEntry,
   formatJournalEvidence,
@@ -16,6 +20,8 @@ import { readResolvedContextConfig } from "./privacy";
 
 interface JournalActivityCandidate {
   contentFingerprint: string;
+  /** False for untouched placeholders, which would otherwise crowd real history out of the window. */
+  hasNarrative: boolean;
   path: string;
   started: string;
   updated: string;
@@ -24,6 +30,7 @@ interface JournalActivityCandidate {
 export interface ReviewJournalEntries {
   continuityEntries: JournalEntry[];
   inputEntries: JournalEntry[];
+  activeEntryFingerprint?: { path: string; contentFingerprint: string };
 }
 
 function compareJournalActivity(
@@ -42,6 +49,7 @@ async function readJournalActivityCandidates(root: string): Promise<JournalActiv
     const content = await readCompleteJournalEntry(root, relativePath);
     candidates.push({
       contentFingerprint: createHash("sha256").update(content).digest("hex"),
+      hasNarrative: selectJournalNarrative(content).length > 0,
       path: relativePath,
       ...readJournalActivity(content, relativePath),
     });
@@ -103,7 +111,7 @@ async function readReviewJournalEntriesLocked(
   const candidates = await readJournalActivityCandidates(root);
   const active = candidates.find(({ path }) => path === excludedContinuityPath);
   const continuityCandidates = candidates
-    .filter(({ path }) => path !== excludedContinuityPath)
+    .filter(({ path, hasNarrative }) => path !== excludedContinuityPath && hasNarrative)
     .slice(0, recentJournalEntries);
   const inputCandidates =
     active === undefined ? continuityCandidates : [active, ...continuityCandidates];
@@ -121,6 +129,10 @@ async function readReviewJournalEntriesLocked(
   return {
     continuityEntries: entriesFor(continuityCandidates),
     inputEntries: entriesFor(inputCandidates),
+    activeEntryFingerprint:
+      active === undefined
+        ? undefined
+        : { path: active.path, contentFingerprint: active.contentFingerprint },
   };
 }
 

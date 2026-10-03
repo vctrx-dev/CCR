@@ -7,6 +7,10 @@ import { z } from "zod";
  * parse or mutate CCR configuration independently.
  */
 
+/** Fixed runtime values that are deliberately not written to or read from `.ccr/config.json`. */
+const MAX_COMPACTION_PERCENT = 25;
+const SHOULD_UPDATE_DECISIONS = true;
+
 const contextSettingsSchema = z
   .object({
     recentJournalEntries: z.number().int().min(1).max(10),
@@ -18,7 +22,7 @@ const hooksSettingsSchema = z
   .object({
     enabled: z.boolean(),
     checkBeforeCommit: z.boolean(),
-    autoUpdateContext: z.boolean().default(false),
+    autoUpdateContext: z.boolean(),
   })
   .strict();
 
@@ -26,7 +30,7 @@ const instructionsSchema = z
   .object({
     updateClaudeMd: z.boolean(),
     updateAgentsMd: z.boolean(),
-    updateDecisionsMd: z.boolean().default(false),
+    updateDecisionsMd: z.boolean(),
   })
   .strict();
 
@@ -34,22 +38,38 @@ const privacySettingsSchema = z
   .object({ excludedPaths: z.array(z.string().min(1)).max(100) })
   .strict();
 
+// Keys removed from the public file stay accepted (and ignored) so older files remain valid.
+const publicHooksSchema = z
+  .object({
+    enabled: z.boolean(),
+    checkBeforeCommit: z.boolean(),
+    autoUpdateContext: z.boolean().optional(),
+  })
+  .strict();
+
+const publicContextSchema = z
+  .object({
+    recentJournalEntries: z.number().int().min(1).max(10),
+    maxCompactionPercent: z.number().int().min(20).max(30).optional(),
+  })
+  .strict();
+
+const publicInstructionsSchema = z
+  .object({
+    updateClaudeMd: z.boolean(),
+    updateAgentsMd: z.boolean(),
+    updateDecisionsMd: z.boolean().optional(),
+  })
+  .strict();
+
 const publicConfigSchema = z
   .object({
     domain: z.string().trim().min(1).max(80).default("unspecified"),
-    hooks: hooksSettingsSchema.default({
-      enabled: true,
-      checkBeforeCommit: true,
-      autoUpdateContext: false,
-    }),
-    context: contextSettingsSchema.default({
-      recentJournalEntries: 3,
-      maxCompactionPercent: 25,
-    }),
-    instructions: instructionsSchema.default({
+    hooks: publicHooksSchema.default({ enabled: true, checkBeforeCommit: true }),
+    context: publicContextSchema.default({ recentJournalEntries: 1 }),
+    instructions: publicInstructionsSchema.default({
       updateClaudeMd: false,
       updateAgentsMd: false,
-      updateDecisionsMd: false,
     }),
     privacy: privacySettingsSchema.optional(),
   })
@@ -82,7 +102,7 @@ const legacyConfigSchema = z
       })
       .passthrough(),
     privacy: z.object({ excludedPaths: z.array(z.string().min(1)).max(100) }).passthrough(),
-    instructions: instructionsSchema.passthrough(),
+    instructions: publicInstructionsSchema.passthrough(),
   })
   .passthrough();
 
@@ -107,30 +127,48 @@ export type LocalContextConfig = z.infer<typeof localConfigSchema>;
 
 export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
   domain: "unspecified",
-  hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
+  // Automatic post-commit updates are derived: on whenever both hook switches are on.
+  hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: true },
   context: {
-    recentJournalEntries: 3,
-    maxCompactionPercent: 25,
+    recentJournalEntries: 1,
+    maxCompactionPercent: MAX_COMPACTION_PERCENT,
   },
   privacy: { excludedPaths: [] },
-  // New setups share human-confirmed review rationale so teammates and CI stop re-raising settled
-  // findings. Files written before this key existed keep the schema's opted-out default.
+  // New setups point Claude Code and other agents at CCR context so journal continuity survives
+  // compaction. Human-confirmed review rationale is always shareable through decisions.md.
   instructions: {
-    updateClaudeMd: false,
-    updateAgentsMd: false,
-    updateDecisionsMd: true,
+    updateClaudeMd: true,
+    updateAgentsMd: true,
+    updateDecisionsMd: SHOULD_UPDATE_DECISIONS,
   },
 };
 
 const UNSPECIFIED_DOMAIN = "unspecified";
 
-function fromPublicConfig(config: PublicContextConfig): ContextConfig {
+/**
+ * Applies the values CCR fixes in code: background context updates follow the two hook switches,
+ * compaction is capped at 25%, and decision appends stay enabled. Every resolved config passes here.
+ */
+function withFixedSettings(config: ContextConfig): ContextConfig {
   return resolvedConfigSchema.parse({
+    ...config,
+    hooks: {
+      enabled: config.hooks.enabled,
+      checkBeforeCommit: config.hooks.checkBeforeCommit,
+      autoUpdateContext: config.hooks.enabled && config.hooks.checkBeforeCommit,
+    },
+    context: { ...config.context, maxCompactionPercent: MAX_COMPACTION_PERCENT },
+    instructions: { ...config.instructions, updateDecisionsMd: SHOULD_UPDATE_DECISIONS },
+  });
+}
+
+function fromPublicConfig(config: PublicContextConfig): ContextConfig {
+  return withFixedSettings({
     ...DEFAULT_CONTEXT_CONFIG,
     domain: config.domain,
-    hooks: config.hooks,
-    context: config.context,
-    instructions: config.instructions,
+    hooks: { ...DEFAULT_CONTEXT_CONFIG.hooks, ...config.hooks },
+    context: { ...DEFAULT_CONTEXT_CONFIG.context, ...config.context },
+    instructions: { ...DEFAULT_CONTEXT_CONFIG.instructions, ...config.instructions },
     privacy: config.privacy ?? DEFAULT_CONTEXT_CONFIG.privacy,
   });
 }
@@ -139,9 +177,12 @@ function fromPublicConfig(config: PublicContextConfig): ContextConfig {
 export function toPublicContextConfig(config: ContextConfig): PublicContextConfig {
   return publicConfigSchema.parse({
     domain: config.domain,
-    hooks: config.hooks,
-    context: config.context,
-    instructions: config.instructions,
+    hooks: { enabled: config.hooks.enabled, checkBeforeCommit: config.hooks.checkBeforeCommit },
+    context: { recentJournalEntries: config.context.recentJournalEntries },
+    instructions: {
+      updateClaudeMd: config.instructions.updateClaudeMd,
+      updateAgentsMd: config.instructions.updateAgentsMd,
+    },
     // Persist repository-specific restrictions; omitting them would broaden evidence access.
     ...(config.privacy.excludedPaths.length > 0 ? { privacy: config.privacy } : {}),
   });
@@ -153,19 +194,17 @@ export function serializeContextConfig(config: ContextConfig): string {
 }
 
 function migrateLegacyConfig(config: z.infer<typeof legacyConfigSchema>): ContextConfig {
-  return resolvedConfigSchema.parse({
+  return withFixedSettings({
     ...DEFAULT_CONTEXT_CONFIG,
     domain: config.domain,
     hooks: {
+      ...DEFAULT_CONTEXT_CONFIG.hooks,
       enabled: config.hooks ?? true,
       checkBeforeCommit: config.automation?.checkBeforeCommit ?? true,
-      autoUpdateContext: false,
     },
     context: {
       ...DEFAULT_CONTEXT_CONFIG.context,
       recentJournalEntries: config.context.recentJournalEntries,
-      maxCompactionPercent:
-        config.context.maxCompactionPercent ?? DEFAULT_CONTEXT_CONFIG.context.maxCompactionPercent,
     },
     privacy: {
       excludedPaths: [
@@ -175,7 +214,11 @@ function migrateLegacyConfig(config: z.infer<typeof legacyConfigSchema>): Contex
         ]),
       ],
     },
-    instructions: config.instructions,
+    instructions: {
+      ...DEFAULT_CONTEXT_CONFIG.instructions,
+      updateClaudeMd: config.instructions.updateClaudeMd,
+      updateAgentsMd: config.instructions.updateAgentsMd,
+    },
   });
 }
 
@@ -213,7 +256,7 @@ export function resolveContextConfig(
   const excludedPaths = [
     ...new Set([...shared.privacy.excludedPaths, ...(local.privacy?.excludedPaths ?? [])]),
   ];
-  return {
+  return withFixedSettings({
     ...shared,
     hooks: {
       ...shared.hooks,
@@ -228,7 +271,7 @@ export function resolveContextConfig(
         local.context?.recentJournalEntries ?? shared.context.recentJournalEntries,
     },
     privacy: { excludedPaths },
-  };
+  });
 }
 
 function parseBooleanSetting(value: string): boolean {
@@ -263,27 +306,12 @@ export function updateContextConfig(
         hooks: { ...config.hooks, checkBeforeCommit: parseBooleanSetting(value) },
       };
       break;
-    case "hooks.autoUpdateContext":
-      updated = {
-        ...config,
-        hooks: { ...config.hooks, autoUpdateContext: parseBooleanSetting(value) },
-      };
-      break;
     case "context.recentJournalEntries":
       updated = {
         ...config,
         context: {
           ...config.context,
           recentJournalEntries: parseIntegerSetting(value),
-        },
-      };
-      break;
-    case "context.maxCompactionPercent":
-      updated = {
-        ...config,
-        context: {
-          ...config.context,
-          maxCompactionPercent: parseIntegerSetting(value),
         },
       };
       break;
@@ -305,21 +333,12 @@ export function updateContextConfig(
         },
       };
       break;
-    case "instructions.updateDecisionsMd":
-      updated = {
-        ...config,
-        instructions: {
-          ...config.instructions,
-          updateDecisionsMd: parseBooleanSetting(value),
-        },
-      };
-      break;
     default:
       throw new Error(
-        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, hooks.autoUpdateContext, context.recentJournalEntries, context.maxCompactionPercent, instructions.updateClaudeMd, instructions.updateAgentsMd, and instructions.updateDecisionsMd.",
+        "Supported settings: domain, hooks.enabled, hooks.checkBeforeCommit, context.recentJournalEntries, instructions.updateClaudeMd, and instructions.updateAgentsMd.",
       );
   }
-  return resolvedConfigSchema.parse(updated);
+  return withFixedSettings(updated);
 }
 
 /**

@@ -22,7 +22,7 @@ import {
   writeManagedText,
   writeManagedTextIfUnchanged,
 } from "./files";
-import { readCurrentCommit, readWorkingTreeFingerprints } from "./git";
+import { isCommitInHeadHistory } from "./git";
 import {
   assertJournalContentWithinLimit,
   inspectJournalDocument,
@@ -70,11 +70,12 @@ async function readAutomaticDecisions(root: string): Promise<string> {
   }
 }
 
+/**
+ * Fingerprints CCR-owned files only. The update runs in the background while the developer keeps
+ * editing source, so source edits are expected; Claude's tool allowlist already denies them.
+ */
 async function readUpdateFingerprints(root: string): Promise<Map<string, string>> {
-  return new Map([
-    ...readWorkingTreeFingerprints(root),
-    ...(await fingerprintManagedTree(root, ".ccr")),
-  ]);
+  return fingerprintManagedTree(root, ".ccr");
 }
 
 async function validateAutomaticUpdate(
@@ -138,14 +139,10 @@ async function readCompletedCommits(root: string): Promise<string[]> {
   }
 }
 
+/** Later commits on top are fine; a commit dropped by reset or rewrite is no longer worth updating. */
 function assertAutomaticUpdateHead(root: string, commit: string): void {
-  try {
-    if (readCurrentCommit(root) !== commit) {
-      throw new Error("Automatic context update commit no longer matches HEAD.");
-    }
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message.includes("no longer matches HEAD")) throw error;
-    throw new Error("Automatic context update could not verify HEAD.");
+  if (!isCommitInHeadHistory(root, commit)) {
+    throw new Error("Automatic context update commit is no longer in the branch history.");
   }
 }
 

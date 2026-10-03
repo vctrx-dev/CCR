@@ -25,8 +25,10 @@ describe("configuration CLI", () => {
     await createCli(io).parseAsync(["node", "ccr", "config", "defaults"]);
     expect(output).toContain('"checkBeforeCommit": true');
     expect(output).toContain('"enabled": true');
-    expect(output).toContain('"autoUpdateContext": false');
-    expect(output).toContain('"updateDecisionsMd": true');
+    expect(output).toContain('"updateAgentsMd": true');
+    expect(output).not.toContain("autoUpdateContext");
+    expect(output).not.toContain("maxCompactionPercent");
+    expect(output).not.toContain("updateDecisionsMd");
     expect(output).not.toContain('"schemaVersion"');
     expect(output).not.toContain('"discovery"');
     expect(output).not.toContain('"privacy"');
@@ -42,18 +44,14 @@ describe("configuration CLI", () => {
     expect(JSON.parse(configText).hooks).toEqual({
       enabled: true,
       checkBeforeCommit: true,
-      autoUpdateContext: false,
     });
     const manualKeys = [
       "## `domain`",
       "### `hooks.enabled`",
       "### `hooks.checkBeforeCommit`",
-      "### `hooks.autoUpdateContext`",
       "### `context.recentJournalEntries`",
-      "### `context.maxCompactionPercent`",
       "### `instructions.updateClaudeMd`",
       "### `instructions.updateAgentsMd`",
-      "### `instructions.updateDecisionsMd`",
     ];
     expect(manualKeys.map((key) => manualText.indexOf(key))).toEqual(
       [...manualKeys]
@@ -128,7 +126,7 @@ describe("configuration CLI", () => {
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "config"]);
     expect(JSON.parse(output)).toMatchObject({
-      hooks: { checkBeforeCommit: true, enabled: true, autoUpdateContext: false },
+      hooks: { checkBeforeCommit: true, enabled: true },
     });
 
     output = "";
@@ -155,7 +153,7 @@ describe("configuration CLI", () => {
       "hooks.checkBeforeCommit",
       "false",
     ]);
-    expect(output).toContain("This advisory pre-commit setting takes effect immediately");
+    expect(output).toContain("background context updates are off");
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "config", "set", "hooks.enabled", "false"]);
@@ -163,7 +161,6 @@ describe("configuration CLI", () => {
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).hooks).toEqual({
       enabled: false,
       checkBeforeCommit: false,
-      autoUpdateContext: false,
     });
   });
 
@@ -255,7 +252,7 @@ describe("configuration CLI", () => {
           "ccr",
           "config",
           "set",
-          "instructions.updateDecisionsMd",
+          "instructions.updateAgentsMd",
           "false",
         ]),
       ).rejects.toThrow(/managed lifecycle is busy/i);
@@ -264,7 +261,7 @@ describe("configuration CLI", () => {
     }
     expect(
       JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8")).instructions
-        .updateDecisionsMd,
+        .updateAgentsMd,
     ).toBe(true);
   });
 });

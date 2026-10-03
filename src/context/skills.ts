@@ -173,10 +173,8 @@ its help only when usage details are needed.
   human-owned and read-only to CCR; later operations may use it as context but never edit it.
 - \`.ccr/decisions.md\`: preserve human entries. Normal updates are append-only. An explicit human
   request to reconcile or compact decisions permits the narrowly scoped maintenance policy below;
-  ordinary project compaction does not. Outside initialize,
-  when \`instructions.updateDecisionsMd\` is \`true\`, append at most one concise, non-duplicate
-  decision through CCR's decision-append support under the human-review policy below.
-  When the setting is \`false\`, never write it.
+  ordinary project compaction does not. Outside initialize, append at most one concise,
+  non-duplicate decision through CCR's decision-append support under the human-review policy below.
 
 ${REVIEW_DECISION_GUIDANCE}
 
@@ -302,6 +300,8 @@ Examples:
 
 \`update last commit\`, which the post-commit hook prints, targets HEAD's commit and its journal even
 when unrelated uncommitted changes remain; plain \`update\` follows the journal rules.
+When the commit journal already ends with CCR's context-assessed marker for that commit, the
+background update has finished: only correct or fill gaps rather than redoing the account.
 Resolve the working or committed journal under the journal rules, then inspect the relevant changes,
 history, and current product flow with the normal tools available to you. Most commits should
 complete the journal without changing project context. Change it only when the commit alters a
@@ -329,10 +329,9 @@ stakeholder edits must be made directly by the human. Verify, show the diff, val
 ## Compact
 
 During compact, keep every constraint, default, and ownership modifier attached to the exact item it
-qualifies; never shorten a list into an ambiguous shared modifier. Read
-\`context.maxCompactionPercent\`; it must remain between 20% and 30%. Compact only the project
-narrative and measure its length before and after. Remove no more than the
-   configured percentage, preserve causal links, critical constraints, and uncertainty,
+qualifies; never shorten a list into an ambiguous shared modifier. Compact only the project
+narrative and measure its length before and after. Remove no more than 25% of it, preserve causal
+links, critical constraints, and uncertainty,
 then verify, show counts and diff, validate, and journal. Leave stakeholders and decisions unchanged.
 
 ## Examples of later changes

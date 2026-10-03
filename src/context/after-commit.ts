@@ -2,7 +2,8 @@ import { reconcileCommittedReviewState } from "../review/review-state";
 import type { ReviewFreshnessStatus } from "../review/review-state";
 import {
   classifyContextChanges,
-  hasWorkingTreeChanges,
+  isHistoryRewriteInProgress,
+  readAmendedCommit,
   readChangedPaths,
   readGitValue,
 } from "./git";
@@ -13,6 +14,7 @@ import {
   journalEntryForCommit,
   journalEntryForCommitParent,
   readCompleteJournalEntry,
+  retargetAmendedJournalEntry,
 } from "./journal";
 import type { JournalDetails } from "./journal";
 
@@ -25,6 +27,8 @@ import type { JournalDetails } from "./journal";
 export interface AfterCommitResult {
   commit: string;
   hasRepositoryChanges: boolean;
+  /** True for intermediate rebase or cherry-pick commits, which continuity deliberately skips. */
+  isSkipped?: boolean;
   journalCreated: boolean;
   journalPath?: string;
   prompt?: string;
@@ -54,6 +58,17 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
       shouldWarn: false,
     };
   }
+  if (isHistoryRewriteInProgress(root)) {
+    return {
+      commit,
+      hasRepositoryChanges: false,
+      isSkipped: true,
+      journalCreated: false,
+      journalPath: undefined,
+      reviewStatus: "unrecorded",
+      shouldWarn: false,
+    };
+  }
   const changed = readChangedPaths(root, 1);
   const { hasRepositoryChanges, shouldWarn } = classifyContextChanges(changed);
 
@@ -65,19 +80,19 @@ export async function runAfterCommitCheck(root: string): Promise<AfterCommitResu
     const details: JournalDetails = { branch, directory, commit };
     reviewJournalPath = (await journalEntryForCommitParent(root, details))?.path;
     const existing = await journalEntryForCommit(root, commit, directory);
-    if (existing) {
-      journalPath = existing.path;
-    } else {
-      const working = hasWorkingTreeChanges(root)
-        ? undefined
-        : await finalizeWorkingJournalEntry(root, details);
-      if (working) {
-        journalPath = working.path;
-      } else {
-        const created = await createJournalEntry(root, new Date(), details);
-        journalPath = created.path;
-        journalCreated = true;
-      }
+    const amended = existing === undefined ? readAmendedCommit(root) : undefined;
+    const retargeted =
+      amended === undefined ? undefined : await retargetAmendedJournalEntry(root, details, amended);
+    // The pending entry always becomes this commit's account, even when unrelated or uncommitted
+    // work remains; that remainder starts a new working entry that links back to this one.
+    const working = existing ?? retargeted ?? (await finalizeWorkingJournalEntry(root, details));
+    if (working) {
+      journalPath = working.path;
+    } else if (hasRepositoryChanges) {
+      // Context-only commits get no empty placeholder entry.
+      const created = await createJournalEntry(root, new Date(), details);
+      journalPath = created.path;
+      journalCreated = true;
     }
   } catch {
     // Journaling must never break the advisory hook; the context warning still applies.

@@ -6,11 +6,14 @@ import {
   assertJournalContentWithinLimit,
   isValidJournalTimestamp,
   parseJournalPath,
+  refreshJournalActivity,
 } from "../context/journal-document";
 import { hasSafeReviewChanges, listSafeReviewChanges } from "./evidence";
+import { isReviewSnapshotCovered, recordReviewCoverage } from "./review-coverage";
 import {
-  computeCommittedReviewState,
-  computeStagedReviewState,
+  computeCommittedReviewSnapshot,
+  computeStagedReviewSnapshot,
+  computeWorkingReviewSnapshot,
   computeWorkingReviewState,
 } from "./review-fingerprint";
 
@@ -170,8 +173,37 @@ export async function recordWorkingReviewState(
   expectedFingerprint: string,
   expectedContextFingerprint: string,
 ): Promise<void> {
-  const expected = reviewFingerprintSchema.parse(expectedFingerprint);
-  const expectedContext = reviewFingerprintSchema.parse(expectedContextFingerprint);
+  await recordReviewState(root, journalPath, {
+    fingerprint: expectedFingerprint,
+    contextFingerprint: expectedContextFingerprint,
+  });
+}
+
+/** Explicitly continues a recorded HEAD review into context-only working state, not a new review. */
+export async function continueWorkingReviewState(
+  root: string,
+  journalPath: string,
+  sourceJournalPath: string,
+  expected: { fingerprint: string; contextFingerprint: string },
+): Promise<void> {
+  await recordReviewState(root, journalPath, expected, parseJournalPath(sourceJournalPath));
+}
+
+async function assertCurrentHeadJournal(root: string, sourcePath: string): Promise<void> {
+  const source = await readReviewJournalEntry(root, { kind: "head" });
+  if (source?.path !== sourcePath) {
+    throw new Error("Continuation source is not the current HEAD journal for this branch.");
+  }
+}
+
+async function recordReviewState(
+  root: string,
+  journalPath: string,
+  expectedState: { fingerprint: string; contextFingerprint: string },
+  sourcePath?: string,
+): Promise<void> {
+  const expected = reviewFingerprintSchema.parse(expectedState.fingerprint);
+  const expectedContext = reviewFingerprintSchema.parse(expectedState.contextFingerprint);
   const normalizedJournalPath = parseJournalPath(journalPath);
   await assertCurrentReviewJournal(root, normalizedJournalPath);
   const current = await computeWorkingReviewState(root);
@@ -182,22 +214,52 @@ export async function recordWorkingReviewState(
     throw new Error("Review context changed before continuity completed; reload the context.");
   }
   const content = await readJournal(root, normalizedJournalPath);
-  const section = latestReviewSection(content);
+  let reviewContent = content;
+  let sourceContent: string | undefined;
+  if (sourcePath !== undefined) {
+    await assertCurrentHeadJournal(root, sourcePath);
+    const working = await readReviewJournalEntry(root, { kind: "working" });
+    if (working?.path !== normalizedJournalPath || sourcePath === normalizedJournalPath) {
+      throw new Error("A HEAD review can only continue into the current working journal.");
+    }
+    if (latestReviewSection(content) !== undefined) {
+      throw new Error(
+        "Continuation target already contains a review run; re-record that run instead.",
+      );
+    }
+    sourceContent = await readJournal(root, sourcePath);
+    const sourceSection = latestReviewSection(sourceContent);
+    if (sourceSection === undefined)
+      throw new Error("Continuation source does not contain a review run.");
+    assertCompleteReviewContinuity(sourceContent, sourceSection);
+    const sourceRecord = readReviewRecord(sourceContent);
+    if (sourceRecord === undefined)
+      throw new Error("Continuation source has no recorded review state.");
+    if (sourceRecord.fingerprint !== expected) {
+      throw new Error("Code changed since this review was recorded; run the review again.");
+    }
+    // Preserve the original timestamp, scope, counts and outcomes; the source receipt stays untouched.
+    const run = `## Review run — ${sourceSection.timestamp}\n${sourceContent.slice(sourceSection.start, sourceSection.end)}`;
+    reviewContent = `${content.replace(JOURNAL_COMPLETION_PLACEHOLDER, "Continued the recorded HEAD review after a verified context clarification.").trimEnd()}\n\n${run.trimEnd()}\n- **Continued from**: ${sourcePath}\n`;
+    reviewContent = refreshJournalActivity(reviewContent, new Date(), normalizedJournalPath);
+  }
+  const section = latestReviewSection(reviewContent);
   if (section === undefined) throw new Error("Journal does not contain a review run.");
-  assertCompleteReviewContinuity(content, section);
+  assertCompleteReviewContinuity(reviewContent, section);
   // Re-recording may absorb this review's own context edits, never code it did not examine.
-  const previous = parseReviewRecord(content.slice(section.start, section.end));
+  const previous = parseReviewRecord(reviewContent.slice(section.start, section.end));
   if (previous !== undefined && previous.fingerprint !== expected) {
     throw new Error("Code changed since this review was recorded; run the review again.");
   }
-  const body = content
+  const body = reviewContent
     .slice(section.start, section.end)
     .replace(/^- \*\*Reviewed state\*\*: `[^`]+`\r?\n?/gmu, "")
     .replace(/^- \*\*Reviewed context\*\*: `[^`]+`\r?\n?/gmu, "")
     .replace(/^- \*\*Review status\*\*: (?:current|stale)\r?\n?/gmu, "");
   const metadata = `\n- **Reviewed state**: \`${expected}\`\n- **Reviewed context**: \`${expectedContext}\`\n- **Review status**: current\n`;
-  const updated = `${content.slice(0, section.start)}${metadata}${body}${content.slice(section.end)}`;
-  const verified = await computeWorkingReviewState(root);
+  const updated = `${reviewContent.slice(0, section.start)}${metadata}${body}${reviewContent.slice(section.end)}`;
+  const verifiedSnapshot = await computeWorkingReviewSnapshot(root);
+  const verified = verifiedSnapshot.state;
   if (verified.fingerprint !== expected) {
     throw new Error("Review evidence changed before continuity completed; rerun the review.");
   }
@@ -205,29 +267,33 @@ export async function recordWorkingReviewState(
     throw new Error("Review context changed before continuity completed; reload the context.");
   }
   await assertCurrentReviewJournal(root, normalizedJournalPath);
+  if (sourcePath !== undefined) {
+    await assertCurrentHeadJournal(root, sourcePath);
+    if ((await readJournal(root, sourcePath)) !== sourceContent) {
+      throw new Error("Continuation source changed concurrently; reload it before recording.");
+    }
+  }
   await writeJournalIfUnchanged(root, normalizedJournalPath, content, updated);
+  await recordReviewCoverage(root, "review", verifiedSnapshot);
 }
 
-/** Compares the staged commit candidate with the latest review recorded for this working journal. */
+/**
+ * Compares the staged commit candidate with the latest review recorded for this working journal.
+ * Committing only reviewed, unchanged files stays current even when other reviewed work remains.
+ * An earlier commit's review does not cover new work, so it is not compared; that would only
+ * repeat the same reminder on every later commit.
+ */
 export async function readStagedReviewFreshness(root: string): Promise<ReviewFreshness> {
   const changes = await listSafeReviewChanges(root);
-  const hasWorkingChanges = hasSafeReviewChanges(changes);
-  const selected = await readReviewJournalEntry(root, {
-    kind: hasWorkingChanges ? "working" : "head",
+  const journal = await readReviewJournalEntry(root, {
+    kind: hasSafeReviewChanges(changes) ? "working" : "head",
   });
-  const journal =
-    selected ??
-    (hasWorkingChanges ? await readReviewJournalEntry(root, { kind: "head" }) : undefined);
   if (journal === undefined) return { status: "unrecorded" };
   const record = readReviewRecord(await readJournal(root, journal.path));
   if (record === undefined) return { status: "unrecorded", journalPath: journal.path };
-  const staged = await computeStagedReviewState(root);
+  const staged = await computeStagedReviewSnapshot(root);
   return {
-    status:
-      record.fingerprint === staged.fingerprint &&
-      record.contextFingerprint === staged.contextFingerprint
-        ? "current"
-        : "stale",
+    status: (await isReviewSnapshotCovered(root, "review", record, staged)) ? "current" : "stale",
     journalPath: journal.path,
   };
 }
@@ -241,13 +307,8 @@ export async function reconcileCommittedReviewState(
   const content = await readJournal(root, journalPath);
   const record = readReviewRecord(content);
   if (record === undefined) return "unrecorded";
-  const committed = await computeCommittedReviewState(root, commit);
-  if (
-    record.fingerprint === committed.fingerprint &&
-    record.contextFingerprint === committed.contextFingerprint
-  ) {
-    return "current";
-  }
+  const committed = await computeCommittedReviewSnapshot(root, commit);
+  if (await isReviewSnapshotCovered(root, "review", record, committed)) return "current";
   const section = latestReviewSection(content);
   if (section === undefined) return "unrecorded";
   const before = content.slice(0, section.start);

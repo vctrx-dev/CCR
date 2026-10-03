@@ -39,7 +39,6 @@ describe("context CLI", () => {
     expect(config.hooks).toEqual({
       enabled: true,
       checkBeforeCommit: true,
-      autoUpdateContext: false,
     });
     expect(config.schemaVersion).toBeUndefined();
     expect(config.discovery).toBeUndefined();
@@ -66,7 +65,7 @@ describe("context CLI", () => {
       "false",
       "--apply",
     ]);
-    expect(output).toContain("takes effect immediately");
+    expect(output).toContain("background context updates are off");
     expect(output).not.toContain("reconcile CCR-managed hooks");
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "hooks", "check"]);

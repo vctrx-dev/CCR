@@ -3,10 +3,12 @@
  * explicit human/agent assessment; a shared-file edit alone never establishes assessment.
  */
 import { z } from "zod";
+import { isReviewSnapshotCovered, recordReviewCoverage } from "../review/review-coverage";
 import {
-  computeCommittedReviewState,
-  computeStagedReviewState,
-  computeWorkingReviewState,
+  type ReviewSnapshot,
+  computeCommittedReviewSnapshot,
+  computeStagedReviewSnapshot,
+  computeWorkingReviewSnapshot,
 } from "../review/review-fingerprint";
 import {
   assertSafeManagedPath,
@@ -66,7 +68,14 @@ export function isMatchingContextAssessment(
 
 /** Selects working evidence by default, or one explicit immutable current-HEAD assessment target. */
 export async function computeContextAssessmentState(root: string, commit?: string) {
-  if (commit === undefined) return computeWorkingReviewState(root);
+  return (await computeContextAssessmentSnapshot(root, commit)).state;
+}
+
+async function computeContextAssessmentSnapshot(
+  root: string,
+  commit?: string,
+): Promise<ReviewSnapshot> {
+  if (commit === undefined) return computeWorkingReviewSnapshot(root);
   const target = commitSchema.parse(commit);
   const assertHead = () => {
     if (readCurrentCommit(root) !== target) {
@@ -74,9 +83,9 @@ export async function computeContextAssessmentState(root: string, commit?: strin
     }
   };
   assertHead();
-  const state = await computeCommittedReviewState(root, target);
+  const snapshot = await computeCommittedReviewSnapshot(root, target);
   assertHead();
-  return state;
+  return snapshot;
 }
 
 /** Records an explicit assessment only while the caller's reviewed evidence still matches. */
@@ -85,7 +94,8 @@ export async function recordContextAssessment(root: string, candidate: unknown):
   const receiptPath = contextAssessmentPath(root);
   const previous = await readAssessment(root, receiptPath);
   if (previous?.isTruncated) throw new Error("Existing context assessment exceeds its safe limit.");
-  const state = await computeContextAssessmentState(root, assessment.commit);
+  const snapshot = await computeContextAssessmentSnapshot(root, assessment.commit);
+  const { state } = snapshot;
   if (
     !isMatchingContextAssessment(
       assessment,
@@ -106,9 +116,13 @@ export async function recordContextAssessment(root: string, candidate: unknown):
   ) {
     throw new Error("Context assessment changed concurrently; reread before recording.");
   }
+  await recordReviewCoverage(root, "assessment", snapshot);
 }
 
-/** Checks the staged candidate; missing or malformed receipts leave the advisory reminder active. */
+/**
+ * Checks the staged candidate, or one commit, against the receipt. A candidate made only of assessed,
+ * unchanged files counts as assessed; missing or malformed receipts leave the reminder active.
+ */
 export async function hasCurrentContextAssessment(root: string, commit?: string): Promise<boolean> {
   const text = await readAssessment(root, contextAssessmentPath(root));
   if (text === undefined || text.isTruncated) return false;
@@ -118,15 +132,20 @@ export async function hasCurrentContextAssessment(root: string, commit?: string)
   } catch {
     return false;
   }
-  if (!assessmentSchema.safeParse(candidate).success) return false;
-  const state =
+  const receipt = assessmentSchema.safeParse(candidate);
+  if (!receipt.success) return false;
+  if (receipt.data.commit !== undefined && receipt.data.commit !== commit) return false;
+  const snapshot =
     commit === undefined
-      ? await computeStagedReviewState(root)
-      : await computeContextAssessmentState(root, commit);
-  return isMatchingContextAssessment(
-    candidate,
-    state.fingerprint,
-    state.contextFingerprint,
-    commit,
+      ? await computeStagedReviewSnapshot(root)
+      : await computeContextAssessmentSnapshot(root, commit);
+  return isReviewSnapshotCovered(
+    root,
+    "assessment",
+    {
+      fingerprint: receipt.data.codeFingerprint,
+      contextFingerprint: receipt.data.contextFingerprint,
+    },
+    snapshot,
   );
 }
