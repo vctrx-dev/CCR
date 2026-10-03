@@ -51,6 +51,24 @@ it("should reject a delayed incomplete creator that resumes inside a live replac
 });
 afterEach(() => vi.restoreAllMocks());
 
+it("should treat a removed acquisition container as contention without removing its replacement", async () => {
+  const root = await filesystem.mkdtemp(path.join(tmpdir(), "ccr-lock-publication-race-"));
+  roots.push(root);
+  const relativePath = ".ccr/private/test.lock";
+  const target = path.join(root, relativePath);
+  vi.mocked(filesystem.writeFile).mockImplementationOnce(async () => {
+    await filesystem.rmdir(target);
+    await filesystem.mkdir(target);
+    throw Object.assign(new Error("Lock container disappeared during publication."), {
+      code: "ENOENT",
+    });
+  });
+
+  await expect(tryAcquireManagedLock(root, relativePath)).resolves.toBeUndefined();
+  await expect(filesystem.readdir(target)).resolves.toEqual([]);
+  await expect(tryAcquireManagedLock(root, relativePath)).resolves.toBeUndefined();
+});
+
 it("should leave old malformed owner metadata untouched rather than evict a delayed writer", async () => {
   const root = await filesystem.mkdtemp(path.join(tmpdir(), "ccr-incomplete-owner-"));
   roots.push(root);

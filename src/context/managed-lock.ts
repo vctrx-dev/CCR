@@ -285,8 +285,11 @@ export async function tryAcquireManagedLock(
       return undefined;
     }
   } catch (error: unknown) {
-    await unlink(ownerPath).catch(ignoreError);
-    await rmdir(target).catch(ignoreError);
+    // Stale empty-container reclamation can race publication. Without our token, this path
+    // may already belong to a replacement creator; leave its container for that creator.
+    const didRemoveOwner = await unlinkIfExists(ownerPath).catch(ignoreError);
+    if (didRemoveOwner) await rmdir(target).catch(ignoreError);
+    if (isFileNotFound(error)) return undefined;
     throw error;
   }
   return async () => {

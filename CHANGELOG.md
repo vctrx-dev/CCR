@@ -20,6 +20,8 @@ See [VERSIONING.md](VERSIONING.md); published release history is retained below.
   evidence/reminders use the first parent; PR approval and net diffs share one immutable comparison.
 - Lock reclamation protects replacement owners; live locks do not expire with duration. Config errors
   omit input excerpts, and upgrades/unrelated edits preserve privacy exclusions.
+- Lock publication treats a concurrently removed empty container as contention and preserves any
+  replacement creator, avoiding intermittent missing-file failures during stale-lock recovery.
 - Input-context hashes include every supplied recent journal and the active entry. Freshness ignores
   journal activity and operational settings but still tracks code and shared review context. Existing
   review records become stale once after this change.
