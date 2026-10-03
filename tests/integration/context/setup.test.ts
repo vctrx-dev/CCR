@@ -42,7 +42,8 @@ describe("CCR setup", () => {
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/architecture.md");
     expect(preview.changes.map((change) => change.path)).toContain(".ccr/decisions.md");
     expect(preview.changes.map((change) => change.path)).not.toContain(".ccr/index.md");
-    expect(preview.changes.map((change) => change.path)).not.toContain("CLAUDE.md");
+    expect(preview.changes.map((change) => change.path)).toContain("CLAUDE.md");
+    expect(preview.changes.map((change) => change.path)).toContain("AGENTS.md");
     await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).rejects.toThrow();
   });
 
@@ -152,7 +153,6 @@ describe("CCR setup", () => {
     expect(upgraded.hooks).toEqual({
       enabled: true,
       checkBeforeCommit: false,
-      autoUpdateContext: false,
     });
     expect(upgraded.discovery).toBeUndefined();
     expect(upgraded.privacy).toEqual({ excludedPaths: [".env*"] });
@@ -186,7 +186,7 @@ describe("CCR setup", () => {
     expect(result.manual.action).toBe("create");
     expect(JSON.parse(await readFile(path.join(root, ".ccr/config.json"), "utf8"))).toMatchObject({
       domain: "education",
-      hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
+      hooks: { enabled: true, checkBeforeCommit: true },
       context: { recentJournalEntries: 2 },
     });
   });

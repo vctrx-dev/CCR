@@ -15,6 +15,7 @@ export {
 } from "./review-fingerprint";
 export type { ReviewFreshness, ReviewFreshnessStatus } from "./review-continuity";
 export {
+  continueWorkingReviewState,
   readStagedReviewFreshness,
   reconcileCommittedReviewState,
   recordWorkingReviewState,

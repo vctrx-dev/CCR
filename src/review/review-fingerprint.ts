@@ -39,6 +39,15 @@ export interface ReviewState {
   pathCount: number;
 }
 
+/** One privacy-approved reviewed path state: path, Git mode, and content object ID. */
+export type ReviewEntry = [path: string, mode: string, oid: string];
+
+/** A review state plus the per-path entries its fingerprint hashes, for subset comparisons. */
+export interface ReviewSnapshot {
+  state: ReviewState;
+  entries: ReviewEntry[];
+}
+
 export interface ReviewContextState {
   contextFingerprint: string;
   inputContextFingerprint: string;
@@ -101,6 +110,8 @@ async function computeReviewContextStateForTarget(
       dimensions,
       contextEntries,
       journalEntries: canonicalEntries(journals.inputEntries),
+      // The active journal is read in full; historical entries are supplied only as previews.
+      activeJournal: journals.activeEntryFingerprint,
     }),
   };
 }
@@ -132,19 +143,20 @@ export async function computeReviewContextFingerprint(
 async function fingerprintState(
   root: string,
   baseCommit: string,
-  entries: Array<[string, string, string]>,
+  entries: ReviewEntry[],
   target: ReviewJournalTarget,
-): Promise<ReviewState> {
-  const canonical = JSON.stringify({
-    baseCommit,
-    entries: entries.sort(([a], [b]) => a.localeCompare(b)),
-  });
+): Promise<ReviewSnapshot> {
+  const sorted = entries.sort(([a], [b]) => a.localeCompare(b));
+  const canonical = JSON.stringify({ baseCommit, entries: sorted });
   const context = await computeReviewContextStateForTarget(root, target);
   return {
-    baseCommit,
-    fingerprint: `sha256:${createHash("sha256").update(canonical).digest("hex")}`,
-    ...context,
-    pathCount: entries.length,
+    state: {
+      baseCommit,
+      fingerprint: `sha256:${createHash("sha256").update(canonical).digest("hex")}`,
+      ...context,
+      pathCount: sorted.length,
+    },
+    entries: sorted,
   };
 }
 
@@ -154,6 +166,11 @@ function isReviewTrackedPath(relativePath: string): boolean {
 
 /** Fingerprints the final approved content represented by all current live changes. */
 export async function computeWorkingReviewState(root: string): Promise<ReviewState> {
+  return (await computeWorkingReviewSnapshot(root)).state;
+}
+
+/** Working review state plus its per-path entries. */
+export async function computeWorkingReviewSnapshot(root: string): Promise<ReviewSnapshot> {
   const changes = await listSafeReviewChanges(root);
   const paths = [
     ...new Set([...changes.stagedPaths, ...changes.unstagedPaths, ...changes.untrackedPaths]),
@@ -169,7 +186,7 @@ export async function computeWorkingReviewState(root: string): Promise<ReviewSta
     }
   })();
   const entries = await Promise.all(
-    paths.map(async (relativePath): Promise<[string, string, string]> => {
+    paths.map(async (relativePath): Promise<ReviewEntry> => {
       const oid = worktree.get(relativePath) ?? index.get(relativePath)?.oid ?? "missing";
       if (oid === "missing") return [relativePath, "missing", oid];
       if (!worktreePaths.has(relativePath)) {
@@ -189,13 +206,18 @@ export async function computeWorkingReviewState(root: string): Promise<ReviewSta
 
 /** Fingerprints the exact privacy-approved commit candidate currently in Git's index. */
 export async function computeStagedReviewState(root: string): Promise<ReviewState> {
+  return (await computeStagedReviewSnapshot(root)).state;
+}
+
+/** Staged review state plus its per-path entries. */
+export async function computeStagedReviewSnapshot(root: string): Promise<ReviewSnapshot> {
   const changes = await listSafeReviewChanges(root);
   const paths = changes.stagedPaths.filter(isReviewTrackedPath);
   const index = new Map(readIndexEntries(root).map((entry) => [entry.path, entry]));
   return fingerprintState(
     root,
     readCurrentCommit(root),
-    paths.map((relativePath) => {
+    paths.map((relativePath): ReviewEntry => {
       const entry = index.get(relativePath);
       return [relativePath, entry?.mode ?? "missing", entry?.oid ?? "missing"];
     }),
@@ -208,6 +230,14 @@ export async function computeCommittedReviewState(
   root: string,
   commit: string,
 ): Promise<ReviewState> {
+  return (await computeCommittedReviewSnapshot(root, commit)).state;
+}
+
+/** Committed review state plus its per-path entries. */
+export async function computeCommittedReviewSnapshot(
+  root: string,
+  commit: string,
+): Promise<ReviewSnapshot> {
   const config = await readResolvedContextConfig(root);
   const baseCommit = readParentCommit(root, commit);
   const commitEntries = readCommitEntries(root, commit);
@@ -222,7 +252,7 @@ export async function computeCommittedReviewState(
   return fingerprintState(
     root,
     baseCommit,
-    paths.map((relativePath) => {
+    paths.map((relativePath): ReviewEntry => {
       const entry = approved.entriesByPath.get(relativePath);
       return [relativePath, entry?.mode ?? "missing", entry?.oid ?? "missing"];
     }),

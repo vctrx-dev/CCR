@@ -20,7 +20,7 @@ import {
 } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
 import { readReviewDimensionRegistry } from "../review/dimension-file";
-import { renderReviewDimensionSections } from "../review/dimensions";
+import { parseReviewDimensionSelection, renderReviewDimensionSections } from "../review/dimensions";
 import {
   hasSafeReviewChanges,
   listSafeReviewChanges,
@@ -31,7 +31,11 @@ import {
   readSafePullRequestHeadEvidence,
 } from "../review/pr-evidence";
 import { saveReview } from "../review/review-save";
-import { computeReviewContextState, recordWorkingReviewState } from "../review/review-state";
+import {
+  computeReviewContextState,
+  continueWorkingReviewState,
+  recordWorkingReviewState,
+} from "../review/review-state";
 import type { CliIo } from "./index";
 import { findCliRepositoryRoot } from "./io";
 
@@ -44,12 +48,26 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
       "Render review lenses from current repository JSON, or packaged defaults when absent",
     )
     .option("--json", "return the validated effective taxonomy instead of rendered prompt sections")
-    .action(async (options: { json?: boolean }) => {
+    .option(
+      "--select <dimensions>",
+      "validate all or comma-separated IDs and render only those lenses",
+    )
+    .action(async (options: { json?: boolean; select?: string }) => {
       const registry = await readReviewDimensionRegistry(root());
+      const selection =
+        options.select === undefined
+          ? undefined
+          : parseReviewDimensionSelection(options.select, registry);
+      const selected =
+        selection === undefined || selection === "all"
+          ? registry
+          : {
+              dimensions: registry.dimensions.filter(({ id }) => selection.split(",").includes(id)),
+            };
       io.write(
         options.json
-          ? `${JSON.stringify(registry, null, 2)}\n`
-          : `${renderReviewDimensionSections(registry) || "No review dimensions are configured."}\n`,
+          ? `${JSON.stringify(selected, null, 2)}\n`
+          : `${renderReviewDimensionSections(selected) || "No review dimensions are configured."}\n`,
       );
     });
   context
@@ -168,10 +186,28 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
     .description(
       "Record fingerprints in the latest journal review run; re-recording requires unchanged code",
     )
-    .action(async (journal: string, fingerprint: string, contextFingerprint: string) => {
-      await recordWorkingReviewState(root(), journal, fingerprint, contextFingerprint);
-      io.write("Review state recorded.\n");
-    });
+    .option(
+      "--continue-from <journal>",
+      "continue a recorded current-HEAD review after context-only edits",
+    )
+    .action(
+      async (
+        journal: string,
+        fingerprint: string,
+        contextFingerprint: string,
+        options: { continueFrom?: string },
+      ) => {
+        if (options.continueFrom === undefined) {
+          await recordWorkingReviewState(root(), journal, fingerprint, contextFingerprint);
+        } else {
+          await continueWorkingReviewState(root(), journal, options.continueFrom, {
+            fingerprint,
+            contextFingerprint,
+          });
+        }
+        io.write("Review state recorded.\n");
+      },
+    );
   context
     .command("review-diff <file>")
     .description("Read privacy-filtered staged, unstaged, or untracked evidence")
@@ -221,13 +257,21 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
     .description("Save a finished review to its journal; counts are critical,high,medium,low")
     .option("--expected-state <fingerprint>", "code fingerprint captured before the review")
     .option("--expected-context <fingerprint>", "context fingerprint captured before the review")
+    .option(
+      "--expected-input-context <fingerprint>",
+      "acknowledged input hash, checked before this save's journal writes",
+    )
     .action(
       async (
         scope: string,
         dimensions: string,
         counts: string,
         summary: string,
-        options: { expectedState?: string; expectedContext?: string },
+        options: {
+          expectedState?: string;
+          expectedContext?: string;
+          expectedInputContext?: string;
+        },
       ) => {
         const saved = await saveReview(root(), { scope, dimensions, counts, summary, ...options });
         io.write(`Review saved to ${saved.path}.

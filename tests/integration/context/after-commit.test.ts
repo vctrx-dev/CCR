@@ -122,9 +122,9 @@ describe("runAfterCommitCheck", () => {
 
     expect(result.journalCreated).toBe(false);
     expect(result.journalPath).toBe(working.path);
-    const entries = await readRecentJournalEntries(root);
-    expect(entries.map((entry) => entry.path)).toEqual([working.path]);
-    expect(entries[0]?.content).toContain(`**Commit**: \`${result.commit}\``);
+    expect(await readFile(path.join(root, working.path), "utf8")).toContain(
+      `**Commit**: \`${result.commit}\``,
+    );
   });
 
   it("should mark a recorded review stale when later code is included in the commit", async () => {
@@ -196,7 +196,7 @@ describe("runAfterCommitCheck", () => {
     expect(await readFile(journalTarget, "utf8")).toContain("- **Review status**: current");
   }, 30_000);
 
-  it("should not attach a partial commit to a journal that still covers working changes", async () => {
+  it("should adopt the reviewed journal for a partial commit and keep its review current", async () => {
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"), { recursive: true });
     await writeFile(
@@ -226,12 +226,12 @@ describe("runAfterCommitCheck", () => {
 
     const result = await runAfterCommitCheck(root);
 
-    expect(result.journalCreated).toBe(true);
-    expect(result.journalPath).not.toBe(working.path);
-    const pendingContent = await readFile(path.join(root, working.path), "utf8");
-    expect(pendingContent).not.toContain("**Commit**");
-    expect(pendingContent).toContain("- **Review status**: stale");
-    expect(result.reviewStatus).toBe("stale");
+    expect(result.journalCreated).toBe(false);
+    expect(result.journalPath).toBe(working.path);
+    const committedContent = await readFile(path.join(root, working.path), "utf8");
+    expect(committedContent).toContain(`**Commit**: \`${result.commit}\``);
+    expect(committedContent).toContain("- **Review status**: current");
+    expect(result.reviewStatus).toBe("current");
 
     const nextWorking = await ensureWorkingJournalEntry(root);
     expect(nextWorking.path).not.toBe(working.path);
@@ -240,9 +240,6 @@ describe("runAfterCommitCheck", () => {
     expect(nextContent).toContain("Reviewed approved repository evidence.");
     expect(nextContent).not.toContain("**Review status**");
     expect(nextContent).not.toContain("## Review run");
-    const committedContent = await readFile(path.join(root, result.journalPath ?? ""), "utf8");
-    expect(committedContent).toContain(working.path);
-    expect(committedContent).toContain("Reviewed approved repository evidence.");
     expect(await ensureWorkingJournalEntry(root)).toEqual(nextWorking);
   }, 30_000);
 
@@ -296,7 +293,7 @@ describe("runAfterCommitCheck", () => {
     expect(content).not.toContain("**Review status**");
   });
 
-  it("should create committed metadata and not prompt for a context-only commit", async () => {
+  it("should create no placeholder journal and not prompt for a context-only commit", async () => {
     const root = await makeRepository();
     await mkdir(path.join(root, ".ccr"), { recursive: true });
     await writeFile(path.join(root, ".ccr/project.md"), "# Project\n", "utf8");
@@ -306,11 +303,36 @@ describe("runAfterCommitCheck", () => {
     const result = await runAfterCommitCheck(root);
     expect(result.shouldWarn).toBe(false);
     expect(result.prompt).toBeUndefined();
-    const journalPath = result.journalPath;
-    if (journalPath === undefined) throw new Error("Expected a journal path.");
-    const content = await readFile(path.join(root, journalPath), "utf8");
-    expect(content).toContain(`**Commit**: \`${result.commit}\``);
-    expect(content).not.toContain("## Changed paths");
+    expect(result.journalCreated).toBe(false);
+    expect(result.journalPath).toBeUndefined();
+  });
+
+  it("should move the journal of an amended commit to the amended commit", async () => {
+    const root = await makeRepository();
+    await commitPath(root, "main.py", "print('x')\n");
+    const original = await runAfterCommitCheck(root);
+    await runCommand("git", ["commit", "--quiet", "--amend", "-m", "reworded"], { cwd: root });
+
+    const amended = await runAfterCommitCheck(root);
+
+    expect(amended.commit).not.toBe(original.commit);
+    expect(amended.journalCreated).toBe(false);
+    expect(amended.journalPath).toBe(original.journalPath);
+    const content = await readFile(path.join(root, amended.journalPath ?? ""), "utf8");
+    expect(content).toContain(`**Commit**: \`${amended.commit}\``);
+    expect(content).not.toContain(original.commit);
+  });
+
+  it("should skip journaling for commits replayed by a rebase", async () => {
+    const root = await makeRepository();
+    await commitPath(root, "main.py", "print('x')\n");
+    await mkdir(path.join(root, ".git/rebase-merge"), { recursive: true });
+
+    const result = await runAfterCommitCheck(root);
+
+    expect(result.isSkipped).toBe(true);
+    expect(result.journalPath).toBeUndefined();
+    expect(result.prompt).toBeUndefined();
   });
 
   it("should keep the context warning when journal creation fails", async () => {

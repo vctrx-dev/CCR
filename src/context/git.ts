@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { BoundedGitText } from "./git-process";
 import { hashGitWorktreePaths, runBoundedGit, runGit, runGitMetadata } from "./git-process";
 
@@ -54,6 +56,43 @@ export function readCurrentCommit(root: string): string {
   return readCommitOrUnborn(root, "HEAD");
 }
 
+/**
+ * Reports a rebase or multi-commit cherry-pick/revert in progress. Git runs post-commit for every
+ * replayed commit, so continuity hooks skip these intermediate commits instead of journaling each.
+ */
+export function isHistoryRewriteInProgress(root: string): boolean {
+  return ["rebase-merge", "rebase-apply", "sequencer"].some((name) => {
+    try {
+      const gitPath = runGit(root, ["rev-parse", "--git-path", name], 4_096, true).trim();
+      return existsSync(path.resolve(root, gitPath));
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Returns the commit HEAD replaced when the latest reflog entry is `git commit --amend`. */
+export function readAmendedCommit(root: string): string | undefined {
+  try {
+    const subject = runGit(root, ["reflog", "-1", "--format=%gs", "HEAD"], 4_096, true).trim();
+    if (!subject.startsWith("commit (amend)")) return undefined;
+    const previous = readCommitOrUnborn(root, "HEAD@{1}");
+    return previous === "unborn" ? undefined : previous;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Returns whether `commit` is HEAD or one of its ancestors. */
+export function isCommitInHeadHistory(root: string, commit: string): boolean {
+  try {
+    runGit(root, ["merge-base", "--is-ancestor", commit, "HEAD"], 200, true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Resolves a commit's first parent, returning `unborn` for a root or missing commit. */
 export function readParentCommit(root: string, commit: string): string {
   return readCommitOrUnborn(root, `${commit}^`);
@@ -92,16 +131,6 @@ export function isSharedContext(relativePath: string): boolean {
     relativePath !== ".ccr/index.md" &&
     !isLocalContext(relativePath)
   );
-}
-
-/** Returns whether tracked, staged, or untracked work remains without exposing path contents. */
-export function hasWorkingTreeChanges(root: string): boolean {
-  const paths = [
-    ...parseGitPaths(runGit(root, ["diff", "--cached", "--name-only", "-z"])),
-    ...readUnstagedPaths(root),
-    ...readUntrackedPaths(root),
-  ];
-  return paths.some((relativePath) => !isLocalContext(relativePath));
 }
 
 /**

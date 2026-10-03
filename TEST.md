@@ -115,7 +115,8 @@ claiming complete coverage. Read-only investigation must still honor privacy exc
 Run `pnpm test:prompt` in CCR to print a read-only standalone review of the first source dimension.
 For PowerShell clipboard output: `pnpm --silent test:prompt | Set-Clipboard`. Generation uses current
 source, not stale `dist`, and calls no model. Paste into a fresh conversation in the target repository.
-For all dimensions, use `dimension-prompts.md`. Neither experiment exercises skill continuity.
+This standalone preview does not exercise skill continuity. For an installed all-dimension review,
+run `/ccr-review codebase all` in Claude Code after setup and initialization.
 
 Edit shared discovery guidance in `src/review/impact-review-guidance.ts`, prompt structure in
 `src/review/dimension-worker-prompt.ts`, and taxonomy in `src/review/dimensions.json`. Keep target

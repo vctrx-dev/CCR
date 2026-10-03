@@ -101,7 +101,10 @@ it("should ignore activity examples in the body and order legacy Timestamp as it
   await mkdir(path.join(root, ".ccr/journal/older"), { recursive: true });
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      context: { ...DEFAULT_CONTEXT_CONFIG.context, recentJournalEntries: 2 },
+    }),
     "utf8",
   );
   const legacyPath = ".ccr/journal/older/2026-08-20.md";
@@ -160,4 +163,25 @@ it("should break equal Updated ties by Started and then stable path", async () =
     expect.objectContaining({ path: ".ccr/journal/a/2026-08-27.md" }),
     expect.objectContaining({ path: ".ccr/journal/b/2026-08-27.md" }),
   ]);
+});
+
+it("should skip untouched placeholder journals so real history keeps the recent slot", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-recency-placeholder-"));
+  roots.push(root);
+  await mkdir(path.join(root, ".ccr/journal/main"), { recursive: true });
+  const reviewedPath = ".ccr/journal/main/2026-08-20.md";
+  await writeFile(
+    path.join(root, reviewedPath),
+    "# CCR Journal\n\n- **Started**: 2026-08-20T01:00:00Z\n- **Updated**: 2026-08-20T01:00:00Z\n\n## Summary\n\nReviewed sign-up.\n",
+  );
+  await writeFile(
+    path.join(root, ".ccr/journal/main/2026-08-21.md"),
+    "# CCR Journal\n\n- **Started**: 2026-08-21T01:00:00Z\n- **Updated**: 2026-08-21T01:00:00Z\n\n## Summary\n\nNeeds concise completion.\n\n## Continuation\n\n### Summary\n\nReviewed sign-up.\n",
+  );
+
+  const result = await withJournalMutationLock(root, () =>
+    readReviewJournalEntriesWhileLocked(root, 1),
+  );
+
+  expect(result.continuityEntries.map(({ path: entryPath }) => entryPath)).toEqual([reviewedPath]);
 });

@@ -1,187 +1,146 @@
 # CCR — Critical Code Reviewer
 
-CCR maintains shared product context and runs stakeholder-impact reviews in Claude Code. Reviews
-look for evidence-backed exclusion, unfair treatment, and harmful product assumptions—not ordinary
-engineering defects relabeled as ethical issues. Results are advisory; source changes need approval.
+CCR uncovers ethical and inclusivity bugs developers may not have anticipated—even when the code
+works as intended. It reviews assumptions, rules, and wording that can exclude people, treat them
+unfairly, or limit their privacy, learning, and control. Findings explain human consequences in plain
+language with code evidence. CCR runs in Claude Code, not as a general code-quality checker, and
+does not change source code without your approval.
 
-Requires Node.js 22.12+ and Claude Code 2.1.0+. The GitHub Action remains on the roadmap; automated
-fixes and the Action are not claimed as available.
+**Requirements:** Node.js 22.12+, Git, and Claude Code 2.1.0+ installed and signed in.
 
 ## Quick start
 
-Install in your repository:
+Install CCR globally:
 
 ```bash
-npm install --save-dev @vctrx/ccr
-# or: pnpm add --save-dev @vctrx/ccr
-npx --no-install ccr config init
-npx --no-install ccr setup
+npm install --global @vctrx/ccr@beta-0.2
 ```
 
-Then open Claude Code:
+The current release, **0.12.0**, is on `beta-0.2`. Installing without a tag uses npm's `latest`
+channel, which currently points to the older 0.10.0 release.
+
+In your project's Git repository, run:
+
+```bash
+ccr setup
+```
+
+Setup creates the configuration, context files, and Claude Code skills. Existing context and custom
+settings are preserved. To preview the changes first, use `ccr setup --dry-run`.
+
+Open Claude Code in the same repository and run these one at a time:
 
 ```text
 /ccr-context initialize
 /ccr-review changes
 ```
 
-For global use, install with `npm install --global @vctrx/ccr` and replace `npx --no-install ccr`
-with `ccr`. Installation alone creates no repository context or hooks.
+Initialization asks about your project and the people it affects. Answer its questions, check the
+generated context, then run the review. After that, just commit as usual: hooks installed during
+initialization keep the journal and project context current in the background, never block a
+commit, and print at most one short line.
 
-Setup applies managed changes and preserves existing context. Use `--dry-run` or `--json` for a
-non-mutating preview. After a package upgrade, run `npx --no-install ccr update`; it refreshes managed
-skills, resources, instruction blocks, and untouched taxonomy defaults while preserving custom files.
+### Prefer a project-local installation?
 
-Use `npx --no-install ccr help`, `ccr help <command>`, or `ccr <group> --help` for terminal syntax.
-`ccr -v`, `ccr -version`, and `ccr --version` print the installed version.
+Install in the repository, then use `npx ccr` instead of `ccr` for terminal commands:
+
+```bash
+npm install --save-dev @vctrx/ccr@beta-0.2
+npx ccr setup
+```
+
+With pnpm, use `pnpm add --save-dev @vctrx/ccr@beta-0.2` and `pnpm exec ccr setup`.
+Install the package before using `npx ccr`; otherwise npx may try to download a different package
+named `ccr`. Claude Code slash commands are the same for either installation.
 
 ## Claude Code skills
 
 | Skill | Purpose |
 |---|---|
-| `/ccr [question]` | Explain installed commands, settings, and safety boundaries |
-| `/ccr-context initialize` | Clarify project facts, populate context, and sync enabled hooks |
-| `/ccr-context update` | Complete the journal; update only durable product context |
+| `/ccr [question]` | Get help with CCR |
+| `/ccr-context initialize` | Set up project context and enabled hooks |
+| `/ccr-context update` | Update context after meaningful project changes |
 | `/ccr-context verify` | Check context against current evidence |
-| `/ccr-context addition` | Incorporate supplied knowledge or labeled plans |
-| `/ccr-context compact` | Compact project context by at most the configured 20–30% |
-| `/ccr-hooks <sync\|status\|remove>` | Manage repository-native hook integration |
-| `/ccr-review [scope] [all\|dimension,...]` | Review changes, codebase, or `PR-<number>` |
+| `/ccr-context addition` | Add facts or plans you provide |
+| `/ccr-context compact` | Shorten project context by at most 25% |
+| `/ccr-hooks status` | Inspect CCR's Git hook integration |
+| `/ccr-review` | Review your current changes |
 
-Run slash skills inside Claude Code, not a terminal. Unique minor misspellings of skill arguments
-are tolerated; ambiguous input stops for clarification. PR numbers, paths, settings, flags, terminal
-commands, and free-form text are never fuzzy-corrected.
+**Slash commands run inside Claude Code.** Terminal commands such as `ccr setup` and `ccr help`
+run in your shell.
 
 ## Reviews and editable dimensions
 
 ```text
 /ccr-review
 /ccr-review codebase
-/ccr-review PR-123 privacy-data-protection, transparency-explainability
+/ccr-review PR-123
+/ccr-review changes privacy-data-protection,inclusion-accessibility
 ```
 
-Blank arguments mean `changes` and all dimensions. A dimension selector without a scope also means
-`changes`. Changes reviews include approved staged, unstaged, and untracked work; codebase reviews
-use the safe Git index plus live changes. PR reviews require authenticated `gh` and immutable remote
-evidence; they do not check out branches or substitute the local working tree.
+- **Changes** includes staged, unstaged, and approved untracked work; this is the default scope.
+- **Codebase** reviews tracked files plus approved current changes.
+- **PR** reviews the specified GitHub pull request and requires GitHub CLI (`gh`) installed and
+  authenticated. It does not check out the PR branch.
 
-Packaged dimension IDs:
+All dimensions are reviewed by default. To select specific ones, use comma-separated IDs from
+`ccr context dimensions`. The defaults cover seven dimensions and 28 criteria.
 
-- `data-system-reliability`
-- `alignment-with-teaching-learning`
-- `fairness-non-discrimination`
-- `inclusion-accessibility`
-- `transparency-explainability`
-- `privacy-data-protection`
-- `human-control-review`
+Findings are numbered, separated, and ordered by severity. Each explains who is affected, a scenario,
+and supporting evidence. Unconfirmed concerns stay out of the findings; a clean report is not a
+guarantee of safety. See the [review guide](USER_MANUAL.md#stakeholder-impact-review) for details.
 
-The baseline follows `CCR_v5_7_review.xlsx`: seven dimensions and 28 criteria. Indicators are
-non-exhaustive guidance, not empirically validated guarantees of complete coverage.
-
-Setup installs editable `.ccr/dimensions.json`. Each review loads it through
-`ccr context dimensions`; edits change the next review's dimension-and-criteria section without
-rebuilding or changing surrounding instructions or report format. `--json` returns the effective
-registry. Help and the generated Markdown reference show packaged defaults, not local customization.
-
-Leave optional `_ccr` ownership metadata unchanged while editing the `dimensions` array. Update
-refreshes untouched defaults but preserves customized or human-authored JSON. To restore defaults,
-back up the custom file, remove only `.ccr/dimensions.json`, and run setup. Only a missing file falls
-back to defaults; invalid, non-UTF-8, symlinked, or oversized input fails closed. Empty taxonomy stops
-reviews. The limit is 256,000 characters. Commit this file; never include private records or secrets.
-
-One agent investigates every selected criterion, checks counterevidence and equivalent routes, and
-merges duplicates. Findings identify affected people, the product rule, a plausible consequence,
-and evidence. Accessibility, privacy, wording, or reliability defects qualify only with a supported
-human-impact pathway. Material uncertainty stays unconfirmed; an empty result does not prove safety.
-
-Reports begin with `Context applied`, then numbered finding headings starting at 1, separated by
-horizontal rules. Each includes severity, dimension/criterion names, `Scenario`, and `Evidence`.
-Supported ethical issues outside the taxonomy use `Other — outside current dimensions` in the same
-list. No trailing questions or observations; uncertain candidates stay unconfirmed in the journal.
-Claude links matching names to sections in `.claude/skills/ccr/references/dimensions.md`, generated
-from packaged JSON and also shipped at `dist/review/dimensions.md`. Custom names absent from that
-reference remain unlinked. No file inventory, coverage report, or unsolicited fixes. See
-[review guidance](USER_MANUAL.md#stakeholder-impact-review).
+To customize criteria, edit `.ccr/dimensions.json`. The next review uses your edits without rebuilding
+or rerunning setup, and updates preserve customization. Leave optional `_ccr` metadata unchanged.
+Invalid files stop the review. See [customization](USER_MANUAL.md#editable-review-taxonomy) for the
+schema and limits.
 
 ## Context, privacy, and hooks
 
-Shared context is committed; local continuity stays ignored:
+- Commit `.ccr/config.json`, `.ccr/dimensions.json`, and the project, stakeholder, and decision
+  Markdown files so your team shares the same review context.
+- Keep local configuration, journals, private state, cache, and temporary files ignored by Git.
+- Never put secrets, credentials, personal records, or private conversations in shared context.
+- Edit `.ccr/config.json` to change settings. Use `ccr config validate` to check it.
+- Privacy exclusions filter review evidence; configure extra exclusions with `privacy.excludedPaths`.
+- New setups update context automatically after each commit in the background using Claude Code.
+  Set `hooks.checkBeforeCommit` to `false` to update manually with `/ccr-context update last commit`.
+- Reviews read the active journal plus the latest non-empty journal entry (`context.recentJournalEntries`,
+  default 1).
 
-| Shared | Local |
-|---|---|
-| `.ccr/config.json`, `.ccr/dimensions.json` | `.ccr/config.local.json` |
-| `.ccr/project.md`, `.ccr/stakeholders.md`, `.ccr/decisions.md` | `.ccr/journal/`, `.ccr/private/`, `.ccr/cache/`, `.ccr/tmp/` |
+See the [manual](USER_MANUAL.md) for settings, context ownership, and hook permissions.
 
-Initialization asks material clarification questions and writes plain-language context. Afterward,
-CCR updates project context only for durable facts or confirmed plans; stakeholders remain
-human-owned. Decisions are append-only under `instructions.updateDecisionsMd` (`true` for new setups,
-`false` when absent from older files). Capture reusable human rationale, not policies inferred from
-code. Configuration changes require approval, except the one-time untouched default-domain inference.
+## Update or remove CCR
 
-Each work state, commit, or PR reuses its local journal. Follow-up explanations, feedback, approved
-fixes, and checks amend that account without claiming a fresh review. `Started` stays fixed;
-`Updated` advances; filenames remain stable. Recent history is repository-wide, excluding the active
-entry, which is always read separately. Review freshness tracks approved code and shared review
-context, including taxonomy; journals and operational settings do not make it stale. A separate
-input-context fingerprint checks all inputs supplied during the review.
-
-Mandatory privacy exclusions always apply. Optional `privacy.excludedPaths` adds up to 100 globs;
-legacy upgrades preserve them. Evidence uses bounded reads and literal filenames. Source and tests
-outrank generated context. Never put secrets, credentials, personal records, or private discussions
-in shared files. Review generated context before relying on it.
-
-With `hooks.enabled: true`, initialization invokes `/ccr-hooks sync`. Hooks are advisory; automatic
-post-commit updates require the separate default-off `hooks.autoUpdateContext` setting. Automation
-uses a bounded, privacy-approved exact-HEAD packet and restricted `Read`/`Edit` permissions. It may
-change only the matching journal, project context, and one authorized decision append. It never
-stages, commits, resets, or pushes. Failure prints a manual fallback; interrupted cleanup may leave
-an ignored packet. See the [manual](USER_MANUAL.md#hooks) for permissions and limits.
-
-Managed lifecycle commands preserve changed-after-preview content and serialize cooperating writers.
-Avoid direct edits during apply; rerun interrupted idempotent operations. Remove provenance-managed
-hooks with `/ccr-hooks remove` before CLI uninstall. `ccr uninstall` preserves shared and local context;
-`--remove-context` removes shared files only.
-
-## Programmatic API
-
-Import supported entry points: `@vctrx/ccr`, `@vctrx/ccr/context`, `@vctrx/ccr/review`, and
-`@vctrx/ccr/llm`. The root supports ESM and CommonJS; focused subpaths are ESM-only. Imports alone
-neither mutate repositories nor contact providers. Explicit operations retain their safety boundaries.
-
-```ts
-import { DEFAULT_CONTEXT_CONFIG, resolveContextConfig } from "@vctrx/ccr";
-
-const config = resolveContextConfig(DEFAULT_CONTEXT_CONFIG, {
-  privacy: { excludedPaths: ["internal/**"] },
-});
-```
-
-Use `readReviewDimensionRegistry(root)` and `renderReviewDimensionSections(registry)` from the review
-entry point for live taxonomy rendering. Default JSON is exported as `@vctrx/ccr/dimensions.json`
-and ships at `dist/review/dimensions.json`. Internal source paths are not public contracts.
-
-## Development
+For a global installation, upgrade the package, then refresh each repository's installed skills:
 
 ```bash
-pnpm install
-pnpm hooks:dev
-pnpm verify
-pnpm test:changed:print
+npm install --global @vctrx/ccr@beta-0.2
+ccr update
 ```
 
-`pnpm verify` runs tracked-file safety, audit, typecheck, lint, coverage tests, build, and package smoke.
-Typecheck rejects unused source locals and parameters; exported helpers still require caller and
-public-API checks. Test-only safety helpers are not automatically dead code.
+For a local installation, run `npm install --save-dev @vctrx/ccr@beta-0.2`, then `npx ccr update`.
+Updating preserves your configuration, context, journals, and custom dimensions.
 
-Reuse the boundaries in [AGENTS.md](AGENTS.md); do not duplicate path, privacy, Git, config, provider,
-or managed-file policy. Feature branches start from and target `dev`; releases proceed through
-`stage` to `main`. See [VERSIONING.md](VERSIONING.md).
+To remove CCR integration, first run `/ccr-hooks remove` inside Claude Code, then in the terminal:
 
-To test a packed build, run `npm pack` after verification and install the resulting tarball in a
-disposable target. For a no-install prompt preview, run `pnpm test:prompt` and paste the first
-dimension's output into a fresh target conversation. `dimension-prompts.md` is the standalone
-read-only all-dimension prompt. Generation calls no model.
+```bash
+ccr uninstall
+npm uninstall --global @vctrx/ccr
+```
 
-- [USER_MANUAL.md](USER_MANUAL.md): settings, ownership, evidence commands, and troubleshooting
-- [TEST.md](TEST.md): automated gates and disposable-repository checks
-- [CHANGELOG.md](CHANGELOG.md): changes and migrations
+Remove integration from every repository using the global installation before removing the package.
+For a local installation, use `npx ccr uninstall`, then `npm uninstall @vctrx/ccr`.
+Context is kept by default; add `--remove-context` to `ccr uninstall` only if you also want to delete
+shared context. Use `--dry-run` to preview update or uninstall changes.
+
+## Help and further reading
+
+- Run `ccr help` for terminal help or `/ccr [question]` inside Claude Code.
+- Run `ccr --version` to check your installed version.
+- [User manual](USER_MANUAL.md): settings, detailed workflows, and the programmatic API.
+- [Changelog](https://github.com/vctrx-dev/CCR/blob/main/CHANGELOG.md): changes and migrations.
+- [Contributor tests](TEST.md) and
+  [project purpose](https://github.com/vctrx-dev/CCR/blob/main/AGENTS.md): background for contributors.
+
+The GitHub Action remains on the roadmap and is not claimed as available.

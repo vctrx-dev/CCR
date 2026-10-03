@@ -308,8 +308,8 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   if (
     !existsSync(configManualPath) ||
     !readFileSync(configManualPath, "utf8").includes(configManualHeading) ||
-    !readFileSync(configManualPath, "utf8").includes("hooks.autoUpdateContext") ||
-    !readFileSync(configManualPath, "utf8").includes("instructions.updateDecisionsMd")
+    !readFileSync(configManualPath, "utf8").includes("hooks.checkBeforeCommit") ||
+    !readFileSync(configManualPath, "utf8").includes("instructions.updateAgentsMd")
   ) {
     throw new Error("config init did not create the configuration manual.");
   }
@@ -321,11 +321,20 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
   if (!existsSync(decisionsPath) || readFileSync(decisionsPath, "utf8") !== "") {
     throw new Error("setup did not create an empty decisions document.");
   }
-  if (installedConfig.instructions?.updateDecisionsMd !== true) {
-    throw new Error("Generated configuration did not default decision updates to true.");
+  if (
+    installedConfig.instructions?.updateAgentsMd !== true ||
+    installedConfig.context?.recentJournalEntries !== 1
+  ) {
+    throw new Error("Generated configuration did not use the documented defaults.");
   }
-  if (installedConfig.hooks?.autoUpdateContext !== false) {
-    throw new Error("Generated configuration did not default automatic context updates to false.");
+  for (const removed of [
+    installedConfig.hooks?.autoUpdateContext,
+    installedConfig.context?.maxCompactionPercent,
+    installedConfig.instructions?.updateDecisionsMd,
+  ]) {
+    if (removed !== undefined) {
+      throw new Error("Generated configuration still writes a setting that is fixed in code.");
+    }
   }
   if (existsSync(preCommitPath) || existsSync(postCommitPath)) {
     throw new Error("setup installed hooks without repository-aware skill analysis.");
