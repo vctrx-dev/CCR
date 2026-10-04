@@ -11,7 +11,7 @@ increment MAJOR. Do not use separate channel tags or labels such as `beta-0.2`.
    `Unreleased` entries under `## MAJOR.MINOR.PATCH - YYYY-MM-DD`, using Added/Changed/Fixed/Removed/
    Security sections and migration notes for incompatible changes.
 2. Run `pnpm verify`.
-3. Merge the release through `dev` → `stage` → `main`.
+3. Merge the release pull request from `dev` into `main`.
 4. Tag the `main` commit and push the tag:
 
    ```bash
