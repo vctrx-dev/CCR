@@ -12,21 +12,21 @@ For project-local installs, use `npx ccr` or `pnpm exec ccr` instead of bare `cc
 Install globally, then run setup in each project's Git repository:
 
 ```bash
-npm install --global @vctrx/ccr@beta-0.2
+npm install --global @vctrx/ccr@latest
 ccr setup
 ```
 
-The current release, 0.12.0, is on `beta-0.2`. An install without a tag uses npm's `latest` channel,
-which currently points to 0.10.0.
+`@latest` always installs the newest release. CCR is in beta (0.x): a minor release may include
+breaking changes, which [CHANGELOG.md](CHANGELOG.md) describes with any migration steps.
 
 For a project-local installation, run these in the repository instead:
 
 ```bash
-npm install --save-dev @vctrx/ccr@beta-0.2
+npm install --save-dev @vctrx/ccr@latest
 npx ccr setup
 ```
 
-With pnpm, use `pnpm add --save-dev @vctrx/ccr@beta-0.2` and `pnpm exec ccr setup`.
+With pnpm, use `pnpm add --save-dev @vctrx/ccr@latest` and `pnpm exec ccr setup`.
 Install the package before running `npx ccr`; otherwise npx may download a different package named
 `ccr`. Installation alone creates no context or hooks.
 
@@ -35,9 +35,9 @@ human-owned files. A separate `ccr config init` is not needed for first-time set
 or upgrade configuration and its manual independently. `setup`, `update`, and
 `uninstall` apply by default; `--dry-run` or `--json` previews without writes. Repeating setup is safe.
 
-For a global upgrade, run `npm install --global @vctrx/ccr@beta-0.2`, then `ccr update` in each
-repository. For a local upgrade, run `npm install --save-dev @vctrx/ccr@beta-0.2`, then
-`npx ccr update`. With pnpm, use `pnpm add --save-dev @vctrx/ccr@beta-0.2` and `pnpm exec ccr update`.
+For a global upgrade, run `npm install --global @vctrx/ccr@latest`, then `ccr update` in each
+repository. For a local upgrade, run `npm install --save-dev @vctrx/ccr@latest`, then
+`npx ccr update`. With pnpm, use `pnpm add --save-dev @vctrx/ccr@latest` and `pnpm exec ccr update`.
 Update refreshes marked skills, resources, instruction
 blocks, and untouched taxonomy defaults; it preserves configuration, custom taxonomy, context,
 journals, private state, and unrelated files. Foreign or malformed managed skills stop the update.

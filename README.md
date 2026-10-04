@@ -1,5 +1,7 @@
 # CCR — Critical Code Reviewer
 
+[![npm version](https://img.shields.io/npm/v/@vctrx/ccr)](https://www.npmjs.com/package/@vctrx/ccr)
+
 CCR uncovers ethical and inclusivity bugs developers may not have anticipated—even when the code
 works as intended. It reviews assumptions, rules, and wording that can exclude people, treat them
 unfairly, or limit their privacy, learning, and control. Findings explain human consequences in plain
@@ -13,11 +15,11 @@ does not change source code without your approval.
 Install CCR globally:
 
 ```bash
-npm install --global @vctrx/ccr@beta-0.2
+npm install --global @vctrx/ccr@latest
 ```
 
-The current release, **0.12.0**, is on `beta-0.2`. Installing without a tag uses npm's `latest`
-channel, which currently points to the older 0.10.0 release.
+CCR is in beta. While its version is 0.x, a minor release (for example 0.12 → 0.13) may include
+breaking changes; the [changelog](CHANGELOG.md) explains each one and any migration.
 
 In your project's Git repository, run:
 
@@ -45,11 +47,11 @@ commit, and print at most one short line.
 Install in the repository, then use `npx ccr` instead of `ccr` for terminal commands:
 
 ```bash
-npm install --save-dev @vctrx/ccr@beta-0.2
+npm install --save-dev @vctrx/ccr@latest
 npx ccr setup
 ```
 
-With pnpm, use `pnpm add --save-dev @vctrx/ccr@beta-0.2` and `pnpm exec ccr setup`.
+With pnpm, use `pnpm add --save-dev @vctrx/ccr@latest` and `pnpm exec ccr setup`.
 Install the package before using `npx ccr`; otherwise npx may try to download a different package
 named `ccr`. Claude Code slash commands are the same for either installation.
 
@@ -115,11 +117,11 @@ See the [manual](USER_MANUAL.md) for settings, context ownership, and hook permi
 For a global installation, upgrade the package, then refresh each repository's installed skills:
 
 ```bash
-npm install --global @vctrx/ccr@beta-0.2
+npm install --global @vctrx/ccr@latest
 ccr update
 ```
 
-For a local installation, run `npm install --save-dev @vctrx/ccr@beta-0.2`, then `npx ccr update`.
+For a local installation, run `npm install --save-dev @vctrx/ccr@latest`, then `npx ccr update`.
 Updating preserves your configuration, context, journals, and custom dimensions.
 
 To remove CCR integration, first run `/ccr-hooks remove` inside Claude Code, then in the terminal:
