@@ -3,8 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONTEXT_CONFIG, serializeContextConfig } from "../../../src/context/config";
+import {
+  ensurePullRequestJournalEntry,
+  ensureWorkingJournalEntry,
+} from "../../../src/context/journal";
 import { saveReview } from "../../../src/review/review-save";
 import {
+  computeReviewContextState,
   computeWorkingReviewState,
   readStagedReviewFreshness,
   recordWorkingReviewState,
@@ -123,6 +128,106 @@ describe("save review", () => {
         changedCode.contextFingerprint,
       ),
     ).rejects.toThrow("Code changed since this review was recorded");
+  });
+
+  it("should reject unacknowledged journal feedback before any save mutation", async () => {
+    const root = await makeRepository();
+    await writeFile(path.join(root, "source.ts"), "export const value = 2;\n");
+    const journal = await ensureWorkingJournalEntry(root, now);
+    const reviewed = await computeWorkingReviewState(root);
+    const file = path.join(root, journal.path);
+    const corrected = `${await readFile(file, "utf8")}\nHuman correction: the appeal route is unavailable.\n`;
+    await writeFile(file, corrected);
+    const expected = {
+      expectedState: reviewed.fingerprint,
+      expectedContext: reviewed.contextFingerprint,
+      expectedInputContext: reviewed.inputContextFingerprint,
+    };
+
+    await expect(saveReview(root, { ...input, ...expected }, now)).rejects.toThrow(
+      "Review journal inputs changed",
+    );
+    expect(await readFile(file, "utf8")).toBe(corrected);
+    const acknowledged = await computeWorkingReviewState(root);
+    const saved = await saveReview(
+      root,
+      {
+        ...input,
+        ...expected,
+        expectedInputContext: acknowledged.inputContextFingerprint,
+      },
+      now,
+    );
+    expect(saved.isRecorded).toBe(true);
+    expect(await readFile(file, "utf8")).toContain("Human correction");
+  });
+
+  it("should check acknowledged inputs before creating the first journal", async () => {
+    const root = await makeRepository();
+    const reviewed = await computeWorkingReviewState(root);
+    const saved = await saveReview(
+      root,
+      {
+        ...input,
+        scope: "codebase",
+        expectedState: reviewed.fingerprint,
+        expectedContext: reviewed.contextFingerprint,
+        expectedInputContext: reviewed.inputContextFingerprint,
+      },
+      now,
+    );
+    expect(saved.isRecorded).toBe(true);
+  });
+
+  it("should reject shared-context drift without creating a review journal", async () => {
+    const root = await makeRepository();
+    const reviewed = await computeWorkingReviewState(root);
+    await writeFile(path.join(root, ".ccr/project.md"), "# Project\n\nChanged product rule.\n");
+    await expect(
+      saveReview(
+        root,
+        {
+          ...input,
+          expectedState: reviewed.fingerprint,
+          expectedContext: reviewed.contextFingerprint,
+        },
+        now,
+      ),
+    ).rejects.toThrow("Review context changed");
+    await expect(readdir(path.join(root, ".ccr/journal"))).rejects.toThrow();
+  });
+
+  it("should validate acknowledged PR inputs without recording local freshness", async () => {
+    const root = await makeRepository();
+    const journal = await ensurePullRequestJournalEntry(root, 7, now);
+    const before = await computeReviewContextState(root, 7);
+    const file = path.join(root, journal.path);
+    const corrected = `${await readFile(file, "utf8")}\nHuman clarification: this is only a draft.\n`;
+    await writeFile(file, corrected);
+    await expect(
+      saveReview(
+        root,
+        {
+          ...input,
+          scope: "PR-7",
+          expectedInputContext: before.inputContextFingerprint,
+        },
+        now,
+      ),
+    ).rejects.toThrow("Review journal inputs changed");
+    expect(await readFile(file, "utf8")).toBe(corrected);
+    const acknowledged = await computeReviewContextState(root, 7);
+    const saved = await saveReview(
+      root,
+      {
+        ...input,
+        scope: "PR-7",
+        expectedInputContext: acknowledged.inputContextFingerprint,
+      },
+      now,
+    );
+    expect(saved).toEqual({ path: journal.path, isRecorded: false });
+    expect(await readFile(file, "utf8")).not.toContain("Reviewed state");
   });
 
   it("should reject malformed scope, counts, and multi-line summaries before writing", async () => {

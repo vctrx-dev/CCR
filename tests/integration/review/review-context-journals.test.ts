@@ -14,6 +14,13 @@ import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-envi
 
 const roots = createTemporaryRootRegistry();
 
+/** Recent history skips untouched placeholders, so give an entry a real summary first. */
+async function summarize(root: string, entry: { path: string }): Promise<void> {
+  const target = path.join(root, entry.path);
+  const content = await readFile(target, "utf8");
+  await writeFile(target, content.replace("Needs concise completion.", "Reviewed sign-up."));
+}
+
 async function makeRepository(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-review-context-journals-"));
   roots.push(root);
@@ -90,7 +97,57 @@ it("should keep PR review freshness stable when other journals change", async ()
   expect(afterActive.inputContextFingerprint).not.toBe(afterOther.inputContextFingerprint);
 });
 
-it("should keep continuity stable when a new active journal displaces the configured recent entry", async () => {
+it("should fingerprint the complete active journal but only supplied historical previews", async () => {
+  const root = await makeRepository();
+  const prior = await ensurePullRequestJournalEntry(root, 41, new Date("2026-08-25T01:00:00Z"));
+  const active = await ensurePullRequestJournalEntry(root, 42, new Date("2026-08-26T01:00:00Z"));
+  const longNarrative = (content: string) =>
+    content.replace(
+      "## Findings and outcomes\n",
+      `## Findings and outcomes\n\n- ${"x".repeat(5_000)}\n- Appeal route exists.\n`,
+    );
+  for (const entry of [prior, active]) {
+    const file = path.join(root, entry.path);
+    await writeFile(file, longNarrative(await readFile(file, "utf8")));
+  }
+  const initial = await computeReviewContextState(root, 42);
+  const previewsBefore = await readRecentJournalEntriesExcludingActive(root, {
+    kind: "pull-request",
+    pullRequest: 42,
+  });
+  const priorFile = path.join(root, prior.path);
+  await writeFile(
+    priorFile,
+    (await readFile(priorFile, "utf8")).replace("route exists", "route absent"),
+  );
+  expect(
+    await readRecentJournalEntriesExcludingActive(root, { kind: "pull-request", pullRequest: 42 }),
+  ).toEqual(previewsBefore);
+  const afterHistoricalTail = await computeReviewContextState(root, 42);
+  expect(afterHistoricalTail).toEqual(initial);
+
+  const activeFile = path.join(root, active.path);
+  await writeFile(
+    activeFile,
+    (await readFile(activeFile, "utf8")).replace("route exists", "route absent"),
+  );
+  const afterActiveTail = await computeReviewContextState(root, 42);
+  expect(afterActiveTail.contextFingerprint).toBe(initial.contextFingerprint);
+  expect(afterActiveTail.inputContextFingerprint).not.toBe(initial.inputContextFingerprint);
+
+  await writeFile(
+    priorFile,
+    (await readFile(priorFile, "utf8")).replace(
+      "Needs concise completion.",
+      "Verified new explanation.",
+    ),
+  );
+  expect((await computeReviewContextState(root, 42)).inputContextFingerprint).not.toBe(
+    afterActiveTail.inputContextFingerprint,
+  );
+});
+
+it("should not let an empty new journal displace the configured recent entry", async () => {
   const root = await makeRepository();
   await writeFile(
     path.join(root, ".ccr/config.json"),
@@ -100,7 +157,7 @@ it("should keep continuity stable when a new active journal displaces the config
     }),
     "utf8",
   );
-  await ensureJournalEntryForHead(root, new Date("2026-08-25T01:00:00Z"));
+  await summarize(root, await ensureJournalEntryForHead(root, new Date("2026-08-25T01:00:00Z")));
   await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
   await runCommand("git", ["add", "--", "source.ts"], { cwd: root });
   await runCommand("git", ["commit", "--quiet", "-m", "test: advance"], { cwd: root });
@@ -110,7 +167,7 @@ it("should keep continuity stable when a new active journal displaces the config
   const afterActive = await computeReviewContextState(root);
 
   expect(afterActive.contextFingerprint).toBe(beforeActive.contextFingerprint);
-  expect(afterActive.inputContextFingerprint).not.toBe(beforeActive.inputContextFingerprint);
+  expect(afterActive.inputContextFingerprint).toBe(beforeActive.inputContextFingerprint);
 });
 
 it("should target a not-yet-created working journal when HEAD already has continuity", async () => {
@@ -188,6 +245,7 @@ it("should keep freshness bound to shared context and review-relevant settings o
 it("should list recent journals without spending a slot on the active entry", async () => {
   const root = await makeRepository();
   const prior = await ensureJournalEntryForHead(root, new Date("2026-08-25T01:00:00Z"));
+  await summarize(root, prior);
   await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
   const active = await ensureWorkingJournalEntry(root, new Date("2026-08-27T01:00:00Z"));
 
@@ -207,6 +265,7 @@ it("should fingerprint the extra continuity journal when the active entry occupi
     }),
   );
   const prior = await ensurePullRequestJournalEntry(root, 41, new Date("2026-08-25T01:00:00Z"));
+  await summarize(root, prior);
   await ensurePullRequestJournalEntry(root, 42, new Date("2026-08-26T01:00:00Z"));
   const before = await computeReviewContextState(root, 42);
   const supplied = await readRecentJournalEntriesExcludingActive(root, {

@@ -8,7 +8,7 @@ import { createTemporaryRootRegistry } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
 
-async function makeContext(updateDecisionsMd: boolean): Promise<string> {
+async function makeContext(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-decisions-"));
   roots.push(root);
   await mkdir(path.join(root, ".ccr"));
@@ -16,7 +16,7 @@ async function makeContext(updateDecisionsMd: boolean): Promise<string> {
     path.join(root, ".ccr/config.json"),
     JSON.stringify({
       ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG),
-      instructions: { updateClaudeMd: false, updateAgentsMd: false, updateDecisionsMd },
+      instructions: { updateClaudeMd: false, updateAgentsMd: false },
     }),
     "utf8",
   );
@@ -24,17 +24,8 @@ async function makeContext(updateDecisionsMd: boolean): Promise<string> {
   return root;
 }
 
-it("should reject decision updates unless the explicit opt-in is enabled", async () => {
-  const root = await makeContext(false);
-
-  await expect(appendDecision(root, "Use the advisory review workflow.")).rejects.toThrow(
-    "instructions.updateDecisionsMd is false",
-  );
-  expect(await readFile(path.join(root, ".ccr/decisions.md"), "utf8")).toBe("");
-});
-
-it("should append one bounded decision line when the opt-in is enabled", async () => {
-  const root = await makeContext(true);
+it("should append one bounded decision line", async () => {
+  const root = await makeContext();
 
   await appendDecision(root, "  Keep the advisory review workflow.  ");
 
@@ -44,13 +35,13 @@ it("should append one bounded decision line when the opt-in is enabled", async (
 });
 
 it("should reject multi-line decisions", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
 
   await expect(appendDecision(root, "First line\nSecond line")).rejects.toThrow("one line");
 });
 
 it("should not append beyond the final document limit", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
   const decisionsPath = path.join(root, ".ccr/decisions.md");
   const existing = "x".repeat(10_000);
   await writeFile(decisionsPath, existing, "utf8");
@@ -62,7 +53,7 @@ it("should not append beyond the final document limit", async () => {
 });
 
 it("should keep an identical normalized decision idempotent", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
 
   await appendDecision(root, "Keep reviews advisory.");
   await appendDecision(root, "  Keep reviews advisory.  ");
@@ -73,7 +64,7 @@ it("should keep an identical normalized decision idempotent", async () => {
 });
 
 it("should preserve distinct decisions appended concurrently", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
   const decisions = Array.from({ length: 64 }, (_, index) => `Concurrent decision ${index}.`);
 
   await Promise.all(decisions.map((decision) => appendDecision(root, decision)));
@@ -85,7 +76,7 @@ it("should preserve distinct decisions appended concurrently", async () => {
 });
 
 it("should converge identical decisions appended concurrently", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
 
   await Promise.all(
     Array.from({ length: 12 }, () => appendDecision(root, "Keep reviews advisory.")),
@@ -97,7 +88,7 @@ it("should converge identical decisions appended concurrently", async () => {
 });
 
 it("should reject one concurrent append when only one entry fits the document bound", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
   const decisionsPath = path.join(root, ".ccr/decisions.md");
   await writeFile(decisionsPath, "x".repeat(9_970), "utf8");
 
@@ -112,7 +103,7 @@ it("should reject one concurrent append when only one entry fits the document bo
 });
 
 it("should reject malformed decision document text without replacing it", async () => {
-  const root = await makeContext(true);
+  const root = await makeContext();
   const decisionsPath = path.join(root, ".ccr/decisions.md");
   const malformed = Buffer.concat([Buffer.from("- Human decision.\n", "utf8"), Buffer.from([255])]);
   await writeFile(decisionsPath, malformed);

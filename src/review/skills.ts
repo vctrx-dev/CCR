@@ -12,6 +12,9 @@ uses packaged defaults. The dimension headings referred to above are the heading
 Use this fresh output as the dimension-and-criteria portion of the review prompt; keep the surrounding
 review instructions and output contract. Resolve selections against its IDs and work through every
 selected criterion. Local JSON edits take effect on the next review without setup or a rebuild.
+After normalizing the requested selector against these IDs, run
+\`ccr context dimensions --select <selection>\` before reading review evidence or writing a journal.
+This validates known IDs, uniqueness, and \`all\` alone; use its selected lenses for discovery.
 If the command fails, the taxonomy is empty, or the output is incomplete, report the limitation and
 stop. Use the live command output, not a remembered taxonomy or the packaged dimensions.md preview.
 If the JSON changes during a review, reload it and reassess the selected criteria before saving.
@@ -32,6 +35,10 @@ ${MANAGED_SKILL_MARKER}
 Review this repository for ethical and inclusivity issues yourself. Do not use subagents.
 Review without changing code. A later request to fix or change code authorizes that follow-up work.
 Maintain the journal throughout this session and use judgment to update durable context as below.
+Terminal support commands in this skill belong to the \`ccr context\` group: use
+\`ccr context review-state\`, \`ccr context save-review\`, and \`ccr context record-review-state\`,
+not \`ccr review-state\` or other root-level shortcuts. For a local installation, replace only
+\`ccr\` with \`npx --no-install ccr\`, keeping \`context\` and the remaining arguments.
 
 \`$ARGUMENTS\` is a scope (\`changes\`, \`codebase\`, or \`PR-<number>\`) and dimensions (\`all\` or IDs
 separated by commas). The default is \`changes all\`. Dimension IDs are the headings below. Fix obvious
@@ -42,14 +49,18 @@ typos. If unclear, show the valid choices and stop.
    too, even if it falls outside that selection. Missing context is a coverage limit, not permission
    to invent facts or initialize shared files. Stop on invalid configuration. Use prior decisions
    and unresolved findings to guide discovery; verify them against live source, tests, and behavior.
+   If \`ccr context status\` reports readiness \`unfilled\`, treat project.md and stakeholders.md as
+   empty templates, not facts, and add one short sentence before the findings suggesting
+   \`/ccr-context initialize\` for better-informed reviews.
 2. Get the scope:
    - changes: all uncommitted changes
    - codebase: the whole codebase, including uncommitted changes
    - PR: the pull request's changes (read only)
    Before local discovery, run CCR's review-state and keep its \`fingerprint\` and
-   \`contextFingerprint\`; for a PR, use its immutable base/head evidence and review-context-state.
+    \`contextFingerprint\` and \`inputContextFingerprint\`; for a PR, use its immutable base/head
+    evidence and review-context-state.
    Pass the local pair to save-review as \`--expected-state\` and \`--expected-context\`. If it
-   refuses because inputs changed during the review, review the changed inputs or report the review
+    refuses because code or shared context changed during the review, review the changed inputs or report the review
    as stale without recording a fresh completion.
 3. Work through every selected dimension using the guidance below. If none are configured, say so
    and stop. Use read-only tools. Privacy exclusions cover \`.env*\`, \`.npmrc\`, \`.pypirc\`,
@@ -66,8 +77,16 @@ typos. If unclear, show the valid choices and stop.
    For a PR, begin the summary with \`head <first 12 characters of headRefOid>\`; on a later run of
    that PR, compare it and focus on commits after that head. When only some dimensions were
    selected, name the unchecked ones in the summary.
+   Immediately before saving, reread the active journal and supplied recent previews if their
+   \`inputContextFingerprint\` changed. Consider any new feedback, preserve your own session writes,
+   and pass the acknowledged hash as \`--expected-input-context\` (also for PR reviews).
+   Refreshing that hash must not silently replace the pre-discovery code/context pair: if either
+   changed, reassess those changes first. The input check runs before save's own journal writes;
+   it is not transaction isolation and later journal activity does not invalidate review freshness.
    Retain the returned journal path as this session's active entry. The short save summary is only
-   a starting point: read and edit that entry to include every finding and the session account below.
+   a starting point: read that entry and write its Findings and outcomes section with one concise
+   summary bullet per reported finding, as the journal content rules below describe. Summarize;
+   do not paste the report's scenarios or evidence into the journal.
 6. Apply the durable-context rules below. For changes or codebase scope, then record the context
    assessment with CCR's assess support, a fresh review-state, and a one-line reason, as
    ccr-context does. Share results in the report format. Briefly disclose shared-context edits or a
@@ -91,6 +110,7 @@ requested fixes and distinguish failed, unrun, and passing checks.
 Reuse the active entry for discussion of the same work. When a clean-HEAD review is followed by edits,
 resolve CCR's working journal and continue there; its continuation points to the prior account.
 Carry forward unresolved finding labels and human explanations, not old completion receipts.
+Retain the former HEAD journal path for the explicit context-only continuation described below.
 Do not call save-review for mere feedback, fixes, or context maintenance: it
 creates a completed review run and records freshness. Preserve prior reviewed fingerprints; changed
 code or another person's shared-context edit requires another review before claiming freshness; your
@@ -124,6 +144,11 @@ shared context. Show the shared diff, validate changes, and record the outcome i
 After your own shared-context edit or decision append for this review, rerun review-state; while its
 \`fingerprint\` still equals the journal's Reviewed state, re-record the run with CCR's
 record-review-state support so your own edit does not leave the review stale. It refuses changed code.
+If context-only edits moved a clean-HEAD review to a working journal with no review run, use
+\`ccr context record-review-state <working-journal> <fingerprint> <contextFingerprint> --continue-from <former-HEAD-journal>\`.
+This carries the verified run with its original time and scope, preserves the source receipt, and
+refuses a different branch, HEAD, or changed code. Continue only after reassessing your own context
+edit; this is not a new completed review. Later edits re-record the working run without that flag.
 Write saved prose for a non-technical reviewer: describe the problem, people's experiences, choices,
 and consequences. Keep the narrative readable; retain minimal supporting references in the journal
 when needed to recover important checks or conclusions. Preserve managed metadata in the files.

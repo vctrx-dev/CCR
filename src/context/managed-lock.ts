@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
 import { lstat, mkdir, readdir, rmdir, unlink, writeFile } from "node:fs/promises";
+import { uptime } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { isFileNotFound, readBoundedTextIfExists } from "./bounded-text";
@@ -13,8 +14,11 @@ import { assertSafeManagedPath } from "./managed-path";
  */
 
 const INCOMPLETE_LOCK_GRACE_MS = 5_000;
+// Writing an owner record takes milliseconds; one still unreadable after this was cut off by a crash.
+const UNREADABLE_OWNER_GRACE_MS = 10 * 60_000;
+// Allows for clock adjustments when comparing the boot time with an owner's creation time.
+const BOOT_TIME_TOLERANCE_MS = 60_000;
 const LOCK_OWNER_FILE_PATTERN = /^([a-f0-9-]{36})\.owner\.json$/u;
-const MANAGED_WRITE_LOCK_GROUP = ".ccr/private/managed-write-locks";
 
 /** Shared lock for setup, uninstall, configuration initialization, and context automation. */
 export const MANAGED_LIFECYCLE_LOCK_PATH = ".ccr/private/managed-lifecycle.lock";
@@ -89,6 +93,19 @@ function parseManagedLockOwner(
   }
 }
 
+/**
+ * An owner created before the system last booted cannot still be running, even when its PID now
+ * belongs to an unrelated process. Without this, PID reuse after a crash would hold a lock forever.
+ */
+function wasCreatedBeforeBoot(owner: ManagedLockOwner): boolean {
+  const bootedAt = Date.now() - uptime() * 1000;
+  return bootedAt > owner.createdAt + BOOT_TIME_TOLERANCE_MS;
+}
+
+function isOwnerStale(owner: ManagedLockOwner): boolean {
+  return wasCreatedBeforeBoot(owner) || !isProcessAlive(owner.pid);
+}
+
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -123,9 +140,11 @@ async function inspectManagedLockOwner(
     const owner = existing?.isTruncated
       ? undefined
       : parseManagedLockOwner(existing?.content ?? "", "legacy-lock-owner");
-    return {
-      isStale: owner !== undefined && !isProcessAlive(owner.pid),
-    };
+    if (owner === undefined) {
+      // Current versions never create file locks, so an unreadable one is left from a crash.
+      return { isStale: Date.now() - details.mtimeMs > INCOMPLETE_LOCK_GRACE_MS };
+    }
+    return { isStale: isOwnerStale(owner) };
   }
   if (!details.isDirectory()) return { isStale: false };
   let entries: Dirent[];
@@ -142,17 +161,22 @@ async function inspectManagedLockOwner(
     if (entry !== undefined && match !== null) {
       const token = match[1];
       if (token !== undefined) {
-        const existing = await readBoundedTextIfExists(path.join(target, entry.name), 300).catch(
-          () => undefined,
-        );
+        const ownerPath = path.join(target, entry.name);
+        const existing = await readBoundedTextIfExists(ownerPath, 300).catch(() => undefined);
         const owner = existing?.isTruncated
           ? undefined
           : parseManagedLockOwner(existing?.content ?? "", token);
         if (owner !== undefined) {
-          return { isStale: !isProcessAlive(owner.pid), ownerFile: entry.name };
+          return { isStale: isOwnerStale(owner), ownerFile: entry.name };
         }
-        // A partially written token may belong to a paused live creator; age cannot prove death.
-        return { isStale: false };
+        // A partially written token may belong to a briefly paused live creator. Only a record
+        // that stays unreadable far longer than any write takes is treated as a crash leftover.
+        const ownerDetails = await lstat(ownerPath).catch(() => undefined);
+        if (ownerDetails === undefined) return { isStale: false };
+        return {
+          isStale: Date.now() - ownerDetails.mtimeMs > UNREADABLE_OWNER_GRACE_MS,
+          ownerFile: entry.name,
+        };
       }
     }
   }
@@ -207,28 +231,6 @@ async function reclaimManagedLock(
       ["EACCES", "EEXIST", "EISDIR", "ENOTDIR", "ENOTEMPTY", "EPERM"].includes(String(error.code))
     ) {
       return false;
-    }
-    throw error;
-  }
-}
-
-/**
- * Compare-and-swap writes share this grouping path. Remove it only after its final lock is gone so
- * callers retain serialization without leaving an empty implementation directory in `.ccr/private`.
- */
-async function removeEmptyManagedWriteLockGroup(root: string, target: string): Promise<void> {
-  const group = await assertSafeManagedPath(root, MANAGED_WRITE_LOCK_GROUP);
-  if (path.resolve(path.dirname(target)) !== path.resolve(group)) return;
-  try {
-    await rmdir(group);
-  } catch (error: unknown) {
-    if (
-      isFileNotFound(error) ||
-      (error instanceof Error &&
-        "code" in error &&
-        ["EEXIST", "ENOTEMPTY"].includes(String(error.code)))
-    ) {
-      return;
     }
     throw error;
   }
@@ -294,10 +296,9 @@ export async function tryAcquireManagedLock(
   }
   return async () => {
     if (!(await unlinkIfExists(ownerPath))) return;
-    let didRemoveLock = false;
+    // Shared parent directories stay in place: removing one races writers about to lock inside it.
     try {
       await rmdir(target);
-      didRemoveLock = true;
     } catch (error: unknown) {
       if (
         !isFileNotFound(error) &&
@@ -307,7 +308,6 @@ export async function tryAcquireManagedLock(
         throw error;
       }
     }
-    if (didRemoveLock) await removeEmptyManagedWriteLockGroup(root, target);
   };
 }
 

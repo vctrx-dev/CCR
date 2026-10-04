@@ -87,33 +87,47 @@ Examples:
 /** Shared journal content contract; callers retain their own target selection and write permissions. */
 export const JOURNAL_WRITING_GUIDANCE = `## Journal content
 
-Keep a compact, living account that makes sense without the chat. Use plain language and short
-bullets. Maintain these sections, omitting optional sections when empty:
-- Summary: what was reviewed or requested, the main result, and where the work stands now.
-- Findings and outcomes: one bullet per distinct issue, with a stable label, severity when known,
-  the problem and affected people, current disposition, and the reason or verification supporting
-  that disposition. Distinguish open, questioned, rejected, deferred, changed-but-unverified, and
-  fixed-and-verified. Preserve a short explanation when an earlier finding was corrected.
+Keep a compact, living account that makes sense without the chat, the report, or the code. Someone
+reading it days later should understand what was reviewed, each finding, what was decided, and what
+is left. Use plain language and short bullets. Maintain these sections, omitting optional sections
+when empty:
+- Summary: one to three sentences on what was reviewed or requested, the main result, and where the
+  work stands now.
+- Findings and outcomes: exactly one bullet per distinct issue. Each bullet is a concise summary of
+  the reported finding, never a copy of it: about 40–80 words in this shape:
+  \`F1 (High, Dimension name) — open: who is affected and what happens to them, because of which
+  rule or behavior, in plain words. Why it matters. Reason for the status or the next check.\`
+  Keep the stable label, severity, dimension, affected people, cause, consequence, status, and its
+  reason. Leave out the scenario story, evidence quotes, code, and repeated explanation. Statuses are
+  open, questioned, rejected, deferred, changed-but-unverified, and fixed-and-verified. When a status
+  changes, edit the same bullet and keep one short reason; preserve a short note when an earlier
+  finding was corrected.
 - Work and decisions (when useful): follow-up answers, actions actually taken, human choices and
-  their rationale, checks performed and results, and any shared-context updates.
+  their rationale, checks performed and results, and any shared-context updates, one line each.
 - Next steps (when useful): unresolved questions, blockers, or remaining checks, not generic advice.
-- Supporting references (when useful): minimal evidence/check references for recovering the basis
-  of important conclusions. Distinguish observed behavior, human-reported practice, and plans.
+- Supporting references (when useful): at most one short line per finding label naming the main file
+  or check behind it, so later work can find the evidence. Distinguish observed behavior,
+  human-reported practice, and plans.
 
-Summarize every reported issue, not just severity totals. If none were found, state that once with
-any material coverage limit. Update existing bullets rather than copying reports or appending a
-transcript. Remove obsolete placeholders, empty disposition categories, repeated counts in prose,
-and generic process narration. Keep meaningful earlier outcomes and decisions. Preserve the
-package-managed identity, timestamps, review-run headings and metadata; those support freshness
-checks. Use subordinate headings within a review run so its metadata remains in that section.
-Keep the complete entry within CCR's 64,000-character limit; condense repetition before it fills.
-Never record secrets, personal records, raw private discussion, or a changed-file inventory.`;
+Example finding bullet:
+\`F2 (Medium, Inclusion & Accessibility) — open: people whose names contain accents, apostrophes, or
+spaces cannot finish sign-up, because the name field accepts only plain English letters. They must
+misspell their own name to take part. Checked for another sign-up route; none exists.\`
+
+If none were found, state that once with any material coverage limit. Update existing bullets rather
+than copying reports or appending a transcript. Remove obsolete placeholders, empty disposition
+categories, repeated counts in prose, and generic process narration. Keep meaningful earlier outcomes
+and decisions. Preserve the package-managed identity, timestamps, review-run headings and metadata;
+those support freshness checks. Use subordinate headings within a review run so its metadata remains
+in that section. Keep the complete entry within CCR's 64,000-character limit; condense repetition
+before it fills. Never record secrets, personal records, raw private discussion, or a changed-file
+inventory.`;
 
 /** Reused by review and context writers so human review rationale has one promotion policy. */
 export const REVIEW_DECISION_GUIDANCE = `## Human review decisions
 
 decisions.md preserves uncommon human rationale learned in review follow-ups that future reviewers
-would otherwise miss. Append only when instructions.updateDecisionsMd is true and all are true:
+would otherwise miss. Append only when all are true:
 - A human explicitly explains or confirms the rationale in response to a review finding.
 - It establishes a lasting product choice, intended behavior, exception, or outside-the-software
   practice that could otherwise produce similar findings in future reviews.
@@ -132,10 +146,7 @@ missing human rationale that explains an intentional review exception belongs in
 project.md describes enduring product facts and plans, without duplicating that explanation.
 Automatic context updates may carry forward
 only an explicit human review rationale already recorded in the approved journal, never originate
-a decision from a commit or infer human agreement. If the setting is false, retain the rationale in
-the journal, explain that shared decision capture is disabled, show
-\`ccr config set instructions.updateDecisionsMd true\` for a human to run, and offer to append the
-rationale once they enable it.
+a decision from a commit or infer human agreement.
 
 At the start of every review, read decisions with project and stakeholder context. Apply each rule
 within its stated scope: do not repeat the same resolved finding when the human explanation still

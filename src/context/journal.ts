@@ -255,6 +255,32 @@ export async function finalizeWorkingJournalEntry(
   );
 }
 
+/**
+ * Moves the journal of a commit replaced by `git commit --amend` to the amended commit, so its
+ * review account and finding history stay attached to the work instead of a now-unreachable SHA.
+ */
+export async function retargetAmendedJournalEntry(
+  root: string,
+  details: JournalDetails,
+  replacedCommit: string,
+  now: Date = new Date(),
+): Promise<JournalResult | undefined> {
+  return withJournalMutationLock(root, () =>
+    withJournalIdentityLock(root, `commit:${details.directory}:${details.commit}`, async () => {
+      const previous = await findCommitJournalEntry(root, replacedCommit, details.directory);
+      if (previous === undefined) return undefined;
+      const metadata = `- **Commit**: \`${replacedCommit}\``;
+      const refreshed = refreshJournalActivity(previous.content, now, previous.path);
+      if (!refreshed.includes(metadata)) {
+        throw new Error(`Journal identity metadata is malformed: ${previous.path}`);
+      }
+      const updated = refreshed.replace(metadata, `- **Commit**: \`${details.commit}\``);
+      await replaceJournalFileIfUnchanged(root, previous.path, previous.content, updated);
+      return { path: previous.path };
+    }),
+  );
+}
+
 /** Returns the existing current-commit journal or creates its sole review continuity entry. */
 export async function ensureJournalEntryForHead(
   root: string,

@@ -1,5 +1,5 @@
 import * as filesystem from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, uptime } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { tryAcquireManagedLock } from "../../../src/context/managed-lock";
@@ -118,4 +118,51 @@ it("should not reclaim a live replacement after observing a stale lock", async (
     await staleRelease?.();
     await replacementRelease?.();
   }
+});
+
+it("should reclaim a lock whose owner was created before the last boot despite PID reuse", async () => {
+  const root = await filesystem.mkdtemp(path.join(tmpdir(), "ccr-rebooted-owner-"));
+  roots.push(root);
+  const relativePath = ".ccr/private/test.lock";
+  const target = path.join(root, relativePath);
+  await filesystem.mkdir(target, { recursive: true });
+  const token = "11111111-1111-1111-1111-111111111111";
+  await filesystem.writeFile(
+    path.join(target, `${token}.owner.json`),
+    // A live PID stands in for one reused by an unrelated process after a crash and reboot.
+    JSON.stringify({ token, pid: process.pid, createdAt: Date.now() - uptime() * 1000 - 120_000 }),
+  );
+
+  const release = await tryAcquireManagedLock(root, relativePath);
+  expect(release).toBeTypeOf("function");
+  await release?.();
+});
+
+it("should reclaim owner metadata that stays unreadable long after a crash", async () => {
+  const root = await filesystem.mkdtemp(path.join(tmpdir(), "ccr-crashed-owner-"));
+  roots.push(root);
+  const relativePath = ".ccr/private/test.lock";
+  const target = path.join(root, relativePath);
+  await filesystem.mkdir(target, { recursive: true });
+  const ownerPath = path.join(target, "11111111-1111-1111-1111-111111111111.owner.json");
+  await filesystem.writeFile(ownerPath, "");
+  await filesystem.utimes(ownerPath, new Date(0), new Date(0));
+
+  const release = await tryAcquireManagedLock(root, relativePath);
+  expect(release).toBeTypeOf("function");
+  await release?.();
+});
+
+it("should reclaim an old unreadable legacy file lock", async () => {
+  const root = await filesystem.mkdtemp(path.join(tmpdir(), "ccr-legacy-lock-"));
+  roots.push(root);
+  const relativePath = ".ccr/private/test.lock";
+  const target = path.join(root, relativePath);
+  await filesystem.mkdir(path.dirname(target), { recursive: true });
+  await filesystem.writeFile(target, "");
+  await filesystem.utimes(target, new Date(0), new Date(0));
+
+  const release = await tryAcquireManagedLock(root, relativePath);
+  expect(release).toBeTypeOf("function");
+  await release?.();
 });

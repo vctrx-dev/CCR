@@ -46,9 +46,9 @@ describe("parseContextConfig", () => {
     expect(parsed).toEqual(DEFAULT_CONTEXT_CONFIG);
     expect(toPublicContextConfig(parsed)).toEqual({
       domain: "unspecified",
-      hooks: { enabled: true, checkBeforeCommit: true, autoUpdateContext: false },
-      context: { recentJournalEntries: 3, maxCompactionPercent: 25 },
-      instructions: { updateClaudeMd: false, updateAgentsMd: false, updateDecisionsMd: true },
+      hooks: { enabled: true, checkBeforeCommit: true },
+      context: { recentJournalEntries: 1 },
+      instructions: { updateClaudeMd: true, updateAgentsMd: true },
     });
     expect(parsed.privacy.excludedPaths).toEqual([]);
   });
@@ -72,15 +72,42 @@ describe("parseContextConfig", () => {
     ).toBe("civic-tech");
   });
 
-  it("should default the decisions update opt-in for existing configuration files", () => {
+  it("should accept but ignore settings that are now fixed in code", () => {
     const parsed = parseContextConfig(
       JSON.stringify({
-        ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG),
-        instructions: { updateClaudeMd: true, updateAgentsMd: false },
+        domain: "unspecified",
+        hooks: { enabled: true, checkBeforeCommit: false, autoUpdateContext: true },
+        context: { recentJournalEntries: 2, maxCompactionPercent: 30 },
+        instructions: { updateClaudeMd: true, updateAgentsMd: false, updateDecisionsMd: false },
       }),
     );
 
-    expect(parsed.instructions).toMatchObject({ updateDecisionsMd: false });
+    expect(parsed.hooks.autoUpdateContext).toBe(false);
+    expect(parsed.context.maxCompactionPercent).toBe(25);
+    expect(parsed.instructions.updateDecisionsMd).toBe(true);
+    expect(serializeContextConfig(parsed)).not.toMatch(
+      /autoUpdateContext|maxCompactionPercent|updateDecisionsMd/u,
+    );
+  });
+
+  it("should derive automatic context updates from both hook switches", () => {
+    for (const [enabled, checkBeforeCommit, expected] of [
+      [true, true, true],
+      [true, false, false],
+      [false, true, false],
+    ] as const) {
+      const parsed = parseContextConfig(
+        JSON.stringify({
+          ...toPublicContextConfig(DEFAULT_CONTEXT_CONFIG),
+          hooks: { enabled, checkBeforeCommit },
+        }),
+      );
+      expect(parsed.hooks.autoUpdateContext).toBe(expected);
+    }
+    expect(
+      resolveContextConfig(DEFAULT_CONTEXT_CONFIG, { hooks: { checkBeforeCommit: false } }).hooks
+        .autoUpdateContext,
+    ).toBe(false);
   });
 
   it("should migrate supported settings from the previous schema", () => {
@@ -105,7 +132,7 @@ describe("parseContextConfig", () => {
     expect(parsed.hooks).toEqual({
       enabled: true,
       checkBeforeCommit: true,
-      autoUpdateContext: false,
+      autoUpdateContext: true,
     });
     expect(parsed).not.toHaveProperty("discovery");
     expect(parsed.domain).toBe("education");
@@ -158,9 +185,9 @@ describe("updateContextConfig", () => {
         .instructions.updateClaudeMd,
     ).toBe(true);
     expect(
-      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "instructions.updateDecisionsMd", "true")
-        .instructions,
-    ).toMatchObject({ updateDecisionsMd: true });
+      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "instructions.updateAgentsMd", "false")
+        .instructions.updateAgentsMd,
+    ).toBe(false);
     expect(
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.enabled", "false").hooks.enabled,
     ).toBe(false);
@@ -169,17 +196,9 @@ describe("updateContextConfig", () => {
         .checkBeforeCommit,
     ).toBe(false);
     expect(
-      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.autoUpdateContext", "true").hooks
-        .autoUpdateContext,
-    ).toBe(true);
-    expect(
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.recentJournalEntries", "2").context
         .recentJournalEntries,
     ).toBe(2);
-    expect(
-      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.maxCompactionPercent", "30").context
-        .maxCompactionPercent,
-    ).toBe(30);
     expect(updateContextConfig(DEFAULT_CONTEXT_CONFIG, "domain", "civic-tech").domain).toBe(
       "civic-tech",
     );
@@ -192,9 +211,15 @@ describe("updateContextConfig", () => {
     expect(() =>
       updateContextConfig(DEFAULT_CONTEXT_CONFIG, "hooks.checkBeforeCommit", "maybe"),
     ).toThrow(/true or false/);
-    expect(() =>
-      updateContextConfig(DEFAULT_CONTEXT_CONFIG, "context.maxCompactionPercent", "31"),
-    ).toThrow();
+    for (const removed of [
+      "hooks.autoUpdateContext",
+      "context.maxCompactionPercent",
+      "instructions.updateDecisionsMd",
+    ]) {
+      expect(() => updateContextConfig(DEFAULT_CONTEXT_CONFIG, removed, "true")).toThrow(
+        /Supported settings/,
+      );
+    }
   });
 });
 

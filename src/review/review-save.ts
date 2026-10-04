@@ -12,9 +12,11 @@ import {
   assertJournalContentWithinLimit,
   refreshJournalActivity,
 } from "../context/journal-document";
+import { readReviewDimensionRegistry } from "./dimension-file";
+import { parseReviewDimensionSelection } from "./dimensions";
 import { hasSafeReviewChanges, listSafeReviewChanges } from "./evidence";
 import { recordWorkingReviewState } from "./review-continuity";
-import { computeWorkingReviewState } from "./review-fingerprint";
+import { computeReviewContextState, computeWorkingReviewState } from "./review-fingerprint";
 
 /**
  * One-step review continuity for the review skill: selects the journal, appends a complete review
@@ -30,7 +32,7 @@ const reviewFingerprintSchema = z
 const saveReviewInputSchema = z
   .object({
     scope: z.union([z.enum(["changes", "codebase"]), z.string().regex(/^PR-[1-9][0-9]*$/iu)]),
-    dimensions: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?:,[a-z0-9]+(?:-[a-z0-9]+)*)*$/u),
+    dimensions: z.string(),
     counts: z
       .string()
       .regex(/^\d{1,4},\d{1,4},\d{1,4},\d{1,4}$/u, "Counts must be critical,high,medium,low."),
@@ -42,6 +44,7 @@ const saveReviewInputSchema = z
       .regex(/^[^\r\n]+$/u, "Summary must be one line."),
     expectedState: reviewFingerprintSchema.optional(),
     expectedContext: reviewFingerprintSchema.optional(),
+    expectedInputContext: reviewFingerprintSchema.optional(),
   })
   .strict()
   .refine(
@@ -62,8 +65,10 @@ function journalTimestamp(now: Date): string {
 /**
  * Saves one completed review run. With `expectedState` and `expectedContext` from the reviewer's
  * pre-discovery `review-state`, changes and codebase runs record exactly those fingerprints and
- * refuse edits made during the review; without them the current state is recorded for backward
- * compatibility. PR runs are journaled without local fingerprints.
+ * refuse code/shared-context edits made during the review; without them the current state is recorded
+ * for backward compatibility. Optional `expectedInputContext` checks the acknowledged journal inputs
+ * before this operation's own journal writes, not persistent freshness or full transaction isolation.
+ * PR runs are journaled without local fingerprints but may check their acknowledged context inputs.
  *
  * @param input - Untrusted CLI values: scope, dimension IDs, `critical,high,medium,low`, summary,
  * and optional expected fingerprints.
@@ -73,22 +78,46 @@ export async function saveReview(
   input: unknown,
   now: Date = new Date(),
 ): Promise<SaveReviewResult> {
-  const { scope, dimensions, counts, summary, expectedState, expectedContext } =
-    saveReviewInputSchema.parse(input);
+  const {
+    scope,
+    dimensions: selection,
+    counts,
+    summary,
+    expectedState,
+    expectedContext,
+    expectedInputContext,
+  } = saveReviewInputSchema.parse(input);
+  const dimensions = parseReviewDimensionSelection(
+    selection,
+    await readReviewDimensionRegistry(root),
+  );
   const isPullRequest = scope !== "changes" && scope !== "codebase";
   if (isPullRequest && expectedState !== undefined) {
     throw new Error("Expected review fingerprints apply only to changes and codebase scopes.");
   }
-  if (expectedState !== undefined) {
-    const current = await computeWorkingReviewState(root);
-    if (current.fingerprint !== expectedState) {
+  if (expectedState !== undefined || expectedInputContext !== undefined) {
+    const current = isPullRequest
+      ? await computeReviewContextState(root, parsePullRequestToken(scope))
+      : await computeWorkingReviewState(root);
+    if (
+      expectedState !== undefined &&
+      (!("fingerprint" in current) || current.fingerprint !== expectedState)
+    ) {
       throw new Error(
         "Review evidence changed since review-state was captured; review the changes or report the review as stale.",
       );
     }
-    if (current.contextFingerprint !== expectedContext) {
+    if (expectedContext !== undefined && current.contextFingerprint !== expectedContext) {
       throw new Error(
         "Review context changed since review-state was captured; reload the context before saving.",
+      );
+    }
+    if (
+      expectedInputContext !== undefined &&
+      current.inputContextFingerprint !== expectedInputContext
+    ) {
+      throw new Error(
+        "Review journal inputs changed; read the updated inputs and acknowledge them before saving.",
       );
     }
   }

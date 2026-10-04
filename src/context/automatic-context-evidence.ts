@@ -23,7 +23,8 @@ async function createDefaultEvidenceBroker(
   root: string,
   commit: string,
 ): Promise<AutomaticContextEvidenceBroker> {
-  const snapshot = await createSafeCommitEvidenceReader(root, commit);
+  // The background update may start after later commits; the commit only has to stay in history.
+  const snapshot = await createSafeCommitEvidenceReader(root, commit, { scope: "history" });
   return {
     listPaths: (_root, _commit, after) => snapshot.listPaths(after),
     readFile: (_root, _commit, file) => snapshot.readFile(file),
@@ -70,7 +71,7 @@ async function readAllApprovedPaths(
   return { paths, excludedPathCount: excludedPathCount ?? 0 };
 }
 
-/** Builds one bounded JSON packet from privacy-approved blobs belonging to the exact current HEAD. */
+/** Builds one bounded JSON packet from privacy-approved blobs of a commit in the current history. */
 export async function buildAutomaticContextEvidencePacket(
   root: string,
   commit: string,

@@ -22,7 +22,7 @@ import {
   writeManagedText,
   writeManagedTextIfUnchanged,
 } from "./files";
-import { readCurrentCommit, readWorkingTreeFingerprints } from "./git";
+import { isCommitInHeadHistory } from "./git";
 import {
   assertJournalContentWithinLimit,
   inspectJournalDocument,
@@ -70,11 +70,24 @@ async function readAutomaticDecisions(root: string): Promise<string> {
   }
 }
 
-async function readUpdateFingerprints(root: string): Promise<Map<string, string>> {
-  return new Map([
-    ...readWorkingTreeFingerprints(root),
-    ...(await fingerprintManagedTree(root, ".ccr")),
-  ]);
+/**
+ * Fingerprints CCR-owned files only. The update runs in the background while the developer keeps
+ * editing source, so source edits are expected; Claude's tool allowlist already denies them. Other
+ * journals and private state also change during normal CCR use (later commits, saved reviews,
+ * locks), so only shared context and this update's own journal are compared.
+ */
+async function readUpdateFingerprints(
+  root: string,
+  journalPath: string,
+): Promise<Map<string, string>> {
+  const fingerprints = await fingerprintManagedTree(root, ".ccr");
+  for (const relativePath of fingerprints.keys()) {
+    const isOtherJournal = relativePath.startsWith(".ccr/journal/") && relativePath !== journalPath;
+    if (isOtherJournal || relativePath.startsWith(".ccr/private/")) {
+      fingerprints.delete(relativePath);
+    }
+  }
+  return fingerprints;
 }
 
 async function validateAutomaticUpdate(
@@ -138,14 +151,10 @@ async function readCompletedCommits(root: string): Promise<string[]> {
   }
 }
 
+/** Later commits on top are fine; a commit dropped by reset or rewrite is no longer worth updating. */
 function assertAutomaticUpdateHead(root: string, commit: string): void {
-  try {
-    if (readCurrentCommit(root) !== commit) {
-      throw new Error("Automatic context update commit no longer matches HEAD.");
-    }
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message.includes("no longer matches HEAD")) throw error;
-    throw new Error("Automatic context update could not verify HEAD.");
+  if (!isCommitInHeadHistory(root, commit)) {
+    throw new Error("Automatic context update commit is no longer in the branch history.");
   }
 }
 
@@ -207,7 +216,7 @@ export async function runAutomaticContextUpdate(
       : undefined;
     const allowedPaths = new Set([validatedJournalPath, ".ccr/project.md"]);
     if (config.instructions.updateDecisionsMd) allowedPaths.add(".ccr/decisions.md");
-    const before = await readUpdateFingerprints(root);
+    const before = await readUpdateFingerprints(root, validatedJournalPath);
     const packetPath = automaticEvidencePacketPath(validatedCommit);
     const packetContent = await buildAutomaticContextEvidencePacket(root, validatedCommit);
     assertAutomaticUpdateHead(root, validatedCommit);
@@ -227,7 +236,7 @@ export async function runAutomaticContextUpdate(
     assertAutomaticUpdateHead(root, validatedCommit);
     const unauthorized = changedUnauthorizedPath(
       before,
-      await readUpdateFingerprints(root),
+      await readUpdateFingerprints(root, validatedJournalPath),
       allowedPaths,
     );
     if (unauthorized) {
