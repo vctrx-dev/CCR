@@ -62,6 +62,18 @@ export function runGit(
   });
 }
 
+/** Quotes a path in Git's C style; `--stdin-paths` rejects JSON's `\uXXXX` control escapes. */
+export function quoteGitPath(file: string): string {
+  let quoted = '"';
+  for (const character of file) {
+    const code = character.codePointAt(0) ?? 0;
+    if (character === '"' || character === "\\") quoted += `\\${character}`;
+    else if (code < 0x20 || code === 0x7f) quoted += `\\${code.toString(8).padStart(3, "0")}`;
+    else quoted += character;
+  }
+  return `${quoted}"`;
+}
+
 /** Hashes bounded batches of exact filenames; failed batches split to isolate missing paths. */
 export function hashGitWorktreePaths(
   root: string,
@@ -77,7 +89,7 @@ export function hashGitWorktreePaths(
         ["hash-object", ...(shouldApplyFilters ? [] : ["--no-filters"]), "--stdin-paths"],
         batch.length * 66,
         true,
-        `${batch.map((file) => JSON.stringify(file)).join("\n")}\n`,
+        `${batch.map(quoteGitPath).join("\n")}\n`,
       );
       const hashes = output.trimEnd().split("\n");
       if (

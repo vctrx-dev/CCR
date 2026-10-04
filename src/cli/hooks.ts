@@ -48,7 +48,13 @@ async function runPostCommitCommand(io: CliIo): Promise<void> {
   }
   const result = await runAfterCommitCheck(root);
   if (result.isSkipped || !result.hasRepositoryChanges) return;
-  if (await hasCurrentContextAssessment(root, result.commit)) return;
+  let isAssessed = false;
+  try {
+    isAssessed = await hasCurrentContextAssessment(root, result.commit);
+  } catch {
+    // Assessment receipts are advisory; fall through to the update or the manual hint.
+  }
+  if (isAssessed) return;
   if (
     settings.autoUpdateContext &&
     result.journalPath !== undefined &&

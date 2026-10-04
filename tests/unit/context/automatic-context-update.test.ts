@@ -254,16 +254,29 @@ describe("runAutomaticContextUpdate", () => {
     );
   });
 
-  it("should reject unauthorized ignored CCR files", async () => {
+  it("should reject new untracked CCR files outside the approved context paths", async () => {
     const root = await makeAutomationRoot();
     const runner = vi.fn(async () => {
       await completeJournal(root);
-      await writeFile(path.join(root, ".ccr/journal/main/extra.md"), "unexpected\n");
+      await writeFile(path.join(root, ".ccr/extra.md"), "unexpected\n");
     });
 
     await expect(runUpdate(root, runner)).rejects.toThrow(
-      "Automatic context update changed an unauthorized path: .ccr/journal/main/extra.md.",
+      "Automatic context update changed an unauthorized path: .ccr/extra.md.",
     );
+  });
+
+  it("should tolerate other journals and private state written while the update runs", async () => {
+    const root = await makeAutomationRoot();
+    const runner = vi.fn(async () => {
+      await completeJournal(root);
+      // A later commit's journal and a saved review land while the headless run is in flight.
+      await writeFile(path.join(root, ".ccr/journal/main/later.md"), "later commit\n");
+      await mkdir(path.join(root, ".ccr/private/coverage"), { recursive: true });
+      await writeFile(path.join(root, ".ccr/private/coverage/review-main.json"), "{}\n");
+    });
+
+    await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
   });
 
   it("should reclaim an expired lock left by a dead process", async () => {

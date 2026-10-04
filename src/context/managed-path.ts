@@ -213,7 +213,9 @@ export async function fingerprintManagedTree(
         await assertSafeManagedPath(root, relativePath),
         maxCharactersPerFile,
       );
-      if (bounded === undefined || bounded.isTruncated) {
+      // Another CCR process may remove a short-lived file (such as a lock owner) after readdir.
+      if (bounded === undefined) continue;
+      if (bounded.isTruncated) {
         throw new Error(`Managed file exceeds the content limit: ${relativePath}`);
       }
       fingerprints.set(relativePath, createHash("sha256").update(bounded.content).digest("hex"));

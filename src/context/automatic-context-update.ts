@@ -72,10 +72,22 @@ async function readAutomaticDecisions(root: string): Promise<string> {
 
 /**
  * Fingerprints CCR-owned files only. The update runs in the background while the developer keeps
- * editing source, so source edits are expected; Claude's tool allowlist already denies them.
+ * editing source, so source edits are expected; Claude's tool allowlist already denies them. Other
+ * journals and private state also change during normal CCR use (later commits, saved reviews,
+ * locks), so only shared context and this update's own journal are compared.
  */
-async function readUpdateFingerprints(root: string): Promise<Map<string, string>> {
-  return fingerprintManagedTree(root, ".ccr");
+async function readUpdateFingerprints(
+  root: string,
+  journalPath: string,
+): Promise<Map<string, string>> {
+  const fingerprints = await fingerprintManagedTree(root, ".ccr");
+  for (const relativePath of fingerprints.keys()) {
+    const isOtherJournal = relativePath.startsWith(".ccr/journal/") && relativePath !== journalPath;
+    if (isOtherJournal || relativePath.startsWith(".ccr/private/")) {
+      fingerprints.delete(relativePath);
+    }
+  }
+  return fingerprints;
 }
 
 async function validateAutomaticUpdate(
@@ -204,7 +216,7 @@ export async function runAutomaticContextUpdate(
       : undefined;
     const allowedPaths = new Set([validatedJournalPath, ".ccr/project.md"]);
     if (config.instructions.updateDecisionsMd) allowedPaths.add(".ccr/decisions.md");
-    const before = await readUpdateFingerprints(root);
+    const before = await readUpdateFingerprints(root, validatedJournalPath);
     const packetPath = automaticEvidencePacketPath(validatedCommit);
     const packetContent = await buildAutomaticContextEvidencePacket(root, validatedCommit);
     assertAutomaticUpdateHead(root, validatedCommit);
@@ -224,7 +236,7 @@ export async function runAutomaticContextUpdate(
     assertAutomaticUpdateHead(root, validatedCommit);
     const unauthorized = changedUnauthorizedPath(
       before,
-      await readUpdateFingerprints(root),
+      await readUpdateFingerprints(root, validatedJournalPath),
       allowedPaths,
     );
     if (unauthorized) {

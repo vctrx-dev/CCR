@@ -47,6 +47,18 @@ beta while its version is 0.x, so incompatible changes increment MINOR. See
   scratch files and partial commits no longer produce false warnings or stale reviews.
 - Context-only commits create no empty journal, and recent history skips untouched placeholder
   entries so they cannot crowd out real review history.
+- A background context update still completes when the developer commits again before it starts,
+  or commits, reviews, or writes other CCR journals and private state while it runs.
+- A post-commit hook whose context-assessment check fails still starts the background update or
+  prints the manual hint.
+- Locks left by a crash no longer block setup, configuration, and updates until deleted by hand:
+  owners from before the last reboot (even when their process ID was reused) and owner records that
+  stay unreadable are reclaimed. Live owners still keep their locks however long they run.
+- Concurrent CCR writes no longer fail occasionally on Windows; the shared
+  `.ccr/private/managed-write-locks` directory is kept rather than removed after each write.
+- Files whose names contain control characters are fingerprinted correctly, so editing them after a
+  review marks the review stale.
+- Background context updates for large commits read evidence with half as many Git calls.
 
 ## 0.11.0 - 2026-10-02
 

@@ -9,7 +9,7 @@ import {
   utimes,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, uptime } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import {
@@ -84,7 +84,7 @@ it("should hold an exclusive managed lock and permit release more than once", as
   await expect(release?.()).resolves.toBeUndefined();
 });
 
-it("should remove an empty managed write-lock group after release", async () => {
+it("should keep the shared managed write-lock group after release", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-managed-write-lock-files-"));
   roots.push(root);
   const release = await tryAcquireManagedLock(
@@ -95,7 +95,8 @@ it("should remove an empty managed write-lock group after release", async () => 
 
   await release();
 
-  await expect(lstat(path.join(root, ".ccr/private/managed-write-locks"))).rejects.toThrow();
+  // Removing the shared group would race writers about to create their own lock inside it.
+  await expect(readdir(path.join(root, ".ccr/private/managed-write-locks"))).resolves.toEqual([]);
 });
 
 it("should preserve a replacement lock when an earlier owner releases", async () => {
@@ -127,7 +128,8 @@ it("should keep an over-age live lock exclusive until its owner releases", async
     `${JSON.stringify({
       token: ownerFile.replace(/\.owner\.json$/u, ""),
       pid: process.pid,
-      createdAt: 946_684_800_000,
+      // Long ago but after boot: age alone never reclaims a live owner.
+      createdAt: Math.max(Date.now() - 24 * 60 * 60_000, Date.now() - uptime() * 1000),
     })}\n`,
   );
 
@@ -254,7 +256,7 @@ it("should compare and replace managed text while serializing cooperating writer
   ]);
   expect(results.filter(Boolean)).toHaveLength(1);
   expect(["first\n", "second\n"]).toContain(await readFile(path.join(root, relativePath), "utf8"));
-  await expect(lstat(path.join(root, ".ccr/private/managed-write-locks"))).rejects.toThrow();
+  await expect(readdir(path.join(root, ".ccr/private/managed-write-locks"))).resolves.toEqual([]);
 });
 
 it("should delete managed text only while its observed content is unchanged", async () => {

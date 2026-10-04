@@ -7,6 +7,7 @@ import {
 } from "./evidence-format";
 import { assertSafeManagedPath, readBoundedUtf8TextIfExists } from "./files";
 import {
+  isCommitInHeadHistory,
   readBoundedCommitDiff,
   readBoundedGitBlob,
   readBoundedStagedDiff,
@@ -87,8 +88,24 @@ function boundedPathPage(paths: string[], excludedCount: number, after?: string)
 
 const gitCommitSchema = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u);
 
-function validateCurrentCommit(root: string, commit: string): string {
+/**
+ * `head` requires the exact current HEAD; `history` also accepts a commit that later commits have
+ * built on, for background work that may start after the developer commits again.
+ */
+export type CommitEvidenceScope = "head" | "history";
+
+function validateCurrentCommit(
+  root: string,
+  commit: string,
+  scope: CommitEvidenceScope = "head",
+): string {
   const validated = gitCommitSchema.parse(commit);
+  if (scope === "history") {
+    if (!isCommitInHeadHistory(root, validated)) {
+      throw new Error("Commit evidence is available only for commits in the current history.");
+    }
+    return validated;
+  }
   if (readCurrentCommit(root) !== validated) {
     throw new Error("Commit evidence is available only for the exact current HEAD.");
   }
@@ -98,12 +115,13 @@ function validateCurrentCommit(root: string, commit: string): string {
 async function safeCommitFiles(
   root: string,
   commit: string,
+  scope: CommitEvidenceScope = "head",
 ): Promise<{
   entriesByPath: Map<string, ReturnType<typeof readCommitEntries>[number]>;
   result: SafeCommitInventory;
   config: Awaited<ReturnType<typeof readResolvedContextConfig>>;
 }> {
-  const validated = validateCurrentCommit(root, commit);
+  const validated = validateCurrentCommit(root, commit, scope);
   const config = await readResolvedContextConfig(root);
   const changedPaths = readCommitChangedPaths(root, validated);
   const entries = readCommitEntries(root, validated);
@@ -116,7 +134,7 @@ async function safeCommitFiles(
     excludedPatterns: config.privacy.excludedPaths,
   });
   const paths = sortUniqueRepositoryPaths(approved.included);
-  validateCurrentCommit(root, validated);
+  validateCurrentCommit(root, validated, scope);
   return {
     config,
     entriesByPath: approved.entriesByPath,
@@ -222,21 +240,22 @@ export interface SafeCommitEvidenceReader {
 
 /**
  * Shares one approved commit inventory across a bounded evidence assembly. Every read checks HEAD
- * and resolved configuration before and after content access; changed policy invalidates the reader.
+ * and resolved configuration after content access; changed policy invalidates the reader.
  * Extend this operation-scoped reader for batching instead of caching approval between operations.
  */
 export async function createSafeCommitEvidenceReader(
   root: string,
   commit: string,
+  { scope = "head" }: { scope?: CommitEvidenceScope } = {},
 ): Promise<SafeCommitEvidenceReader> {
-  const safe = await safeCommitFiles(root, commit);
+  const safe = await safeCommitFiles(root, commit, scope);
   const approvedPaths = new Set(safe.result.paths);
   const expectedConfig = JSON.stringify(safe.config);
   const assertCurrent = async (): Promise<void> => {
     if (JSON.stringify(await readResolvedContextConfig(root)) !== expectedConfig) {
       throw new Error("Commit evidence configuration changed during the operation.");
     }
-    validateCurrentCommit(root, commit);
+    validateCurrentCommit(root, commit, scope);
   };
   const readApproved = async (
     candidate: string,
@@ -246,7 +265,7 @@ export async function createSafeCommitEvidenceReader(
     if (!approvedPaths.has(normalized)) {
       throw new Error("Path is not an approved changed file for the current commit.");
     }
-    await assertCurrent();
+    // Content comes from immutable objects, so one check after the read rejects a stale reader.
     const content = await read(normalized);
     await assertCurrent();
     return content;
