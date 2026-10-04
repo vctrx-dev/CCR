@@ -4,7 +4,7 @@ User-visible changes and migrations, following [Semantic Versioning](https://sem
 beta while its version is 0.x, so incompatible changes increment MINOR. See
 [VERSIONING.md](VERSIONING.md). Versions before 0.8.0, and 0.9.0–0.9.1, were never published to npm.
 
-## Unreleased
+## 0.13.0 - 2026-10-04
 
 ### Changed
 
