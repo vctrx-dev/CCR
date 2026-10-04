@@ -9,6 +9,10 @@ See [VERSIONING.md](VERSIONING.md); published release history is retained below.
 
 ### Changed
 
+- Releases are now published to npm's `latest` tag, so `npm install --global @vctrx/ccr@latest`
+  (or no tag) always installs the newest version. Earlier releases were published only to
+  `beta-0.1`/`beta-0.2`, which left `latest` on 0.10.0.
+
 - Context upkeep is automatic by default. After each commit not already covered by a review or
   context update, the post-commit hook starts a background headless Claude Code update and returns
   immediately. It runs while `hooks.enabled` and `hooks.checkBeforeCommit` are both `true`; set

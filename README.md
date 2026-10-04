@@ -13,11 +13,11 @@ does not change source code without your approval.
 Install CCR globally:
 
 ```bash
-npm install --global @vctrx/ccr@beta-0.2
+npm install --global @vctrx/ccr@latest
 ```
 
-The current release, **0.12.0**, is on `beta-0.2`. Installing without a tag uses npm's `latest`
-channel, which currently points to the older 0.10.0 release.
+The current release is **0.12.0**. Every release is published to npm's `latest` tag, so
+`@vctrx/ccr@latest` (or no tag) always installs the newest version.
 
 In your project's Git repository, run:
 
@@ -45,11 +45,11 @@ commit, and print at most one short line.
 Install in the repository, then use `npx ccr` instead of `ccr` for terminal commands:
 
 ```bash
-npm install --save-dev @vctrx/ccr@beta-0.2
+npm install --save-dev @vctrx/ccr@latest
 npx ccr setup
 ```
 
-With pnpm, use `pnpm add --save-dev @vctrx/ccr@beta-0.2` and `pnpm exec ccr setup`.
+With pnpm, use `pnpm add --save-dev @vctrx/ccr@latest` and `pnpm exec ccr setup`.
 Install the package before using `npx ccr`; otherwise npx may try to download a different package
 named `ccr`. Claude Code slash commands are the same for either installation.
 
@@ -115,11 +115,11 @@ See the [manual](USER_MANUAL.md) for settings, context ownership, and hook permi
 For a global installation, upgrade the package, then refresh each repository's installed skills:
 
 ```bash
-npm install --global @vctrx/ccr@beta-0.2
+npm install --global @vctrx/ccr@latest
 ccr update
 ```
 
-For a local installation, run `npm install --save-dev @vctrx/ccr@beta-0.2`, then `npx ccr update`.
+For a local installation, run `npm install --save-dev @vctrx/ccr@latest`, then `npx ccr update`.
 Updating preserves your configuration, context, journals, and custom dimensions.
 
 To remove CCR integration, first run `/ccr-hooks remove` inside Claude Code, then in the terminal:
