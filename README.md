@@ -1,5 +1,7 @@
 # CCR — Critical Code Reviewer
 
+[![npm version](https://img.shields.io/npm/v/@vctrx/ccr)](https://www.npmjs.com/package/@vctrx/ccr)
+
 CCR uncovers ethical and inclusivity bugs developers may not have anticipated—even when the code
 works as intended. It reviews assumptions, rules, and wording that can exclude people, treat them
 unfairly, or limit their privacy, learning, and control. Findings explain human consequences in plain
@@ -16,8 +18,8 @@ Install CCR globally:
 npm install --global @vctrx/ccr@latest
 ```
 
-The current release is **0.12.0**. Every release is published to npm's `latest` tag, so
-`@vctrx/ccr@latest` (or no tag) always installs the newest version.
+CCR is in beta. While its version is 0.x, a minor release (for example 0.12 → 0.13) may include
+breaking changes; the [changelog](CHANGELOG.md) explains each one and any migration.
 
 In your project's Git repository, run:
 

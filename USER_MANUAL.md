@@ -16,8 +16,8 @@ npm install --global @vctrx/ccr@latest
 ccr setup
 ```
 
-The current release is 0.12.0. Every release is published to npm's `latest` tag, so
-`@vctrx/ccr@latest` (or no tag) always installs the newest version.
+`@latest` always installs the newest release. CCR is in beta (0.x): a minor release may include
+breaking changes, which [CHANGELOG.md](CHANGELOG.md) describes with any migration steps.
 
 For a project-local installation, run these in the repository instead:
 
