@@ -25,9 +25,10 @@ ${SKILL_ARGUMENT_NORMALIZATION}
    - \`.claude/skills/ccr-hooks/SKILL.md\`
    - \`.claude/skills/ccr-review/SKILL.md\`
 4. For review selectors or criteria, run the installed CCR command \`ccr context dimensions\`
-   (or \`npx --no-install ccr context dimensions\` locally). It reads current \`.ccr/dimensions.json\`
-   or packaged defaults when absent. Use its current order and IDs; the packaged dimensions.md is
-   only a default preview. Report invalid JSON rather than relying on an example or remembered list.
+   (or \`npx --no-install ccr context dimensions\` locally). It rereads repository source JSON,
+   otherwise customized \`.ccr/dimensions.json\`, otherwise current on-disk package JSON. Untouched
+   setup copies track package defaults. Use its current order and IDs; Markdown and compiled
+   constants are derived snapshots. Report invalid JSON rather than using a remembered list.
 5. For a project-specific setting question, read the resolved configuration and consult
    \`.ccr/config-manual.md\` when present. Treat \`.ccr/config.json\` as human-owned, except that
    \`/ccr-context initialize\` may conditionally replace its untouched \`domain: "unspecified"\`
@@ -43,8 +44,9 @@ while answering a help question.
 <answer_contract>
 - Clearly distinguish terminal commands from Claude Code skills. Terminal commands run in the
   shell; slash skills run inside Claude Code after \`ccr setup\`.
-- State defaults and accepted arguments exactly. For reviews, explain blank/all, comma-separated
-  selection, and invalid-ID behavior only as supported by the current installed sources.
+- State defaults and accepted arguments exactly. For reviews, explain blank/all, space- or
+  comma-separated IDs, the optional dimension prefix, dimension without IDs listing choices and
+  asking for a selection, and invalid-ID behavior only as supported by the current installed sources.
 - When an operation can write or remove files, state its preview/write or approval boundary before
   showing the command.
 - Answer from current installed behavior. Label future roadmap items as unavailable instead of

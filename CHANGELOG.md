@@ -6,6 +6,26 @@ beta while its version is 0.x, so incompatible changes increment MINOR. See
 
 ## Unreleased
 
+### Changed
+
+- Review taxonomy is always read from live JSON: repository `src/review/dimensions.json` takes
+  priority, then customized `.ccr/dimensions.json`, then on-disk package defaults. Untouched setup
+  copies follow current package defaults automatically. Source edits need no build or update to
+  affect the next review. Setup derives references from the same JSON;
+  `ccr context dimensions --reference` renders a current reference. Invalid authoritative JSON
+  stops setup and review.
+- `/ccr-review` accepts any configured dimension individually or multiple IDs separated by spaces
+  or commas, with an optional `dimension` keyword. `/ccr-review codebase dimension` lists available
+  IDs and names and asks which dimensions to review. Explicit selections limit investigation and
+  findings to those dimensions; only an omitted selection defaults to `all`.
+
+### Fixed
+
+- ESM SDK imports from Node eval and stdin resolve the package taxonomy from the module location
+  rather than a caller-provided global `__dirname`.
+- Watch rebuilds regenerate `dist/review/dimensions.md` from current JSON rather than a value
+  captured when the watcher started.
+
 ## 0.12.0 - 2026-10-03
 
 ### Changed

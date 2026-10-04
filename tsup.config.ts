@@ -1,10 +1,15 @@
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "tsup";
-import { REVIEW_DIMENSION_REFERENCE } from "./src/review/dimensions";
+import { type Options, defineConfig } from "tsup";
+import { renderReviewDimensionReference } from "./src/review/dimensions";
 
 // Array configs build concurrently, so clean once before workers can race over the shared directory.
 rmSync(fileURLToPath(new URL("./dist", import.meta.url)), { force: true, recursive: true });
+
+const runtimeLocationOptions: Options["esbuildOptions"] = (options, { format }) => {
+  // CommonJS uses __dirname; only ESM evaluates the import.meta branch of the live JSON loader.
+  if (format === "cjs") options.define = { ...options.define, "import.meta.url": "undefined" };
+};
 
 export default defineConfig([
   {
@@ -13,6 +18,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     noExternal: ["picomatch", "zod"],
+    esbuildOptions: runtimeLocationOptions,
     clean: false,
     outDir: "dist",
     onSuccess: async () => {
@@ -24,7 +30,11 @@ export default defineConfig([
       );
       writeFileSync(
         fileURLToPath(new URL("./dist/review/dimensions.md", import.meta.url)),
-        REVIEW_DIMENSION_REFERENCE,
+        renderReviewDimensionReference(
+          JSON.parse(
+            readFileSync(new URL("./src/review/dimensions.json", import.meta.url), "utf8"),
+          ),
+        ),
         "utf8",
       );
     },
@@ -49,6 +59,7 @@ export default defineConfig([
     platform: "node",
     target: "node22",
     noExternal: ["commander", "picomatch", "zod"],
+    esbuildOptions: runtimeLocationOptions,
     sourcemap: false,
     clean: false,
     outDir: "dist/cli",

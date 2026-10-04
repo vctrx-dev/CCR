@@ -20,7 +20,11 @@ import {
 } from "../context/journal";
 import { readSafeStagedPaths } from "../context/privacy";
 import { readReviewDimensionRegistry } from "../review/dimension-file";
-import { parseReviewDimensionSelection, renderReviewDimensionSections } from "../review/dimensions";
+import {
+  parseReviewDimensionSelection,
+  renderReviewDimensionReference,
+  renderReviewDimensionSections,
+} from "../review/dimensions";
 import {
   hasSafeReviewChanges,
   listSafeReviewChanges,
@@ -45,14 +49,17 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   context
     .command("dimensions")
     .description(
-      "Render review lenses from current repository JSON, or packaged defaults when absent",
+      "Render review lenses from current source, customized repository, or packaged JSON",
     )
     .option("--json", "return the validated effective taxonomy instead of rendered prompt sections")
+    .option("--reference", "render a Markdown reference from the current effective JSON")
     .option(
       "--select <dimensions>",
-      "validate all or comma-separated IDs and render only those lenses",
+      "validate all or space/comma-separated IDs (quote spaces) and render only those lenses",
     )
-    .action(async (options: { json?: boolean; select?: string }) => {
+    .action(async (options: { json?: boolean; reference?: boolean; select?: string }) => {
+      if (options.json && options.reference)
+        throw new Error("Use --json or --reference, not both.");
       const registry = await readReviewDimensionRegistry(root());
       const selection =
         options.select === undefined
@@ -67,7 +74,9 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
       io.write(
         options.json
           ? `${JSON.stringify(selected, null, 2)}\n`
-          : `${renderReviewDimensionSections(selected) || "No review dimensions are configured."}\n`,
+          : options.reference
+            ? renderReviewDimensionReference(selected)
+            : `${renderReviewDimensionSections(selected) || "No review dimensions are configured."}\n`,
       );
     });
   context

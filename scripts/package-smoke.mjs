@@ -177,7 +177,7 @@ try {
   if (
     !installedHelp.includes(packageJson.description) ||
     !installedHelp.includes("Claude Code skills (run inside Claude Code after setup):") ||
-    !installedHelp.includes(`Configured dimension IDs: ${reviewDimensionIds.join(", ") || "none"}`)
+    !installedHelp.includes("Current dimension IDs and criteria: ccr context dimensions --json.")
   ) {
     throw new Error("Installed CLI help is incomplete or stale.");
   }
@@ -227,7 +227,8 @@ try {
   const esmSdkCheckPath = path.join(consumer, "verify-sdk.mjs");
   writeFileSync(
     esmSdkCheckPath,
-    `import { createAsuAimlProviderConfig } from "@vctrx/ccr";
+    `import { readFile, writeFile } from "node:fs/promises";
+import { createAsuAimlProviderConfig } from "@vctrx/ccr";
 import { DEFAULT_CONTEXT_CONFIG, resolveContextConfig } from "@vctrx/ccr/context";
 import { parseReviewDimensionRegistry, readReviewDimensionRegistry, renderReviewDimensionSections } from "@vctrx/ccr/review";
 import dimensionsJson from "@vctrx/ccr/dimensions.json" with { type: "json" };
@@ -253,6 +254,21 @@ const effective = await readReviewDimensionRegistry(process.cwd());
 if (JSON.stringify(packaged) !== JSON.stringify(effective) || typeof renderReviewDimensionSections(registry) !== "string") {
   throw new Error("Installed taxonomy data or runtime SDK exports are incomplete.");
 }
+const asset = new URL(import.meta.resolve("@vctrx/ccr/dimensions.json"));
+const original = await readFile(asset, "utf8");
+try {
+  await writeFile(asset, JSON.stringify(registry));
+  const revised = await readReviewDimensionRegistry(process.cwd());
+  if (JSON.stringify(revised) !== JSON.stringify(registry)) {
+    throw new Error("Installed SDK cached package JSON instead of rereading it.");
+  }
+  await writeFile(asset, "invalid JSON");
+  let rejected = false;
+  try { await readReviewDimensionRegistry(process.cwd()); } catch { rejected = true; }
+  if (!rejected) throw new Error("Invalid package JSON silently fell back to cached data.");
+} finally {
+  await writeFile(asset, original);
+}
 `,
     "utf8",
   );
@@ -267,6 +283,35 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     "utf8",
   );
   execFileSync(process.execPath, [cjsSdkCheckPath], { cwd: consumer, windowsHide: true });
+
+  // CommonJS eval/stdin expose a global __dirname that ESM dependencies must not mistake for
+  // their own location. Check both bundled entry points from an installed consumer directory.
+  const inlineSdkCheck = `
+(async () => {
+  const ccr = require("@vctrx/ccr");
+  const expected = ccr.parseReviewDimensionRegistry(JSON.parse(require("node:fs").readFileSync(require.resolve("@vctrx/ccr/dimensions.json"), "utf8")));
+  for (const entry of ["@vctrx/ccr", "@vctrx/ccr/review"]) {
+    const { readReviewDimensionRegistry } = await import(entry);
+    const registry = await readReviewDimensionRegistry(process.cwd());
+    if (JSON.stringify(registry) !== JSON.stringify(expected)) {
+      throw new Error("Inline ESM import did not read the installed package taxonomy.");
+    }
+  }
+  const registry = await ccr.readReviewDimensionRegistry(process.cwd());
+  if (JSON.stringify(registry) !== JSON.stringify(expected)) {
+    throw new Error("Inline CommonJS require did not read the installed package taxonomy.");
+  }
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+`;
+  execFileSync(process.execPath, ["-e", inlineSdkCheck], {
+    cwd: consumer,
+    windowsHide: true,
+  });
+  execFileSync(process.execPath, [], {
+    cwd: consumer,
+    input: inlineSdkCheck,
+    windowsHide: true,
+  });
 
   execFileSync("git", ["init", "--quiet"], { cwd: consumer, windowsHide: true });
   const preview = runInstalled(installedBin, ["setup", "--dry-run"], consumer);

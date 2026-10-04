@@ -68,7 +68,7 @@ describe("save review dimension selection", () => {
       const root = await makeRepository();
       const saved = await saveReview(
         root,
-        { ...input, scope, dimensions: " CUSTOM-MIDDLE , Custom-Zeta " },
+        { ...input, scope, dimensions: " CUSTOM-MIDDLE   Custom-Zeta " },
         now,
       );
       expect(await readFile(path.join(root, saved.path), "utf8")).toContain(
