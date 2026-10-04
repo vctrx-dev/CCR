@@ -2,8 +2,13 @@ import { mkdir, mkdtemp, rename, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
+import { serializeUpgradableJsonArtifact } from "../../../src/context/managed-json";
 import { readReviewDimensionRegistry } from "../../../src/review/dimension-file";
-import { REVIEW_DIMENSIONS, renderReviewDimensionSections } from "../../../src/review/dimensions";
+import {
+  REVIEW_DIMENSIONS,
+  parseReviewDimensionSelection,
+  renderReviewDimensionSections,
+} from "../../../src/review/dimensions";
 import { computeReviewContextState } from "../../../src/review/review-state";
 import {
   createTemporaryGitRepository,
@@ -21,6 +26,52 @@ const registry = {
     },
   ],
 };
+
+it("should reread source JSON ahead of repository copies without a build and update freshness", async () => {
+  const root = await createTemporaryGitRepository(roots, "ccr-source-dimensions-");
+  await mkdir(path.join(root, "src/review"), { recursive: true });
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(path.join(root, ".ccr/config.json"), "{}");
+  await writeFile(path.join(root, ".ccr/dimensions.json"), JSON.stringify(REVIEW_DIMENSIONS));
+  const file = path.join(root, "src/review/dimensions.json");
+  await writeFile(file, JSON.stringify(registry));
+  expect(await readReviewDimensionRegistry(root)).toEqual(registry);
+  const before = await computeReviewContextState(root);
+  const revised = {
+    dimensions: [
+      {
+        ...registry.dimensions[0],
+        id: "renamed-source",
+        criteria: [
+          { id: "N1", name: "Current source criterion", details: "Current source question?" },
+        ],
+      },
+    ],
+  };
+  await writeFile(file, JSON.stringify(revised));
+  const current = await readReviewDimensionRegistry(root);
+  expect(current).toEqual(revised);
+  expect(parseReviewDimensionSelection("renamed-source", current)).toBe("renamed-source");
+  expect(() => parseReviewDimensionSelection("example-lens", current)).toThrow(/unknown/i);
+  expect(renderReviewDimensionSections(current)).toContain("Current source question?");
+  expect((await computeReviewContextState(root)).contextFingerprint).not.toBe(
+    before.contextFingerprint,
+  );
+  await writeFile(file, "invalid JSON");
+  await expect(readReviewDimensionRegistry(root)).rejects.toThrow(/JSON/i);
+});
+
+it("should follow live package defaults for an untouched old setup copy", async () => {
+  const root = await createTemporaryGitRepository(roots, "ccr-live-default-dimensions-");
+  await mkdir(path.join(root, ".ccr"));
+  await writeFile(
+    path.join(root, ".ccr/dimensions.json"),
+    serializeUpgradableJsonArtifact(registry),
+  );
+  expect(await readReviewDimensionRegistry(root)).toEqual(REVIEW_DIMENSIONS);
+  await writeFile(path.join(root, ".ccr/dimensions.json"), JSON.stringify(registry));
+  expect(await readReviewDimensionRegistry(root)).toEqual(registry);
+});
 
 it("should use packaged defaults only when the repository file is absent and reread local edits", async () => {
   const root = await createTemporaryGitRepository(roots, "ccr-dimension-file-");

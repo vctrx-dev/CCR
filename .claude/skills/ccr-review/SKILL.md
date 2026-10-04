@@ -1,7 +1,7 @@
 ---
 name: ccr-review
-description: Review code for inclusivity bugs. Usage /ccr-review [changes | codebase | PR-<number>] [all | dimension-id,...]; changes = uncommitted changes (default), codebase = whole codebase, PR-<number> = a pull request; all = every dimension (default). Example /ccr-review PR-123 privacy-data-protection,inclusion-accessibility.
-argument-hint: "[changes | codebase | PR-<number>] [all | dimension-id,...]"
+description: Review code for inclusivity bugs. Usage /ccr-review [changes | codebase | PR-<number>] [all | dimension [<id> ...] | <id> ...]; all reviews every dimension (default), IDs select only those dimensions and can be separated by spaces or commas. The dimension keyword is optional; dimension alone lists available IDs and asks which to review. Example /ccr-review codebase dimension.
+argument-hint: "[changes | codebase | PR-<number>] [all | dimension [<id> ...] | <id> ...]"
 ---
 
 <!-- managed by CCR skill; package updates may replace this file -->
@@ -13,9 +13,39 @@ Terminal support commands in this skill belong to the `ccr context` group: use
 not `ccr review-state` or other root-level shortcuts. For a local installation, replace only
 `ccr` with `npx --no-install ccr`, keeping `context` and the remaining arguments.
 
-`$ARGUMENTS` is a scope (`changes`, `codebase`, or `PR-<number>`) and dimensions (`all` or IDs
-separated by commas). The default is `changes all`. Dimension IDs are the headings below. Fix obvious
-typos. If unclear, show the valid choices and stop.
+`$ARGUMENTS` is an optional scope (`changes`, `codebase`, or `PR-<number>`) followed by an
+optional dimension selection: `all`, `dimension <id> ...`, or bare IDs, separated by spaces or commas.
+The default scope is `changes`; only an omitted selection defaults to `all`.
+`dimension` is an optional keyword introducing the IDs, not a dimension ID. Remove that keyword
+before validating the selection or passing it to CCR support commands. Empty comma-separated items,
+duplicates, mixed `all` and IDs, or unrelated arguments must stop before investigation
+or journal writes; never replace an invalid explicit selection with `all`.
+Dimension IDs are the headings in the live taxonomy output below. Fix obvious typos only when the
+intended ID is unambiguous. If unclear, show the valid choices and stop.
+
+When `dimension` is supplied without IDs, load the current taxonomy using
+`ccr context dimensions --json`. List every available dimension's ID and display name in registry
+order, then ask "Which dimension(s) would you like to review? You can select one or more IDs."
+Wait for the user's selection before reading review evidence or writing any journal. Keep the
+requested scope (for example, `codebase`) for their reply, reload the taxonomy, and validate the
+chosen IDs before proceeding. Do not default this request to `all`. If the taxonomy is empty or
+invalid, explain that limitation instead of offering invented choices.
+
+Selection applies to every ID in the live taxonomy, including custom or newly added dimensions;
+examples do not limit the available choices. JSON is the source of truth: never use compiled
+dimension constants, remembered criteria, or an older Markdown reference instead of fresh output.
+Edits to the authoritative JSON apply to the next command without rebuilding or running setup.
+Normalize a multi-ID selection into one comma-separated argument for CCR support commands.
+Both `/ccr-review codebase dimension <id>` and `/ccr-review codebase <id>` mean the whole codebase,
+including uncommitted changes, reviewed only for the chosen live ID. With multiple IDs, review
+only those selected dimensions across the whole codebase. Validate with
+`ccr context dimensions --select <selection>` and save with scope `codebase` and the same selected
+IDs, not `all`; do not pass `dimension` to either support command. The optional `dimension`
+prefix also works with multiple IDs. Substitute actual IDs from the current taxonomy for placeholders.
+The file scope and dimension selection are independent: selecting `codebase` must not expand the
+dimension selection. For a subset, investigate and report only issues related to the selected
+dimensions, using every selected criterion. Do not review unselected dimensions or add
+`Other — outside current dimensions` findings. General impact guidance does not widen that selection.
 
 1. Read resolved CCR configuration, current project.md, stakeholders.md, decisions.md, and the
    configured recent journals using installed CCR context support. Read the active review journal
@@ -296,9 +326,10 @@ It is completely fine to find no supported inclusivity issues.
 <review_dimensions>
 Before choosing dimensions or discovering findings on every review, run the installed CCR command
 `ccr context dimensions` (or `npx --no-install ccr context dimensions` for a local installation).
-It imports and validates the current `.ccr/dimensions.json`, then renders the dimension headings,
-descriptions, criterion names, and questions using CCR's shared prompt renderer. Only an absent file
-uses packaged defaults. The dimension headings referred to above are the headings in this output.
+It rereads and validates JSON on every call: repository `src/review/dimensions.json` takes priority,
+otherwise customized `.ccr/dimensions.json` applies, otherwise current package JSON is read from
+disk. Untouched setup copies track package JSON automatically. It renders the dimension headings,
+descriptions, criterion names, and questions using CCR's shared prompt renderer.
 Use this fresh output as the dimension-and-criteria portion of the review prompt; keep the surrounding
 review instructions and output contract. Resolve selections against its IDs and work through every
 selected criterion. Local JSON edits take effect on the next review without setup or a rebuild.
@@ -310,7 +341,10 @@ stop. Use the live command output, not a remembered taxonomy or the packaged dim
 If the JSON changes during a review, reload it and reassess the selected criteria before saving.
 </review_dimensions>
 
-Link dimension/criterion names in findings to their exact matching section in `.claude/skills/ccr/references/dimensions.md` after reading it; choose the Markdown anchor or viewer-supported line link yourself, never link to JSON or invent a target, and leave unmatched custom names unlinked.
+For finding references, load `ccr context dimensions --reference` from the same live JSON.
+Link names to installed `.claude/skills/ccr/references/dimensions.md` only after checking that each
+matching dimension and criterion's names and wording agree with the live output. Otherwise leave
+the names unlinked. Never let an older reference override current criteria or invent a link target.
 
 ### Output
 
@@ -339,8 +373,10 @@ most severe issues first and combine duplicates. For accessibility, explain the 
 cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
 above before reporting it.
 
-Include supported ethical/inclusivity issues outside the current taxonomy in this same numbered
-list, labeled **Other — outside current dimensions**, with the same severity, scenario, and evidence.
+When the selection is `all`, include supported ethical/inclusivity issues outside the current taxonomy
+in this same numbered list, labeled **Other — outside current dimensions**, with the same severity,
+scenario, and evidence. When specific dimensions are selected, report only issues related to those
+dimensions; do not include findings from unselected dimensions or outside the taxonomy.
 Do not add a separate other-issues section or include unrelated ordinary engineering defects.
 
 Keep uncertain candidates out of the report and retain material unknowns in the journal when one is

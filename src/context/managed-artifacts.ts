@@ -1,5 +1,5 @@
-import { REVIEW_DIMENSIONS_PATH } from "../review/dimension-file";
-import { REVIEW_DIMENSIONS } from "../review/dimensions";
+import { REVIEW_DIMENSIONS_PATH, readReviewDimensionRegistry } from "../review/dimension-file";
+import { REVIEW_DIMENSIONS, renderReviewDimensionReference } from "../review/dimensions";
 import {
   MAX_MANAGED_JSON_CHARACTERS,
   isUnmodifiedJsonArtifact,
@@ -82,6 +82,20 @@ export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
     uninstallPolicy: "remove-if-marked" as const,
   })),
 ];
+
+/** Resolves taxonomy-derived lifecycle content from the same live JSON used by reviews. */
+export async function readManagedArtifacts(root: string): Promise<readonly ManagedArtifact[]> {
+  const registry = await readReviewDimensionRegistry(root);
+  return MANAGED_ARTIFACTS.map((artifact) => {
+    if (artifact.path === REVIEW_DIMENSIONS_PATH) {
+      return { ...artifact, content: serializeUpgradableJsonArtifact(registry) };
+    }
+    if (artifact.path === ".claude/skills/ccr/references/dimensions.md") {
+      return { ...artifact, content: renderReviewDimensionReference(registry) };
+    }
+    return artifact;
+  });
+}
 
 /** Single lifecycle inventory for non-executable marked integrations. */
 export const MANAGED_BLOCK_ARTIFACTS: readonly ManagedBlockArtifact[] = [

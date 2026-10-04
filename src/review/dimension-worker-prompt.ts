@@ -35,8 +35,10 @@ most severe issues first and combine duplicates. For accessibility, explain the 
 cannot complete or can complete only with unequal barriers. Check that each finding meets the rules
 above before reporting it.
 
-Include supported ethical/inclusivity issues outside the current taxonomy in this same numbered
-list, labeled **Other — outside current dimensions**, with the same severity, scenario, and evidence.
+When the selection is \`all\`, include supported ethical/inclusivity issues outside the current taxonomy
+in this same numbered list, labeled **Other — outside current dimensions**, with the same severity,
+scenario, and evidence. When specific dimensions are selected, report only issues related to those
+dimensions; do not include findings from unselected dimensions or outside the taxonomy.
 Do not add a separate other-issues section or include unrelated ordinary engineering defects.
 
 Keep uncertain candidates out of the report and retain material unknowns in the journal when one is

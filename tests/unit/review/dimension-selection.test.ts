@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  REVIEW_DIMENSIONS,
   parseReviewDimensionRegistry,
   parseReviewDimensionSelection,
 } from "../../../src/review/dimensions";
@@ -14,6 +15,18 @@ const registry = parseReviewDimensionRegistry({
 });
 
 describe("review dimension selection", () => {
+  it("should accept each packaged dimension individually", () => {
+    for (const { id } of REVIEW_DIMENSIONS.dimensions) {
+      expect(parseReviewDimensionSelection(id, REVIEW_DIMENSIONS)).toBe(id);
+    }
+  });
+
+  it("should normalize space-separated and mixed selections while retaining only chosen IDs", () => {
+    for (const selection of [" Custom-Middle   CUSTOM-ZETA ", "custom-middle, \tCustom-Zeta"]) {
+      expect(parseReviewDimensionSelection(selection, registry)).toBe("custom-zeta,custom-middle");
+    }
+  });
+
   it("should retain custom IDs and normalize subsets into registry order", () => {
     expect(parseReviewDimensionSelection("custom-alpha", registry)).toBe("custom-alpha");
     expect(parseReviewDimensionSelection(" CUSTOM-MIDDLE , Custom-Zeta ", registry)).toBe(
@@ -27,13 +40,24 @@ describe("review dimension selection", () => {
   it("should accept only a standalone all token, case-insensitively", () => {
     expect(parseReviewDimensionSelection("all", registry)).toBe("all");
     expect(parseReviewDimensionSelection(" ALL ", registry)).toBe("all");
-    for (const selection of ["all,custom-zeta", "custom-alpha,ALL", "all,all", "all,unknown"]) {
+    for (const selection of [
+      "all,custom-zeta",
+      "custom-alpha,ALL",
+      "all,all",
+      "all,unknown",
+      "all custom-zeta",
+    ]) {
       expect(() => parseReviewDimensionSelection(selection, registry)).toThrow(/all.*alone/i);
     }
   });
 
   it("should reject unknown IDs without fuzzy matching", () => {
-    for (const selection of ["custom-zet", "unknown", "custom-zeta,unknown"]) {
+    for (const selection of [
+      "custom-zet",
+      "unknown",
+      "custom-zeta,unknown",
+      "custom-zeta unknown",
+    ]) {
       expect(() => parseReviewDimensionSelection(selection, registry)).toThrow(
         /unknown review dimension/i,
       );
@@ -41,7 +65,11 @@ describe("review dimension selection", () => {
   });
 
   it("should reject duplicates after case and whitespace normalization", () => {
-    for (const selection of ["custom-zeta,custom-zeta", "CUSTOM-ALPHA, custom-alpha"]) {
+    for (const selection of [
+      "custom-zeta,custom-zeta",
+      "CUSTOM-ALPHA, custom-alpha",
+      "custom-zeta CUSTOM-ZETA",
+    ]) {
       expect(() => parseReviewDimensionSelection(selection, registry)).toThrow(/duplicate/i);
     }
   });
@@ -54,6 +82,7 @@ describe("review dimension selection", () => {
       "custom-zeta,",
       ",custom-alpha",
       "custom-zeta,,custom-alpha",
+      "custom-zeta, ,custom-alpha",
       null,
       [],
       7,

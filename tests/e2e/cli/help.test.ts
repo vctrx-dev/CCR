@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import packageJson from "../../../package.json";
 import { createCli } from "../../../src/cli/index";
-import { REVIEW_DIMENSIONS } from "../../../src/review/dimensions";
 
 describe("CLI help", () => {
   it("should explain terminal commands and current Claude Code skills", async () => {
@@ -39,10 +38,9 @@ describe("CLI help", () => {
     expect(output).toContain("/ccr-context <initialize|update|verify|addition|compact>");
     expect(output).toContain("/ccr-hooks <sync|status|remove>");
     expect(output).toContain("/ccr-review [changes|codebase|PR-<number>]");
-    expect(output).toContain("[all|dimension,...]");
-    expect(output).toContain(
-      `Configured dimension IDs: ${REVIEW_DIMENSIONS.dimensions.map(({ id }) => id).join(", ")}`,
-    );
+    expect(output).toContain("[all|dimension [<id> ...]|<id> ...]");
+    expect(output).toContain("/ccr-review codebase dimension.");
+    expect(output).toContain("Current dimension IDs and criteria: ccr context dimensions --json.");
     expect(output).toContain("npx --no-install ccr help <command>");
   });
 

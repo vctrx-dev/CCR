@@ -63,8 +63,8 @@ export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionReg
 }
 
 /**
- * Validates a new review's comma-separated selection against its live taxonomy. Matching is exact
- * apart from case and surrounding whitespace; spelling correction belongs to the skill, not this
+ * Validates a new review's comma- or whitespace-separated selection against its live taxonomy.
+ * Matching ignores case and separators; spelling correction belongs to the skill, not this
  * API. Subsets are returned in registry order, and `all` remains the standalone all-dimensions token.
  * Historical journal readers must not use this boundary: their IDs may no longer be configured.
  */
@@ -81,7 +81,7 @@ export function parseReviewDimensionSelection(selection: unknown, input: unknown
     .min(1, "Select all or at least one configured review dimension.")
     .parse(selection)
     .split(",")
-    .map((selector) => selector.trim().toLowerCase());
+    .flatMap((selector) => selector.trim().toLowerCase().split(/\s+/u));
   if (selectors.includes("all")) {
     if (selectors.length !== 1) {
       throw new Error("The all selector must be used alone.");
@@ -132,9 +132,9 @@ description: JSON-generated CCR dimensions and criteria for people and finding r
 ${MANAGED_SKILL_MARKER}
 # CCR dimensions and criteria
 
-Generated from the packaged \`dimensions.json\`. Setup/update installs this reference; edit the JSON,
-not this managed file. Reviews load the live repository taxonomy separately and link only matching
-entries here. Custom entries absent from this packaged reference have no reference target.
+Generated from validated \`dimensions.json\`. JSON is the source of truth; this Markdown is a derived
+reference. Run \`ccr context dimensions --reference\` for the current effective reference. Only link
+to installed entries whose names and wording still match the live JSON output.
 
 ${body}
 `;

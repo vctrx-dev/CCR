@@ -124,16 +124,33 @@ before relying on omitted content.
 ## Review selection
 
 ```text
-/ccr-review [changes|codebase|PR-<number>] [all|dimension,...]
+/ccr-review [changes|codebase|PR-<number>] [all|dimension [<id> ...]|<id> ...]
 
 /ccr-review
+/ccr-review codebase dimension data-system-reliability
+/ccr-review codebase data-system-reliability alignment-with-teaching-learning
+/ccr-review codebase dimension
 /ccr-review codebase privacy-data-protection
 /ccr-review PR-123 fairness-non-discrimination, privacy-data-protection
 ```
 
-Missing scope means `changes`; missing selection means all dimensions. Selectors without a scope
-are a changes-review shorthand. Duplicate IDs, empty items, mixed `all`, invalid PR numbers, and
-unrelated arguments stop before investigation or journal writes.
+Missing scope means `changes`; missing selection means `all`, which reviews every configured
+dimension. A dimension is a review category, such as Data & System Reliability. The optional
+literal keyword `dimension` introduces one or more space- or comma-separated dimension IDs; bare IDs also
+work. `/ccr-review codebase dimension data-system-reliability` reviews the whole codebase only
+for that dimension and all its criteria. Selecting a file scope does not change the dimension
+selection. Every ID in the effective taxonomy is selectable individually or in a subset, including
+custom IDs. Every operation rereads authoritative JSON: repository `src/review/dimensions.json`
+first, otherwise customized `.ccr/dimensions.json`, otherwise on-disk package JSON defaults.
+
+`/ccr-review codebase dimension` without IDs lists every available ID and display name, asks which
+dimension(s) to review, and waits for your answer before investigating or writing a journal. Your
+answer retains the requested scope and is validated against the current taxonomy; this request
+never defaults to `all`. The same chooser works with changes or PR scope.
+
+Selectors without a scope are a changes-review shorthand. Duplicate IDs, empty comma-separated items,
+mixed `all`, invalid PR numbers, and unrelated arguments stop before
+investigation or journal writes; an invalid selection never falls back to `all`.
 
 - **changes:** approved staged, unstaged, and untracked work.
 - **codebase:** complete safe Git index plus approved live changes, not only changed lines.
@@ -184,29 +201,36 @@ Evidence: path, rule, function, or behavior
 ### 2. Next finding title
 ```
 
-Findings are sorted most severe first. Supported ethical/inclusivity issues outside the taxonomy
-appear in that same list as `Other — outside current dimensions`, not a separate section; ordinary
-engineering defects still do not qualify. Omit Question/Context sections, trailing observations,
+Findings are sorted most severe first. With `all`, supported ethical/inclusivity issues outside the
+taxonomy appear in that same list as `Other — outside current dimensions`, not a separate section.
+With specific dimension IDs, investigation and findings stay within those dimensions, and outside
+issues are omitted. Ordinary engineering defects still do not qualify. Omit Question/Context sections, trailing observations,
 coverage tables, file inventories, rejected candidates, and unsolicited fixes. Existing journal
 identities stay stable for follow-ups; each completed report's display numbers restart at 1.
 “No supported inclusivity bugs found.” is valid. Put any necessary evidence-limit, context-edit, or
 continuity-failure disclosure before the findings, not in a trailing section. Reviews never modify
 source without approval.
 
-One prompt instruction asks Claude to read `.claude/skills/ccr/references/dimensions.md` and link
-dimension/criterion names to the exact matching heading or viewer-supported line. CCR does not
-hard-code finding links. This single reference is generated from packaged `dimensions.json`, ships
-at `dist/review/dimensions.md`, and is installed/refreshed by setup/update. It uses real Markdown
-headings for every dimension and criterion, rather than repeated fenced prompts. Live custom entries
-absent from the packaged reference remain unlinked; Claude must not invent targets or link to JSON.
-How the link opens depends on the Claude Code editor/viewer.
+The review loads a current Markdown reference with `ccr context dimensions --reference`. It links
+dimension/criterion names to `.claude/skills/ccr/references/dimensions.md` only when that installed
+entry's names and wording still agree with live JSON; other names remain unlinked. Setup/update
+generates the installed reference from the current effective taxonomy, and builds generate the
+packaged reference from source JSON. Markdown never overrides JSON. Links use actual matching
+headings or viewer-supported lines; how they open depends on the Claude Code editor/viewer.
 
 ## Editable review taxonomy
 
-Edit and commit `.ccr/dimensions.json`. Every review loads it through `ccr context dimensions`;
-`--json` returns the effective registry. Edits affect the next review's dimension-and-criteria section
-without rebuilding, rerunning setup, rewriting `SKILL.md`, or changing surrounding guidance/reporting.
-Help and `.claude/skills/ccr/references/dimensions.md` show packaged defaults only.
+JSON is the sole taxonomy source of truth. Every review, selection, save, and freshness check loads
+it through the same reader. Repository `src/review/dimensions.json` takes precedence when present;
+otherwise customized `.ccr/dimensions.json` applies. If the repository JSON is absent or is an
+untouched setup copy, defaults are reread from the running package's source JSON when available,
+otherwise its shipped `dist/review/dimensions.json`. Compiled constants are API snapshots and are
+never the live reader's fallback.
+
+Edit and commit the authoritative JSON. Edits affect the next command without rebuilding,
+rerunning setup, or rewriting skills. `ccr context dimensions --json` returns the effective registry;
+`--reference` renders a current Markdown reference. Help points to this live lookup rather than
+embedding a list captured at build time. Setup/update refreshes derived references automatically.
 
 Each dimension has `id`, `name`, `summary`, and a nonempty `criteria` array. Each criterion has `id`,
 `name`, and `details`; questions/indicators belong in summary or details. Dimension IDs are lowercase
@@ -229,17 +253,24 @@ IDs as metadata. Criterion IDs are omitted from prompts. Older shorthand selecto
 not empirically validated or comprehensive ethical/accessibility certification.
 
 Optional `_ccr` metadata records `schemaVersion` and the original `defaultSha256`. Leave it unchanged
-while customizing the payload. Update refreshes untouched defaults but preserves customized files
-and human-authored JSON without metadata. To resume defaults, back up the file, remove only
+while customizing the payload. Untouched copies follow current package defaults even before update;
+update refreshes those copies but preserves customized files and human-authored JSON without
+metadata. To resume defaults, back up the file, remove only
 `.ccr/dimensions.json`, and run setup. Ordinary uninstall preserves it; `--remove-context` removes it.
 
-Only absence falls back to packaged defaults. Invalid JSON/schema, symlinks, non-UTF-8 input, and files
+Invalid authoritative JSON/schema, symlinks, non-UTF-8 input, and files
 over 256,000 characters fail closed, including lifecycle previews. An empty dimension array stops
 review. Never include secrets or private records. Taxonomy edits invalidate review freshness.
 
-Package contributors edit `src/review/dimensions.json`, align README/manual references, and run
-package smoke. Default data ships at `dist/review/dimensions.json` and is exported as
-`@vctrx/ccr/dimensions.json`. Target customization requires no package build or documentation edits.
+Package contributors edit only `src/review/dimensions.json` for taxonomy changes. An existing
+installation running against that checkout adopts the changes on its next command without a
+build or update. `pnpm build` packages the JSON for distribution and generates Markdown; watch
+rebuilds reread source JSON too. No manual edits to selection logic or generated files are required.
+Customized consumer taxonomies are preserved unless the repository also supplies source JSON,
+which takes precedence.
+Default data ships at `dist/review/dimensions.json` and is exported as `@vctrx/ccr/dimensions.json`.
+The workbook table above describes the baseline; use `ccr context dimensions --json` for current
+IDs, names, and criteria. Target customization requires no package build or documentation edits.
 
 ## Journals, freshness, and decisions
 
@@ -358,7 +389,7 @@ print the installed version.
 | Command | Purpose |
 |---|---|
 | `ccr context status` / `validate` | Inspect structural validity and readiness |
-| `ccr context dimensions [--json] [--select <all-or-IDs>]` | Read live taxonomy or validate and render selected lenses |
+| `ccr context dimensions [--json|--reference] [--select <all-or-IDs>]` | Read live JSON, selected lenses, or a current Markdown reference |
 | `ccr context changes` | List approved staged paths |
 | `ccr context files [prefix] [--after <path>]` | Page through safe index files |
 | `ccr context read <file>` | Read an approved index blob |

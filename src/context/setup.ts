@@ -10,9 +10,9 @@ import {
   writeManagedTextIfUnchanged,
 } from "./files";
 import {
-  MANAGED_ARTIFACTS,
   MANAGED_BLOCK_ARTIFACTS,
   managedSkillOwnership,
+  readManagedArtifacts,
 } from "./managed-artifacts";
 import type { ManagedArtifact } from "./managed-artifacts";
 import { managedBlock, upsertManagedBlock } from "./managed-block";
@@ -101,7 +101,7 @@ export async function previewSetup(root: string): Promise<SetupPreview> {
       setupCondition === "always" || config.instructions[setupCondition] === true,
   );
   const managedEntries = await Promise.all(
-    MANAGED_ARTIFACTS.map(async (artifact): Promise<SetupChange> => {
+    (await readManagedArtifacts(root)).map(async (artifact): Promise<SetupChange> => {
       const existing = await readManagedTextIfExists(
         root,
         artifact.path,

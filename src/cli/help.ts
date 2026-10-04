@@ -1,12 +1,8 @@
-import { REVIEW_DIMENSIONS } from "../review/dimensions";
-
 /**
- * Renders the product-level help appended to Commander's terminal command list. Review dimension
- * IDs come from the validated registry so taxonomy edits require no CLI implementation changes.
+ * Renders product-level help. Direct users to the live JSON command instead of embedding IDs
+ * captured when the CLI was built or started.
  */
 export function renderProductHelp(): string {
-  const dimensionIds = REVIEW_DIMENSIONS.dimensions.map(({ id }) => id).join(", ");
-  const configuredDimensions = dimensionIds || "none";
   return `
 Terminal commands:
   ccr -v | -version | --version                    Print installed CCR version
@@ -37,11 +33,13 @@ Claude Code skills (run inside Claude Code after setup):
                                                    Manage evidence-backed product context
   /ccr-hooks <sync|status|remove>                  Manage repository-native hooks
   /ccr-review [changes|codebase|PR-<number>]       Review stakeholder impact in changes, codebase, or a PR
-             [all|dimension,...]
+             [all|dimension [<id> ...]|<id> ...]
 
-Configured dimension IDs: ${configuredDimensions}
-These are packaged defaults; context dimensions reads the current editable .ccr/dimensions.json.
+Current dimension IDs and criteria: ccr context dimensions --json.
+JSON is read on every call: repository source, customized .ccr JSON, then current package defaults.
 Blank review arguments default to changes and all dimensions. Add codebase or PR-<number> for
-another scope, then separate multiple dimension IDs with commas.
+another scope. Select one or more dimension IDs separated by spaces or commas; dimension is an
+optional prefix. Use dimension without IDs to list available dimensions and choose which to review.
+Example: /ccr-review codebase dimension.
 `;
 }

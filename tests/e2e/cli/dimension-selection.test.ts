@@ -54,10 +54,75 @@ async function select(root: string, selection: string): Promise<string> {
 }
 
 describe("CLI dimension selection", () => {
+  it("should adopt added, renamed, removed dimensions and changed criteria on the next command", async () => {
+    const root = await makeRepository();
+    expect(JSON.parse(await select(root, "all"))).toEqual(registry);
+    const revised = {
+      dimensions: [
+        {
+          ...registry.dimensions[2],
+          id: "renamed-example",
+          name: "Renamed example",
+          criteria: [{ id: "R1", name: "Revised criterion", details: "Revised question?" }],
+        },
+        {
+          id: "added-example",
+          name: "Added example",
+          summary: "New scope.",
+          criteria: [{ id: "A1", name: "Added criterion", details: "Added question?" }],
+        },
+      ],
+    };
+    await writeFile(path.join(root, ".ccr/dimensions.json"), JSON.stringify(revised));
+    expect(JSON.parse(await select(root, "all"))).toEqual(revised);
+    expect(JSON.parse(await select(root, "added-example renamed-example"))).toEqual(revised);
+    for (const dimension of revised.dimensions) {
+      expect(JSON.parse(await select(root, dimension.id))).toEqual({ dimensions: [dimension] });
+    }
+    await expect(select(root, "custom-middle")).rejects.toThrow(/unknown review dimension/i);
+    await expect(select(root, "custom-zeta")).rejects.toThrow(/unknown review dimension/i);
+    let output = "";
+    await createCli({
+      cwd: root,
+      write: (message) => {
+        output += message;
+      },
+    }).parseAsync(["node", "ccr", "context", "dimensions", "--select", "renamed-example"]);
+    expect(output).toContain("Renamed example");
+    expect(output).toContain("Revised criterion");
+    expect(output).toContain("Revised question?");
+    expect(output).not.toContain("Added criterion");
+    expect(output).not.toContain("Synthetic question?");
+    output = "";
+    await createCli({
+      cwd: root,
+      write: (message) => {
+        output += message;
+      },
+    }).parseAsync([
+      "node",
+      "ccr",
+      "context",
+      "dimensions",
+      "--reference",
+      "--select",
+      "renamed-example",
+    ]);
+    expect(output).toContain("## renamed-example — Renamed example");
+    expect(output).toContain("Revised question?");
+    expect(output).not.toContain("Added criterion");
+    expect(await readFile(path.join(root, ".ccr/dimensions.json"), "utf8")).toBe(
+      JSON.stringify(revised),
+    );
+  });
+
   it("should emit only selected live custom dimensions in registry order without writes", async () => {
     const root = await makeRepository();
     const before = await snapshot(path.join(root, ".ccr"));
     expect(JSON.parse(await select(root, " CUSTOM-MIDDLE , Custom-Zeta "))).toEqual({
+      dimensions: [registry.dimensions[0], registry.dimensions[2]],
+    });
+    expect(JSON.parse(await select(root, " CUSTOM-MIDDLE   Custom-Zeta "))).toEqual({
       dimensions: [registry.dimensions[0], registry.dimensions[2]],
     });
     expect(JSON.parse(await select(root, "ALL"))).toEqual(registry);

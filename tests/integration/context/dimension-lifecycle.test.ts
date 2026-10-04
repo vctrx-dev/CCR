@@ -42,7 +42,7 @@ it("should install parseable taxonomy, refresh untouched older defaults, and rem
   expect((await applySetup(root)).changedPaths).toEqual([]);
 });
 
-it.each(["customized-default", "human-owned", "malformed"] as const)(
+it.each(["customized-default", "human-owned"] as const)(
   "should preserve a %s taxonomy across setup and ordinary uninstall",
   async (kind) => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-dimension-custom-"));
@@ -51,9 +51,7 @@ it.each(["customized-default", "human-owned", "malformed"] as const)(
     const content =
       kind === "customized-default"
         ? serializeUpgradableJsonArtifact(priorRegistry).replace("Previous scope.", "Custom scope.")
-        : kind === "human-owned"
-          ? JSON.stringify(priorRegistry)
-          : "invalid JSON";
+        : JSON.stringify(priorRegistry);
     const file = path.join(root, ".ccr/dimensions.json");
     await writeFile(file, content);
     expect((await applySetup(root)).changedPaths).not.toContain(".ccr/dimensions.json");
@@ -64,6 +62,38 @@ it.each(["customized-default", "human-owned", "malformed"] as const)(
     await expect(readFile(file)).rejects.toThrow();
   },
 );
+
+it("should stop setup on invalid authoritative JSON while ordinary uninstall preserves it", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-dimension-invalid-setup-"));
+  roots.push(root);
+  await mkdir(path.join(root, ".ccr"));
+  const file = path.join(root, ".ccr/dimensions.json");
+  await writeFile(file, "invalid JSON");
+  await expect(previewSetup(root)).rejects.toThrow(/JSON/i);
+  await applyUninstall(root, false);
+  expect(await readFile(file, "utf8")).toBe("invalid JSON");
+});
+
+it("should generate setup defaults and reference from current source JSON", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "ccr-source-dimension-setup-"));
+  roots.push(root);
+  await mkdir(path.join(root, "src/review"), { recursive: true });
+  await writeFile(path.join(root, "src/review/dimensions.json"), JSON.stringify(priorRegistry));
+  await applySetup(root);
+  expect(await readReviewDimensionRegistry(root)).toEqual(priorRegistry);
+  const referencePath = path.join(root, ".claude/skills/ccr/references/dimensions.md");
+  expect(await readFile(referencePath, "utf8")).toContain("Previous question?");
+  const revised = JSON.stringify(priorRegistry).replace(
+    "Previous question?",
+    "Updated source question?",
+  );
+  await writeFile(path.join(root, "src/review/dimensions.json"), revised);
+  await applySetup(root);
+  expect(await readFile(referencePath, "utf8")).toContain("Updated source question?");
+  expect(
+    JSON.parse(await readFile(path.join(root, ".ccr/dimensions.json"), "utf8")).dimensions,
+  ).toEqual(JSON.parse(revised).dimensions);
+});
 
 it("should refuse oversized taxonomy before lifecycle readers retain its full content", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-dimension-oversized-"));

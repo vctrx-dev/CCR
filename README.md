@@ -76,6 +76,9 @@ run in your shell.
 ```text
 /ccr-review
 /ccr-review codebase
+/ccr-review codebase dimension data-system-reliability
+/ccr-review codebase data-system-reliability alignment-with-teaching-learning
+/ccr-review codebase dimension
 /ccr-review PR-123
 /ccr-review changes privacy-data-protection,inclusion-accessibility
 ```
@@ -85,15 +88,24 @@ run in your shell.
 - **PR** reviews the specified GitHub pull request and requires GitHub CLI (`gh`) installed and
   authenticated. It does not check out the PR branch.
 
-All dimensions are reviewed by default. To select specific ones, use comma-separated IDs from
-`ccr context dimensions`. The defaults cover seven dimensions and 28 criteria.
+`all` means every configured dimension and is the default when no selection is given. A dimension
+is a review category, such as Data & System Reliability. To review only that category across the
+whole codebase, run `/ccr-review codebase dimension data-system-reliability`. The `dimension`
+keyword is optional; any dimension ID from `ccr context dimensions` works. Separate multiple IDs
+with spaces or commas to review only those dimensions. `/ccr-review codebase dimension` lists all
+available dimension IDs and names, asks which one or more you want, and waits for your selection.
+Selecting specific dimensions limits both investigation and findings to those dimensions. Use
+`ccr context dimensions --json` for the current list of IDs, names, and criteria.
 
 Findings are numbered, separated, and ordered by severity. Each explains who is affected, a scenario,
 and supporting evidence. Unconfirmed concerns stay out of the findings; a clean report is not a
 guarantee of safety. See the [review guide](USER_MANUAL.md#stakeholder-impact-review) for details.
 
-To customize criteria, edit `.ccr/dimensions.json`. The next review uses your edits without rebuilding
-or rerunning setup, and updates preserve customization. Leave optional `_ccr` metadata unchanged.
+JSON is the source of truth and is reread on every review. A repository's
+`src/review/dimensions.json` takes priority when present; otherwise customized `.ccr/dimensions.json`
+applies. Untouched setup copies follow current package JSON from disk. Edits take effect on the
+next review without rebuilding or rerunning setup. Use `ccr context dimensions --reference` for a
+current Markdown reference. Leave optional `_ccr` metadata unchanged when customizing repository JSON.
 Invalid files stop the review. See [customization](USER_MANUAL.md#editable-review-taxonomy) for the
 schema and limits.
 

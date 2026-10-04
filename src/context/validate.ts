@@ -124,7 +124,7 @@ export async function validateContext(root: string): Promise<ValidationResult> {
     await readReviewDimensionRegistry(root);
   } catch {
     issues.push(
-      ".ccr/dimensions.json is invalid; use ccr context dimensions to inspect validation details.",
+      "Review taxonomy JSON (src/review/dimensions.json or .ccr/dimensions.json) is invalid; use ccr context dimensions to inspect validation details.",
     );
   }
 
