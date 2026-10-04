@@ -71,7 +71,7 @@ it("should read current shared context before it is committed and reject non-con
   ).rejects.toThrow(/approved shared context/i);
 });
 
-it("should append a decision only while the human keeps the config opt-in enabled", async () => {
+it("should append a decision without a configuration opt-in", async () => {
   const root = await createTemporaryGitRepository(roots, "ccr-decisions-cli-");
   let output = "";
   const io = {
@@ -81,38 +81,10 @@ it("should append a decision only while the human keeps the config opt-in enable
     },
   };
   await createCli(io).parseAsync(["node", "ccr", "setup", "--apply"]);
-  expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).toContain(
-    '"updateDecisionsMd": true',
+  expect(await readFile(path.join(root, ".ccr/config.json"), "utf8")).not.toContain(
+    "updateDecisionsMd",
   );
-  await createCli(io).parseAsync([
-    "node",
-    "ccr",
-    "config",
-    "set",
-    "instructions.updateDecisionsMd",
-    "false",
-    "--apply",
-  ]);
 
-  await expect(
-    createCli(io).parseAsync([
-      "node",
-      "ccr",
-      "context",
-      "append-decision",
-      "Keep reviews advisory.",
-    ]),
-  ).rejects.toThrow("instructions.updateDecisionsMd is false");
-
-  await createCli(io).parseAsync([
-    "node",
-    "ccr",
-    "config",
-    "set",
-    "instructions.updateDecisionsMd",
-    "true",
-    "--apply",
-  ]);
   output = "";
   await createCli(io).parseAsync([
     "node",

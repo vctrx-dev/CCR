@@ -1,11 +1,54 @@
 # Changelog
 
-User-visible changes and migrations. Before 1.0, incompatible changes increment MINOR.
-See [VERSIONING.md](VERSIONING.md); published release history is retained below.
+User-visible changes and migrations, following [Semantic Versioning](https://semver.org). CCR is in
+beta while its version is 0.x, so incompatible changes increment MINOR. See
+[VERSIONING.md](VERSIONING.md). Versions before 0.8.0, and 0.9.0–0.9.1, were never published to npm.
 
 ## Unreleased
 
-## 0.11.0 - 2026-10-02 (beta-0.2)
+## 0.12.0 - 2026-10-03
+
+### Changed
+
+- Every release is now published to npm's `latest` tag, so `npm install --global @vctrx/ccr@latest`
+  (or no tag) always installs the newest version. The separate `beta-0.1` and `beta-0.2` tags are
+  retired; if you installed with `@beta-0.2`, reinstall with `@latest`.
+
+- Context upkeep is automatic by default. After each commit not already covered by a review or
+  context update, the post-commit hook starts a background headless Claude Code update and returns
+  immediately. It runs while `hooks.enabled` and `hooks.checkBeforeCommit` are both `true`; set
+  `hooks.checkBeforeCommit` to `false` to update manually with `/ccr-context update last commit`.
+  Rebases and multi-commit cherry-picks are skipped, quick successive commits wait their turn, a
+  failed run is reported once on the next commit, and developer source edits made meanwhile no
+  longer fail the run.
+- Hooks print at most one short line. Pre-commit notes only reviewed uncommitted work that changed
+  before commit; an earlier commit's review never triggers it. The pre-commit context warning and
+  the post-commit journal, assessment, and stale-review lines are removed.
+- `.ccr/config.json` is smaller. `hooks.autoUpdateContext`, `context.maxCompactionPercent`, and
+  `instructions.updateDecisionsMd` are no longer written or accepted by `ccr config set`; older files
+  containing them stay valid but those keys are ignored. Compaction is fixed at 25% and reusable
+  human review rationale may always be appended to decisions. **Migration:** a repository that had
+  `updateDecisionsMd: false` or `autoUpdateContext: false` now gets decision appends and
+  background updates; set `hooks.checkBeforeCommit` to `false` to keep updates manual.
+- New setups read one recent journal entry (`context.recentJournalEntries: 1`) and maintain CCR
+  pointer blocks in both `CLAUDE.md` and `AGENTS.md`. Existing values are preserved.
+- Journals keep one concise 40–80 word summary per finding (label, severity, dimension, affected
+  people, cause, consequence, status, and reason) instead of copying the report.
+- Reviews treat unfilled project and stakeholder templates as empty and suggest
+  `/ccr-context initialize`. Review selections are validated against the live taxonomy before
+  investigation, and saves can check acknowledged journal inputs with `--expected-input-context`.
+  Run `ccr update` to refresh installed skills.
+
+### Fixed
+
+- A commit always adopts the pending review journal, even when untracked or other uncommitted work
+  remains, and `git commit --amend` moves the journal to the amended commit instead of orphaning it.
+- A commit made only of reviewed, unchanged files counts as reviewed and assessed, so untracked
+  scratch files and partial commits no longer produce false warnings or stale reviews.
+- Context-only commits create no empty journal, and recent history skips untouched placeholder
+  entries so they cannot crowd out real review history.
+
+## 0.11.0 - 2026-10-02
 
 ### Added
 
@@ -58,14 +101,14 @@ See [VERSIONING.md](VERSIONING.md); published release history is retained below.
   public APIs and test-only safety helpers remain intact. Docs now separate quick start, reference,
   tests, and contributor rules without repeated walkthroughs.
 
-## 0.10.1 - 2026-09-28 (beta-0.2)
+## 0.10.1 - 2026-09-28
 
 ### Changed
 
 - Simplified dimension summaries and clarified that numbered review items are criteria rather than
   questions in generated prompts and the standalone review prompt. Run setup to refresh installed prompts.
 
-## 0.10.0 - 2026-09-28 (beta-0.1)
+## 0.10.0 - 2026-09-28
 
 ### Added
 

@@ -3,12 +3,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { automaticContextUpdate } = vi.hoisted(() => ({
+const { automaticContextUpdate, launchAutomaticContextUpdate } = vi.hoisted(() => ({
   automaticContextUpdate: vi.fn().mockResolvedValue({ status: "updated" }),
+  launchAutomaticContextUpdate: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("../../../src/context/automatic-context-update", () => ({
   runAutomaticContextUpdate: automaticContextUpdate,
+}));
+vi.mock("../../../src/context/automatic-context-launcher", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/context/automatic-context-launcher")>()),
+  launchAutomaticContextUpdate,
 }));
 import { createCli } from "../../../src/cli/index";
 import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
@@ -39,6 +44,8 @@ describe("hooks CLI", () => {
   beforeEach(() => {
     automaticContextUpdate.mockClear();
     automaticContextUpdate.mockResolvedValue({ status: "updated" });
+    launchAutomaticContextUpdate.mockClear();
+    launchAutomaticContextUpdate.mockReturnValue(true);
   });
   it("should not block disabled setup on an external hook path", async () => {
     const parent = await mkdtemp(path.join(tmpdir(), "ccr-hooks-external-setup-"));
@@ -236,27 +243,8 @@ describe("hooks CLI", () => {
     expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe("#!/bin/sh\n");
   }, 30_000);
 
-  it("should run the post-commit check and print a copy-paste prompt", async () => {
+  it("should print one manual hint after a commit when the commit check is off", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-after-cli-"));
-    roots.push(root);
-    await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
-    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
-    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
-    const setupIo = captureIo(root).io;
-    await createCli(setupIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
-    await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
-    await runCommand("git", ["add", "."], { cwd: root });
-    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
-
-    const { io, output } = captureIo(root);
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
-    expect(output()).toContain("started local journal entry");
-    expect(output()).toContain("Paste this into Claude Code");
-    expect(output()).toContain("  /ccr-context update last commit\n");
-  });
-
-  it("should run one headless update instead of printing a prompt when opted in", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "ccr-after-cli-auto-"));
     roots.push(root);
     await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
     await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
@@ -268,10 +256,30 @@ describe("hooks CLI", () => {
       "ccr",
       "config",
       "set",
-      "hooks.autoUpdateContext",
-      "true",
+      "hooks.checkBeforeCommit",
+      "false",
       "--apply",
     ]);
+    await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
+    await runCommand("git", ["add", "--", "app.py"], { cwd: root });
+    await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+
+    const { io, output } = captureIo(root);
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
+    expect(output()).toBe(
+      "CCR: run /ccr-context update last commit in Claude Code to refresh context.\n",
+    );
+    expect(launchAutomaticContextUpdate).not.toHaveBeenCalled();
+  });
+
+  it("should start the background update by default and report a failure once", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-after-cli-auto-"));
+    roots.push(root);
+    await runCommand("git", ["init", "--quiet", "-b", "main"], { cwd: root });
+    await runCommand("git", ["config", "user.name", "CCR Test"], { cwd: root });
+    await runCommand("git", ["config", "user.email", "ccr@example.test"], { cwd: root });
+    const setupIo = captureIo(root).io;
+    await createCli(setupIo).parseAsync(["node", "ccr", "config", "init", "--apply"]);
     await writeFile(path.join(root, "app.py"), "print(1)\n", "utf8");
     await runCommand("git", ["add", "--", "app.py"], { cwd: root });
     await runCommand("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
@@ -279,35 +287,33 @@ describe("hooks CLI", () => {
     const { io, output, clear } = captureIo(root);
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
 
-    expect(automaticContextUpdate).toHaveBeenCalledOnce();
-    const [calledRoot, calledCommit] = automaticContextUpdate.mock.calls[0] ?? [];
+    expect(launchAutomaticContextUpdate).toHaveBeenCalledOnce();
+    const [calledRoot, calledCommit, calledJournal] =
+      launchAutomaticContextUpdate.mock.calls[0] ?? [];
     expect(path.normalize(calledRoot)).toBe(path.normalize(root));
     expect(calledCommit).toMatch(/^[a-f0-9]{40}$/);
-    expect(output()).toContain("automatic context update completed");
-    expect(output()).toContain("the commit is already saved");
-    expect(output()).not.toContain("Paste this into Claude Code");
-
-    for (const [status, expected] of [
-      ["already-updated", "already completed for this commit"],
-      ["in-progress", "already running"],
-    ] as const) {
-      automaticContextUpdate.mockResolvedValueOnce({ status });
-      clear();
-      await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
-      expect(output()).toContain(expected);
-      expect(output()).not.toContain("Paste this into Claude Code");
-    }
+    expect(output()).toBe("CCR: updating context in the background.\n");
 
     automaticContextUpdate.mockRejectedValueOnce(new Error("provider failed"));
     clear();
-    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
-    expect(output()).toContain("automatic context update failed");
-    expect(output()).toContain("/ccr-context update");
+    await createCli(io).parseAsync([
+      "node",
+      "ccr",
+      "hooks",
+      "auto-update",
+      String(calledCommit),
+      String(calledJournal),
+    ]);
+    expect(automaticContextUpdate).toHaveBeenCalledOnce();
+    expect(output()).toBe("");
 
-    automaticContextUpdate.mockResolvedValueOnce({ status: "updated" });
+    await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
+    expect(output()).toContain("last background context update failed");
+    expect(output()).toContain("/ccr-context update last commit");
+
     clear();
     await createCli(io).parseAsync(["node", "ccr", "hooks", "post-commit"]);
-    expect(output()).toContain("automatic context update completed");
+    expect(output()).not.toContain("failed");
   });
 
   it("should retain hidden compatibility aliases for previously generated hooks", async () => {

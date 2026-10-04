@@ -183,7 +183,7 @@ describe("review state", () => {
     ).rejects.toThrow("Review evidence changed");
   }, 30_000);
 
-  it("should detect edits made after a clean codebase review", async () => {
+  it("should not repeat a clean-HEAD review reminder for new uncommitted work", async () => {
     const root = await makeRepository();
     const reviewed = await computeWorkingReviewState(root);
     const journal = await ensureJournalEntryForHead(root);
@@ -197,10 +197,7 @@ describe("review state", () => {
     await writeFile(path.join(root, "source.ts"), "export const value = 2;\n", "utf8");
     await runCommand("git", ["add", "--", "source.ts"], { cwd: root });
 
-    expect(await readStagedReviewFreshness(root)).toMatchObject({
-      status: "stale",
-      journalPath: journal.path,
-    });
+    expect(await readStagedReviewFreshness(root)).toEqual({ status: "unrecorded" });
   }, 30_000);
 
   it("should reject an oversized journal before retaining or rewriting it", async () => {

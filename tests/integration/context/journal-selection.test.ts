@@ -22,7 +22,10 @@ async function createRepository(prefix: string): Promise<string> {
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig({
+      ...DEFAULT_CONTEXT_CONFIG,
+      context: { ...DEFAULT_CONTEXT_CONFIG.context, recentJournalEntries: 3 },
+    }),
     "utf8",
   );
   return root;
@@ -38,7 +41,8 @@ function journalDocument(metadata: string[], body: string[]): string {
     "",
     "## Summary",
     "",
-    ...body,
+    // Recent history skips entries without narrative, so fixtures carry a short summary.
+    ...(body.length > 0 ? body : ["Worked on a change."]),
     "",
   ].join("\n");
 }

@@ -62,6 +62,44 @@ export function parseReviewDimensionRegistry(input: unknown): ReviewDimensionReg
   return registry;
 }
 
+/**
+ * Validates a new review's comma-separated selection against its live taxonomy. Matching is exact
+ * apart from case and surrounding whitespace; spelling correction belongs to the skill, not this
+ * API. Subsets are returned in registry order, and `all` remains the standalone all-dimensions token.
+ * Historical journal readers must not use this boundary: their IDs may no longer be configured.
+ */
+export function parseReviewDimensionSelection(selection: unknown, input: unknown): string {
+  const registry = parseReviewDimensionRegistry(input);
+  if (registry.dimensions.length === 0) {
+    throw new Error(
+      "No review dimensions are configured; populate the live taxonomy before reviewing.",
+    );
+  }
+  const selectors = z
+    .string()
+    .trim()
+    .min(1, "Select all or at least one configured review dimension.")
+    .parse(selection)
+    .split(",")
+    .map((selector) => selector.trim().toLowerCase());
+  if (selectors.includes("all")) {
+    if (selectors.length !== 1) {
+      throw new Error("The all selector must be used alone.");
+    }
+    return "all";
+  }
+  const ids = registry.dimensions.map(({ id }) => id);
+  const known = new Set(ids);
+  if (selectors.some((selector) => !known.has(selector))) {
+    throw new Error(`Unknown review dimension selection. Valid choices: all, ${ids.join(", ")}.`);
+  }
+  if (duplicate(selectors)) {
+    throw new Error("Review dimension selection must not contain duplicate IDs.");
+  }
+  const selected = new Set(selectors);
+  return ids.filter((id) => selected.has(id)).join(",");
+}
+
 /** Renders only the JSON-derived middle of the review prompt, using the shared criterion renderer. */
 export function renderReviewDimensionSections(input: unknown): string {
   const registry = parseReviewDimensionRegistry(input);

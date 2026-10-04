@@ -62,6 +62,9 @@ service-account*.json
 .superpowers/
 docs/
 
+# Local testing reference
+/TEST.md
+
 # Per-developer CCR continuity. Shared context remains tracked.
 .ccr/config.local.json
 .ccr/journal/

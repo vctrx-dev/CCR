@@ -91,7 +91,7 @@ describe("runAutomaticContextUpdate", () => {
     expect(runClaude).toHaveBeenCalledWith(root, JOURNAL_PATH, {
       commit,
       evidencePacketPath: evidencePacketPath(commit),
-      shouldUpdateDecisions: false,
+      shouldUpdateDecisions: true,
     });
     expect(await readFile(path.join(root, ".ccr/private/auto-update.json"), "utf8")).toContain(
       commit,
@@ -143,7 +143,7 @@ describe("runAutomaticContextUpdate", () => {
     await expect(
       runUpdate(root, async () => {
         await completeJournal(root);
-        await writeFile(path.join(root, "unauthorized.txt"), "changed");
+        await writeFile(path.join(root, ".ccr/unauthorized.md"), "changed");
       }),
     ).rejects.toThrow("unauthorized path");
     const runner = vi.fn(() => completeJournal(root));
@@ -231,7 +231,7 @@ describe("runAutomaticContextUpdate", () => {
     ).rejects.toThrow();
   });
 
-  it("should reject changes outside the approved context paths", async () => {
+  it("should tolerate developer source edits made while the background update runs", async () => {
     const root = await makeAutomationRoot();
     await writeFile(path.join(root, "app.ts"), "before\n");
     const runner = vi.fn(async () => {
@@ -239,8 +239,18 @@ describe("runAutomaticContextUpdate", () => {
       await writeFile(path.join(root, "app.ts"), "after\n");
     });
 
+    await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
+  });
+
+  it("should reject changes to CCR files outside the approved context paths", async () => {
+    const root = await makeAutomationRoot();
+    const runner = vi.fn(async () => {
+      await completeJournal(root);
+      await writeFile(path.join(root, ".ccr/stakeholders.md"), "# Stakeholders\n\nEdited.\n");
+    });
+
     await expect(runUpdate(root, runner)).rejects.toThrow(
-      "Automatic context update changed an unauthorized path: app.ts.",
+      "Automatic context update changed an unauthorized path: .ccr/stakeholders.md.",
     );
   });
 
@@ -300,10 +310,10 @@ describe("runAutomaticContextUpdate", () => {
 
     await expect(
       runAutomaticContextUpdate(root, "b".repeat(64), vi.fn(), JOURNAL_PATH),
-    ).rejects.toThrow("Automatic context update commit no longer matches HEAD.");
+    ).rejects.toThrow("Automatic context update commit is no longer in the branch history.");
   });
 
-  it("should stop when HEAD changes during the headless update", async () => {
+  it("should finish when a new commit lands on top during the headless update", async () => {
     const root = await makeAutomationRoot();
     const runner = vi.fn(async () => {
       await completeJournal(root);
@@ -312,8 +322,18 @@ describe("runAutomaticContextUpdate", () => {
       await runCommand("git", ["commit", "--quiet", "-m", "concurrent commit"], { cwd: root });
     });
 
+    await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
+  });
+
+  it("should stop when the commit leaves the branch history during the headless update", async () => {
+    const root = await makeAutomationRoot();
+    const runner = vi.fn(async () => {
+      await completeJournal(root);
+      await runCommand("git", ["commit", "--quiet", "--amend", "-m", "rewritten"], { cwd: root });
+    });
+
     await expect(runUpdate(root, runner)).rejects.toThrow(
-      "Automatic context update commit no longer matches HEAD.",
+      "Automatic context update commit is no longer in the branch history.",
     );
   });
 

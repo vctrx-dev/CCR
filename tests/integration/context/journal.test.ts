@@ -16,6 +16,19 @@ import {
 import { createTemporaryRootRegistry, runCommand } from "../../helpers/test-environment";
 
 const roots = createTemporaryRootRegistry();
+const RECENT_CONFIG = {
+  ...DEFAULT_CONTEXT_CONFIG,
+  context: { ...DEFAULT_CONTEXT_CONFIG.context, recentJournalEntries: 3 },
+};
+
+/** Recent history skips untouched placeholders, so give entries a real summary first. */
+async function summarize(root: string, ...entries: Array<{ path: string }>): Promise<void> {
+  for (const entry of entries) {
+    const target = path.join(root, entry.path);
+    const content = await readFile(target, "utf8");
+    await writeFile(target, content.replace("Needs concise completion.", "Worked on a file."));
+  }
+}
 
 it("should create a branch-local working journal without premature commit metadata", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-journal-"));
@@ -26,7 +39,7 @@ it("should create a branch-local working journal without premature commit metada
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
@@ -51,6 +64,7 @@ it("should create a branch-local working journal without premature commit metada
   const refreshed = await readFile(path.join(root, result.path), "utf8");
   expect(refreshed).toContain("**Started**: 2026-07-29T06:45:12Z");
   expect(refreshed).toContain("**Updated**: 2026-07-29T07:45:12Z");
+  await summarize(root, result);
   const recent = await readRecentJournalEntries(root);
   expect(recent.map((entry) => entry.path)).toEqual([result.path]);
 });
@@ -95,7 +109,7 @@ it("should not overwrite journal entries created on the same date", async () => 
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
@@ -114,9 +128,10 @@ it("should not overwrite journal entries created on the same date", async () => 
     expect(content).not.toContain("**Commit**");
   }
 
+  await summarize(root, first, second, third, fourth);
   const recent = await readRecentJournalEntries(root);
   expect(recent.map((entry) => entry.path)).toHaveLength(
-    DEFAULT_CONTEXT_CONFIG.context.recentJournalEntries,
+    RECENT_CONFIG.context.recentJournalEntries,
   );
   expect(recent.map((entry) => entry.path)).toEqual([fourth.path, third.path, second.path]);
 });
@@ -160,7 +175,7 @@ it("should reuse one review journal entry for repeated reviews of the same commi
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
   await writeFile(path.join(root, "file.txt"), "test\n", "utf8");
@@ -176,6 +191,7 @@ it("should reuse one review journal entry for repeated reviews of the same commi
   expect(await readFile(path.join(root, first.path), "utf8")).toContain(
     "**Updated**: 2026-07-29T12:00:00Z",
   );
+  await summarize(root, first);
   expect((await readRecentJournalEntries(root)).map(({ path: entryPath }) => entryPath)).toEqual([
     first.path,
   ]);
@@ -190,7 +206,7 @@ it("should create separate date-suffixed journals for different commits on the s
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
 
@@ -239,7 +255,7 @@ it("should reuse one isolated journal entry for each pull request", async () => 
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
 
@@ -252,6 +268,7 @@ it("should reuse one isolated journal entry for each pull request", async () => 
   const firstContent = await readFile(path.join(root, first.path), "utf8");
   expect(firstContent).toContain("**Pull request**: `PR-42`");
   expect(firstContent).toContain("**Updated**: 2026-07-29T12:00:00Z");
+  await summarize(root, first, other);
   expect((await readRecentJournalEntries(root)).map(({ path: entryPath }) => entryPath)).toEqual([
     other.path,
     first.path,
@@ -265,7 +282,7 @@ it("should bound recent journal content before returning it", async () => {
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
   const journal = await createJournalEntry(root, new Date("2026-07-29T14:00:00Z"));
@@ -288,7 +305,7 @@ it("should skip an oversized committed journal when resolving later working cont
   await mkdir(path.join(root, ".ccr"));
   await writeFile(
     path.join(root, ".ccr/config.json"),
-    serializeContextConfig(DEFAULT_CONTEXT_CONFIG),
+    serializeContextConfig(RECENT_CONFIG),
     "utf8",
   );
   const details = {
