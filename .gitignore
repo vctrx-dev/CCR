@@ -56,11 +56,18 @@ id_ed25519
 credentials.json
 service-account*.json
 
-# Local AI-agent state. Shared Claude settings and skills remain tracked.
+# Local AI-agent state and generated CCR skills. Shared Claude settings remain tracked.
 .claude/settings.local.json
 .claude/worktrees/
+/.claude/skills/ccr/
+/.claude/skills/ccr-context/
+/.claude/skills/ccr-hooks/
+/.claude/skills/ccr-review/
 .superpowers/
 docs/
+
+# Local CCR self-use hook
+/.husky/post-commit
 
 # Local testing reference
 /TEST.md

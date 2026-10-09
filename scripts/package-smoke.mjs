@@ -127,7 +127,7 @@ try {
     ),
   )[0];
   const files = pack.files.map((file) => file.path).sort();
-  const documentationFiles = ["README.md", "USER_MANUAL.md", "TEST.md"];
+  const documentationFiles = ["README.md", "USER_MANUAL.md"];
   const requiredFiles = ["LICENSE", ...documentationFiles, packageJson.bin.ccr, "package.json"]
     .concat(publicExportFiles)
     .map((file) => file.replace(/^\.\//u, ""));

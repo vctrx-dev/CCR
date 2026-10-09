@@ -132,9 +132,7 @@ description: JSON-generated CCR dimensions and criteria for people and finding r
 ${MANAGED_SKILL_MARKER}
 # CCR dimensions and criteria
 
-Generated from validated \`dimensions.json\`. JSON is the source of truth; this Markdown is a derived
-reference. Run \`ccr context dimensions --reference\` for the current effective reference. Only link
-to installed entries whose names and wording still match the live JSON output.
+Use these headings for finding links; use the current \`dimensions.json\` for review criteria.
 
 ${body}
 `;

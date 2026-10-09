@@ -75,8 +75,8 @@ dimension selection. For a subset, investigate and report only issues related to
 dimensions, using every selected criterion. Do not review unselected dimensions or add
 \`Other — outside current dimensions\` findings. General impact guidance does not widen that selection.
 
-1. Read resolved CCR configuration, current project.md, stakeholders.md, decisions.md, and the
-   configured recent journals using installed CCR context support. Read the active review journal
+1. Read resolved CCR configuration, \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, \`.ccr/decisions.md\`,
+   and the configured recent journals directly from their files. Read the active review journal
    too, even if it falls outside that selection. Missing context is a coverage limit, not permission
    to invent facts or initialize shared files. Stop on invalid configuration. Use prior decisions
    and unresolved findings to guide discovery; verify them against live source, tests, and behavior.
@@ -221,10 +221,7 @@ ${STAKEHOLDER_IMPACT_REVIEW_STANDARD}
 
 ${DIMENSION_LENSES}
 
-For finding references, load \`ccr context dimensions --reference\` from the same live JSON.
-Link names to installed \`.claude/skills/ccr/references/dimensions.md\` only after checking that each
-matching dimension and criterion's names and wording agree with the live output. Otherwise leave
-the names unlinked. Never let an older reference override current criteria or invent a link target.
+Link dimension and criterion labels in each finding to their matching headings in \`.claude/skills/ccr/references/dimensions.md\`.
 
 ${REVIEW_REPORT_FORMAT}
 `;

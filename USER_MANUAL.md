@@ -458,4 +458,4 @@ Contributors run `pnpm verify`: safety, audit, typecheck, lint, coverage, build,
 Typecheck rejects unused source locals/parameters; test-only helpers and public exports require
 caller checks before removal. In the source checkout, `pnpm test:prompt` prints the first dimension's
 standalone prompt without installation or a model call. Use `/ccr-review codebase all` in Claude Code
-for an installed all-dimension review. See [TEST.md](TEST.md) for the test workflow.
+for an installed all-dimension review.

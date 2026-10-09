@@ -154,7 +154,6 @@ shared context. Use `--dry-run` to preview update or uninstall changes.
 - Run `ccr --version` to check your installed version.
 - [User manual](USER_MANUAL.md): settings, detailed workflows, and the programmatic API.
 - [Changelog](https://github.com/vctrx-dev/CCR/blob/main/CHANGELOG.md): changes and migrations.
-- [Contributor tests](TEST.md) and
-  [project purpose](https://github.com/vctrx-dev/CCR/blob/main/AGENTS.md): background for contributors.
+- [Project purpose](https://github.com/vctrx-dev/CCR/blob/main/AGENTS.md): background for contributors.
 
 The GitHub Action remains on the roadmap and is not claimed as available.
