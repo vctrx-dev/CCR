@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { automaticContextUpdate, launchAutomaticContextUpdate } = vi.hoisted(() => ({
   automaticContextUpdate: vi.fn().mockResolvedValue({ status: "updated" }),
@@ -41,6 +41,10 @@ function captureIo(root: string): {
 }
 
 describe("hooks CLI", () => {
+  const originalExitCode = process.exitCode;
+  afterEach(() => {
+    process.exitCode = originalExitCode;
+  });
   beforeEach(() => {
     automaticContextUpdate.mockClear();
     automaticContextUpdate.mockResolvedValue({ status: "updated" });
@@ -161,6 +165,7 @@ describe("hooks CLI", () => {
     clear();
     await createCli(io).parseAsync(["node", "ccr", "uninstall", "--apply"]);
     expect(output()).toContain("invalid hook provenance");
+    expect(process.exitCode).toBe(1);
     expect(output()).not.toContain("CCR integration removed");
     expect(await readFile(hookPath, "utf8")).toBe(existing);
     await expect(

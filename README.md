@@ -136,7 +136,7 @@ ccr update
 For a local installation, run `npm install --save-dev @vctrx/ccr@latest`, then `npx ccr update`.
 Updating preserves your configuration, context, journals, and custom dimensions.
 
-To remove CCR integration, first run `/ccr-hooks remove` inside Claude Code, then in the terminal:
+To remove CCR integration, run in the terminal:
 
 ```bash
 ccr uninstall
@@ -145,8 +145,20 @@ npm uninstall --global @vctrx/ccr
 
 Remove integration from every repository using the global installation before removing the package.
 For a local installation, use `npx ccr uninstall`, then `npm uninstall @vctrx/ccr`.
-Context is kept by default; add `--remove-context` to `ccr uninstall` only if you also want to delete
-shared context. Use `--dry-run` to preview update or uninstall changes.
+Uninstall deletes all project CCR data by default; add `--keep-context` to preserve `.ccr` data.
+Use `--dry-run` to preview update or uninstall changes.
+
+For full project cleanup, including journals, local settings, and caches:
+
+```sh
+npx @vctrx/ccr@latest uninstall --dry-run
+npx @vctrx/ccr@latest uninstall
+```
+
+`uninstall` deletes the entire `.ccr` folder and removes verified CCR hook integration, skills, and
+instruction blocks. Unrelated hook commands and files are preserved. Cleanup stops if ownership,
+original hook bytes, or path safety cannot be verified. This removes files, not a forensic secure
+erase, and does not remove Git history, npm dependencies, or the shared npx cache.
 
 ## Help and further reading
 
@@ -154,7 +166,6 @@ shared context. Use `--dry-run` to preview update or uninstall changes.
 - Run `ccr --version` to check your installed version.
 - [User manual](USER_MANUAL.md): settings, detailed workflows, and the programmatic API.
 - [Changelog](https://github.com/vctrx-dev/CCR/blob/main/CHANGELOG.md): changes and migrations.
-- [Contributor tests](TEST.md) and
-  [project purpose](https://github.com/vctrx-dev/CCR/blob/main/AGENTS.md): background for contributors.
+- [Project purpose](https://github.com/vctrx-dev/CCR/blob/main/AGENTS.md): background for contributors.
 
 The GitHub Action remains on the roadmap and is not claimed as available.

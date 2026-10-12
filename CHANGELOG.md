@@ -4,6 +4,37 @@ User-visible changes and migrations, following [Semantic Versioning](https://sem
 beta while its version is 0.x, so incompatible changes increment MINOR. See
 [VERSIONING.md](VERSIONING.md). Versions before 0.8.0, and 0.9.0–0.9.1, were never published to npm.
 
+## 0.14.0 - 2026-10-12
+
+### Changed
+
+- `ccr uninstall` now removes the entire project `.ccr` directory, including shared context,
+  customized dimensions, journals, local settings, private state, and caches. **Migration:** use
+  `ccr uninstall --keep-context` to preserve this data, and `--dry-run` to preview removal.
+  `--purge` and `--remove-context` are compatibility aliases for full cleanup; neither can be
+  combined with `--keep-context`. Package dependencies, Git history, and shared npx caches are
+  unchanged.
+- Uninstall removes recorded hook integration directly when the original bytes can be verified;
+  running `/ccr-hooks remove` first is no longer required. Unrelated hooks and files retain their
+  original contents and permissions. Unsupported layouts, invalid ownership records, unsafe paths,
+  and concurrent changes stop cleanup. Empty CCR skill directories are removed during full cleanup.
+- Reviews read project context and journals directly from their files and link finding labels to
+  the installed dimension reference. Live JSON remains the source of review criteria. Run
+  `ccr update` to refresh installed skills.
+
+### Fixed
+
+- Legacy hook removal rejects symlinked hook paths and hook locations changed after a preview,
+  and preserves hook permissions.
+- Uninstall reports an unsuccessful exit status when invalid hook provenance prevents cleanup.
+- Full cleanup works on supported Node 22 Windows installations whose path-based file stats omit
+  the device identifier; file identity and concurrent-edit checks remain enforced.
+
+### Security
+
+- Updated the development-tool source map parser to the patched version for indexed source map
+  denial of service protection.
+
 ## 0.13.0 - 2026-10-04
 
 ### Changed

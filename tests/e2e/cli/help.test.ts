@@ -23,7 +23,7 @@ describe("CLI help", () => {
     );
     expect(output).toContain("ccr setup [--dry-run] [--json]");
     expect(output).toContain("ccr update [--dry-run] [--json]");
-    expect(output).toContain("ccr uninstall [--dry-run] [--remove-context]");
+    expect(output).toContain("ccr uninstall [--dry-run] [--keep-context]");
     expect(output).toContain("ccr config init [--dry-run]");
     expect(output).toContain("ccr context <command>");
     expect(output).toContain("ccr context append-decision <decision>");

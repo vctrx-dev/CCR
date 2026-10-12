@@ -71,7 +71,7 @@ command, change PATH, or install anything unless the user separately asks for th
 </example>
 <example>
 User: \`/ccr Can I review only privacy?\`
-Action: Read current help and the review dimension reference. If \`privacy-data-protection\` is a configured ID, show
+Action: Read current help and \`.claude/skills/ccr/references/dimensions.md\`. If \`privacy-data-protection\` is a configured ID, show
 \`/ccr-review privacy-data-protection\` as the changes shorthand and \`/ccr-review codebase privacy-data-protection\` for the whole repository.
 Use \`/ccr-review PR-123 privacy-data-protection\` for a pull request. Explain that reviews run inside Claude Code
 and report without fixing.

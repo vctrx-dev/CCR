@@ -58,6 +58,7 @@ export { applyConfigSetup, applySetup, previewSetup } from "./setup.js";
 
 export type {
   UninstallModification,
+  UninstallOptions,
   UninstallPreview,
   UninstallRemoval,
 } from "./uninstall.js";
