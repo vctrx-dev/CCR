@@ -27,6 +27,8 @@ beta while its version is 0.x, so incompatible changes increment MINOR. See
 - Legacy hook removal rejects symlinked hook paths and hook locations changed after a preview,
   and preserves hook permissions.
 - Uninstall reports an unsuccessful exit status when invalid hook provenance prevents cleanup.
+- Full cleanup works on supported Node 22 Windows installations whose path-based file stats omit
+  the device identifier; file identity and concurrent-edit checks remain enforced.
 
 ### Security
 

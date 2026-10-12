@@ -24,7 +24,11 @@ async function fileFingerprint(root: string, relativePath: string): Promise<stri
   const handle = await open(target, "r");
   try {
     const opened = await handle.stat();
-    if (opened.ino !== details.ino || opened.dev !== details.dev) {
+    // Windows path stats in Node 22 can report an unknown device (0) while handle stats report it.
+    if (
+      opened.ino !== details.ino ||
+      (opened.dev !== 0 && details.dev !== 0 && opened.dev !== details.dev)
+    ) {
       throw new Error(`Purge path changed while reading: ${relativePath}`);
     }
     const hash = createHash("sha256");
