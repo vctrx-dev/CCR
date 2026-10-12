@@ -45,9 +45,7 @@ ${SKILL_ARGUMENT_NORMALIZATION}
   edited path. A linked worktree's Git-owned common hooks directory is a valid boundary. Treat a
   configured path outside the repository as unsupported, and stop if any edited path crosses a
   symlink. Report the path and make no changes.
-- The TypeScript CLI can inspect and remove only legacy native marker blocks; it cannot validate or
-  remove provenance-managed framework or language-native integration. While a valid state file
-  exists, \`/ccr-hooks\` is the lifecycle authority; invalid state grants no ownership authority.
+- \`ccr uninstall\` can remove recorded hook blocks when the original bytes can be verified; \`ccr hooks uninstall\` removes legacy blocks only, and invalid records never authorize cleanup.
 - Check CCR hook status before sync writes. Invalid provenance means stop and
   ask the human to preserve or move the state for investigation. Markers without provenance are
   legacy/unprovenanced; stop with no changes. Do not infer or reconstruct history, original bytes,

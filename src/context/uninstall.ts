@@ -16,6 +16,20 @@ import {
 import type { ManagedArtifact } from "./managed-artifacts";
 import { managedBlock, removeManagedBlock } from "./managed-block";
 import { withManagedLifecycleLock } from "./setup";
+import {
+  type UninstallHooksPreview,
+  applyUninstallHooks,
+  previewUninstallHooks,
+  uninstallHookPaths,
+  validateUninstallHooks,
+} from "./uninstall-hooks";
+import {
+  type PurgeSnapshot,
+  applyPurgeTree,
+  finishPurgeTree,
+  snapshotPurgeTree,
+  validatePurgeTree,
+} from "./uninstall-purge";
 
 /**
  * Bounded removal workflow for managed artifacts. Extend registry lifecycle policies instead of
@@ -43,6 +57,14 @@ export interface UninstallPreview {
   modifications: UninstallModification[];
   removeContext: boolean;
   root: string;
+  purge: boolean;
+  hooks?: UninstallHooksPreview;
+  purgeSnapshot?: PurgeSnapshot;
+}
+
+export interface UninstallOptions {
+  purge?: boolean;
+  removeHooks?: boolean;
 }
 
 export interface UninstallRemoval {
@@ -96,15 +118,28 @@ async function hasLocalStateAtPath(root: string, relativePath: string): Promise<
   }
 }
 
-/** Previews files affected by uninstall without deleting user-edited context by default. */
+/** Previews managed integration cleanup; purge explicitly includes every safe path inside .ccr. */
 export async function previewUninstall(
   root: string,
   shouldRemoveContext: boolean,
+  options: UninstallOptions = {},
 ): Promise<UninstallPreview> {
+  const purge = options.purge === true;
+  const hooks = options.removeHooks || purge ? await previewUninstallHooks(root) : undefined;
+  const purgeSnapshot = purge ? await snapshotPurgeTree(root) : undefined;
   const removePaths: string[] = [];
   const removals: UninstallRemoval[] = [];
   for (const artifact of MANAGED_ARTIFACTS) {
+    if (purge && artifact.path.startsWith(".ccr/")) continue;
     const existing = await readManagedTextIfExists(root, artifact.path, artifact.maximumCharacters);
+    if (
+      purge &&
+      artifact.kind === "skill" &&
+      existing !== undefined &&
+      !shouldRemoveArtifact(artifact, existing, true)
+    ) {
+      throw new Error(`Cannot verify CCR ownership of ${artifact.path}; cleanup stopped.`);
+    }
     if (shouldRemoveArtifact(artifact, existing, shouldRemoveContext)) {
       removePaths.push(artifact.path);
       if (existing !== undefined)
@@ -119,7 +154,7 @@ export async function previewUninstall(
   }
   const modifyPaths: string[] = [];
   const modifications: UninstallModification[] = [];
-  const isLocalStatePresent = await hasLocalState(root);
+  const isLocalStatePresent = purge ? false : await hasLocalState(root);
   for (const blockArtifact of MANAGED_BLOCK_ARTIFACTS) {
     if (blockArtifact.uninstallCondition === "without-local-state" && isLocalStatePresent) continue;
     const content = await readManagedTextIfExists(root, blockArtifact.path);
@@ -139,6 +174,13 @@ export async function previewUninstall(
       });
     }
   }
+  if (hooks !== undefined) {
+    const paths = uninstallHookPaths(hooks);
+    removePaths.push(...paths.remove);
+    modifyPaths.push(...paths.modify);
+    if (hooks.kind === "recorded" && !purge) removePaths.push(".ccr/private/hooks-state.json");
+  }
+  if (purge) removePaths.push(".ccr");
   return {
     root,
     removeContext: shouldRemoveContext,
@@ -146,6 +188,9 @@ export async function previewUninstall(
     modifyPaths,
     removals,
     modifications,
+    purge,
+    ...(hooks === undefined ? {} : { hooks }),
+    ...(purgeSnapshot === undefined ? {} : { purgeSnapshot }),
   };
 }
 
@@ -170,29 +215,48 @@ function reconcileSuppliedPreview(
   return {
     root: current.root,
     removeContext: current.removeContext,
-    removePaths: removals.map((removal) => removal.path),
-    modifyPaths: modifications.map((modification) => modification.path),
+    removePaths: current.removePaths.filter(
+      (file) =>
+        !current.removals.some((item) => item.path === file) ||
+        removals.some((item) => item.path === file),
+    ),
+    modifyPaths: current.modifyPaths.filter(
+      (file) =>
+        !current.modifications.some((item) => item.path === file) ||
+        modifications.some((item) => item.path === file),
+    ),
     removals,
     modifications,
+    purge: current.purge,
+    ...(current.hooks === undefined ? {} : { hooks: current.hooks }),
+    ...(current.purgeSnapshot === undefined ? {} : { purgeSnapshot: current.purgeSnapshot }),
   };
 }
 
-/** Applies a bounded uninstall and removes only known files and marked instruction blocks. */
+/** Removes verified integration, preserving user data unless shared-context removal or purge is explicit. */
 export async function applyUninstall(
   root: string,
   shouldRemoveContext: boolean,
   suppliedPreview?: UninstallPreview,
+  options: UninstallOptions = {},
 ): Promise<UninstallPreview> {
-  return withManagedLifecycleLock(root, () =>
+  const result = await withManagedLifecycleLock(root, () =>
     withJournalMutationLock(root, async () => {
       if (
         suppliedPreview !== undefined &&
         (path.resolve(suppliedPreview.root) !== path.resolve(root) ||
-          suppliedPreview.removeContext !== shouldRemoveContext)
+          suppliedPreview.removeContext !== shouldRemoveContext ||
+          suppliedPreview.purge !== (options.purge === true) ||
+          (suppliedPreview.hooks !== undefined) !==
+            (options.removeHooks === true || options.purge === true))
       ) {
         throw new Error("CCR uninstall preview does not match this operation.");
       }
       if (suppliedPreview !== undefined) {
+        if (suppliedPreview.hooks !== undefined)
+          await validateUninstallHooks(root, suppliedPreview.hooks);
+        if (suppliedPreview.purgeSnapshot !== undefined)
+          await validatePurgeTree(root, suppliedPreview.purgeSnapshot);
         for (const planned of [...suppliedPreview.removals, ...suppliedPreview.modifications]) {
           if (
             (await readManagedTextIfExists(root, planned.path, planned.maximumCharacters)) !==
@@ -202,11 +266,14 @@ export async function applyUninstall(
           }
         }
       }
-      const currentPreview = await previewUninstall(root, shouldRemoveContext);
+      const currentPreview = await previewUninstall(root, shouldRemoveContext, options);
       const preview =
         suppliedPreview === undefined
           ? currentPreview
           : reconcileSuppliedPreview(suppliedPreview, currentPreview);
+      // Validate everything before the first write, then remove hooks before deleting their records.
+      if (preview.hooks !== undefined)
+        await applyUninstallHooks(root, preview.hooks, preview.purge);
       for (const removal of preview.removals) {
         if (!(await deleteManagedTextIfUnchanged(root, removal.path, removal.expectedContent))) {
           throw new Error(`CCR managed file changed after preview: ${removal.path}.`);
@@ -224,7 +291,10 @@ export async function applyUninstall(
           throw new Error(`CCR managed file changed after preview: ${modification.path}.`);
         }
       }
+      if (preview.purgeSnapshot !== undefined) await applyPurgeTree(root, preview.purgeSnapshot);
       return preview;
     }),
   );
+  if (result.purge) await finishPurgeTree(root);
+  return result;
 }

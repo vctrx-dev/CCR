@@ -2,11 +2,6 @@ import type { Command } from "commander";
 import { hasCurrentContextAssessment } from "../context/assessment";
 import { readStagedContextState } from "../context/git";
 import { readHookState } from "../context/hook-state";
-import {
-  previewContextHookRemoval,
-  removeAllContextHooks,
-  validateContextHookRemoval,
-} from "../context/hooks";
 import { applyUninstall, previewUninstall } from "../context/uninstall";
 import { inspectContextReadiness } from "../context/validate";
 import { registerContextInspectionCommands } from "./context-inspection";
@@ -21,74 +16,78 @@ export function registerContextCommands(program: Command, io: CliIo): void {
 
   program
     .command("uninstall")
-    .description("Remove CCR-managed integration while preserving context by default")
+    .description("Remove CCR integration and the entire .ccr directory")
     .option("--apply", "apply removal (retained for backward compatibility; now the default)")
     .option("--dry-run", "preview removal without changing files")
-    .option("--remove-context", "also delete known shared context files")
-    .action(async (options: { dryRun?: boolean; removeContext?: boolean }) => {
-      const root = findCliRepositoryRoot(io);
-      const hookState = await readHookState(root);
-      if (hookState.status === "valid") {
+    .option("--keep-context", "preserve .ccr data and its ignore rules")
+    .option("--remove-context", "full cleanup (compatibility alias; now the default)")
+    .option("--purge", "full cleanup (compatibility alias; now the default)")
+    .action(
+      async (options: {
+        dryRun?: boolean;
+        keepContext?: boolean;
+        removeContext?: boolean;
+        purge?: boolean;
+      }) => {
+        if (options.keepContext && (options.removeContext || options.purge)) {
+          throw new Error("--keep-context cannot be combined with --purge or --remove-context.");
+        }
+        const root = findCliRepositoryRoot(io);
+        const hookState = await readHookState(root);
+        if (hookState.status === "invalid") {
+          writeCliLines(io, [
+            formatTone(
+              "CCR has invalid hook provenance; uninstall stopped before changing files.",
+              "warning",
+              io.isColorEnabled === true,
+            ),
+            hookState.issue,
+            "Run `/ccr-hooks status` and repair provenance before uninstalling.",
+          ]);
+          process.exitCode = 1;
+          return;
+        }
+        const uninstallOptions = { purge: options.keepContext !== true, removeHooks: true };
+        const shouldRemoveContext = uninstallOptions.purge;
+        const preview = await previewUninstall(root, shouldRemoveContext, uninstallOptions);
+        if (options.dryRun) {
+          writeCliLines(io, [
+            formatHeading("CCR uninstall preview · no files changed", io.isColorEnabled === true),
+            formatHeading("Planned changes", io.isColorEnabled === true),
+            ...preview.modifyPaths.map(
+              (file) => `  ${formatAction("modify".padEnd(9), io.isColorEnabled === true)} ${file}`,
+            ),
+            ...preview.removePaths.map(
+              (file) => `  ${formatAction("remove".padEnd(9), io.isColorEnabled === true)} ${file}`,
+            ),
+            formatTone(
+              uninstallOptions.purge
+                ? "The entire .ccr directory will be deleted, including journals, local settings, and caches."
+                : "Local config, journals, private files, caches, and their ignore rules are preserved.",
+              "muted",
+              io.isColorEnabled === true,
+            ),
+            formatTone(
+              `Run \`ccr uninstall${options.keepContext ? " --keep-context" : ""}\` to remove the integration.`,
+              "success",
+              io.isColorEnabled === true,
+            ),
+          ]);
+          return;
+        }
+        await applyUninstall(root, shouldRemoveContext, preview, uninstallOptions);
         writeCliLines(io, [
           formatTone(
-            "CCR hooks are provenance-managed; uninstall stopped before changing files.",
-            "warning",
-            io.isColorEnabled === true,
-          ),
-          "Run `/ccr-hooks remove` first, then rerun `ccr uninstall`.",
-        ]);
-        return;
-      }
-      if (hookState.status === "invalid") {
-        writeCliLines(io, [
-          formatTone(
-            "CCR has invalid hook provenance; uninstall stopped before changing files.",
-            "warning",
-            io.isColorEnabled === true,
-          ),
-          hookState.issue,
-          "Run `/ccr-hooks status` and repair provenance before uninstalling.",
-        ]);
-        return;
-      }
-      const preview = await previewUninstall(root, options.removeContext ?? false);
-      if (options.dryRun) {
-        writeCliLines(io, [
-          formatHeading("CCR uninstall preview · no files changed", io.isColorEnabled === true),
-          formatHeading("Planned changes", io.isColorEnabled === true),
-          ...preview.modifyPaths.map(
-            (file) => `  ${formatAction("modify".padEnd(9), io.isColorEnabled === true)} ${file}`,
-          ),
-          ...preview.removePaths.map(
-            (file) => `  ${formatAction("remove".padEnd(9), io.isColorEnabled === true)} ${file}`,
-          ),
-          formatTone(
-            "Local config, journals, private files, caches, and their ignore rules are preserved.",
-            "muted",
-            io.isColorEnabled === true,
-          ),
-          formatTone(
-            "Run `ccr uninstall` to remove the integration.",
+            `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
             "success",
             io.isColorEnabled === true,
           ),
+          uninstallOptions.purge
+            ? "The .ccr directory and verified CCR hook integration were removed."
+            : "Local context was preserved and remains ignored.",
         ]);
-        return;
-      }
-      const shouldRemoveContext = options.removeContext ?? false;
-      const hookRemovalPreview = await previewContextHookRemoval(root);
-      await validateContextHookRemoval(root, hookRemovalPreview);
-      await applyUninstall(root, shouldRemoveContext, preview);
-      await removeAllContextHooks(root, hookRemovalPreview);
-      writeCliLines(io, [
-        formatTone(
-          `CCR integration removed. Shared context ${shouldRemoveContext ? "removed." : "preserved."}`,
-          "success",
-          io.isColorEnabled === true,
-        ),
-        "Local context was preserved and remains ignored.",
-      ]);
-    });
+      },
+    );
 
   const context = program
     .command("context")

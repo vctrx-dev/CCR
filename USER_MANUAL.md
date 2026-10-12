@@ -256,7 +256,7 @@ Optional `_ccr` metadata records `schemaVersion` and the original `defaultSha256
 while customizing the payload. Untouched copies follow current package defaults even before update;
 update refreshes those copies but preserves customized files and human-authored JSON without
 metadata. To resume defaults, back up the file, remove only
-`.ccr/dimensions.json`, and run setup. Ordinary uninstall preserves it; `--remove-context` removes it.
+`.ccr/dimensions.json`, and run setup. Uninstall removes it; `--keep-context` preserves it.
 
 Invalid authoritative JSON/schema, symlinks, non-UTF-8 input, and files
 over 256,000 characters fail closed, including lifecycle previews. An empty dimension array stops
@@ -350,7 +350,8 @@ checks. `ccr hooks pre-commit` and `post-commit` are the handlers; `check` and `
 hidden compatibility aliases.
 
 Provenance records original byte counts/hashes and managed separators for verified restoration.
-While it exists, `/ccr-hooks` owns status/removal; CLI uninstall defers. Marker-only hooks without
+`ccr uninstall` removes marked integration only when the recorded original bytes can be verified;
+unsupported layouts stop without cleanup. Marker-only hooks without
 state are legacy/unprovenanced, not safely adoptable. Invalid state blocks automatic changes.
 After inspection, `ccr hooks uninstall` removes legacy blocks while preserving unrelated bytes.
 Use `ccr hooks status` and `ccr config validate` to investigate failures.
@@ -430,18 +431,26 @@ behind the global journal barrier.
 
 ## Uninstall
 
-First run `/ccr-hooks remove` for provenance-managed integration. Then:
+Preview first, then remove the integration:
 
 ```bash
 ccr uninstall --dry-run
 ccr uninstall
-# Only when shared context should also be deleted:
-ccr uninstall --remove-context
+# Only when CCR data should be preserved:
+ccr uninstall --keep-context
 ```
 
-Ordinary uninstall preserves shared context, custom taxonomy, journals, and private state. The
-explicit flag removes shared context only. Real local content protects its ignore rules; empty
-internal lock scaffolding alone does not. Unknown framework integration is not claimed as removed.
+Uninstall deletes the entire `.ccr` directory, including shared context, custom dimensions, journals,
+local settings, and caches, and removes its ignore block. `--keep-context` preserves that data and
+its ignore rules. `--purge` and `--remove-context` remain compatibility aliases for full cleanup;
+neither can be combined with `--keep-context`. Unknown framework integration stops cleanup.
+
+Hook cleanup preserves original bytes and permissions, removes only verified CCR blocks or newly
+created CCR hook files, and never runs hooks or installs a framework. Invalid records, changed
+original bytes, malformed markers, and symlinked paths stop cleanup. Empty CCR skill directories
+are removed; directories containing unrelated files are kept. Filesystem or concurrent-edit errors
+may leave a partial cleanup, which is reported rather than claimed as success. Purge is file removal,
+not a forensic secure erase; Git history, npm dependencies, and shared npx caches are not deleted.
 
 After removing integration from every repository that uses the installation, remove the package
 with `npm uninstall --global @vctrx/ccr`. For a local installation, run `npx ccr uninstall` before

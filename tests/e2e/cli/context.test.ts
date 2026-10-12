@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -85,7 +85,7 @@ describe("context CLI", () => {
     expect(output).toContain("Shared context removed.");
   }, 30_000);
 
-  it("should apply uninstall by default while preserving shared context", async () => {
+  it("should preview and delete all CCR data with plain uninstall", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-uninstall-default-"));
     roots.push(root);
     await runCommand("git", ["init", "--quiet"], { cwd: root });
@@ -106,14 +106,56 @@ describe("context CLI", () => {
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "uninstall", "--dry-run"]);
     expect(output).toContain("preview");
+    expect(output).toContain("entire .ccr directory will be deleted");
+    expect(output).toContain("Run `ccr uninstall` to remove the integration.");
     expect(await readFile(skillPath, "utf8")).toContain("# CCR");
 
     output = "";
     await createCli(io).parseAsync(["node", "ccr", "uninstall"]);
-    expect(output).toContain("Shared context preserved.");
-    expect(await readFile(projectPath, "utf8")).toContain("# Project");
+    expect(output).toContain("Shared context removed.");
+    await expect(lstat(path.join(root, ".ccr"))).rejects.toThrow();
     await expect(readFile(skillPath, "utf8")).rejects.toThrow();
   });
+
+  it("should preserve CCR data only when keep-context is explicit", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-uninstall-keep-"));
+    roots.push(root);
+    await runCommand("git", ["init", "--quiet"], { cwd: root });
+    let output = "";
+    const io = {
+      cwd: root,
+      write: (message: string) => {
+        output += message;
+      },
+    };
+    await createCli(io).parseAsync(["node", "ccr", "setup"]);
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "uninstall", "--keep-context", "--dry-run"]);
+    expect(output).toContain("Run `ccr uninstall --keep-context`");
+    output = "";
+    await createCli(io).parseAsync(["node", "ccr", "uninstall", "--keep-context"]);
+    expect(output).toContain("Shared context preserved.");
+    expect(await readFile(path.join(root, ".ccr/project.md"), "utf8")).toContain("# Project");
+    await expect(lstat(path.join(root, ".claude/skills/ccr"))).resolves.toBeDefined();
+    await expect(
+      readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it.each(["--purge", "--remove-context"])(
+    "should reject keep-context combined with %s before writes",
+    async (flag) => {
+      const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-uninstall-conflict-"));
+      roots.push(root);
+      await runCommand("git", ["init", "--quiet"], { cwd: root });
+      const io = { cwd: root, write: () => {} };
+      await createCli(io).parseAsync(["node", "ccr", "setup"]);
+      await expect(
+        createCli(io).parseAsync(["node", "ccr", "uninstall", "--keep-context", flag]),
+      ).rejects.toThrow(/cannot be combined/);
+      expect(await readFile(path.join(root, ".ccr/project.md"), "utf8")).toContain("# Project");
+    },
+  );
 
   it("should never write setup when dry-run is combined with apply", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ccr-cli-dry-run-"));

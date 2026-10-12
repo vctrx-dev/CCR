@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { chmod } from "node:fs/promises";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { chmod, lstat } from "node:fs/promises";
 import path from "node:path";
 import { readTextIfExists, writeTextAtomic } from "./files";
 import {
@@ -45,6 +45,8 @@ interface ResolvedHook {
 }
 
 interface HookRemovalPlan {
+  authorityRoot: string;
+  mode?: number;
   content?: string;
   original?: string;
   result: HookResult;
@@ -54,6 +56,7 @@ const PREVIEW_PLANS = Symbol("context-hook-removal-preview");
 
 /** Opaque validated plan; pass it back to removal to detect drift before either hook is written. */
 export interface ContextHookRemovalPreview {
+  readonly paths: { remove: string[]; modify: string[] };
   readonly [PREVIEW_PLANS]: {
     plans: readonly [HookRemovalPlan, HookRemovalPlan];
     root: string;
@@ -89,6 +92,21 @@ function assertHookIsWithinAuthority(authorityRoot: string, hookPath: string): v
   }
 
   const realAuthority = realpathSync(resolvedAuthority);
+  let current = resolvedAuthority;
+  for (const segment of path
+    .relative(resolvedAuthority, hookPath)
+    .split(path.sep)
+    .filter(Boolean)) {
+    current = path.join(current, segment);
+    try {
+      if (lstatSync(current).isSymbolicLink()) {
+        throw new UnsafeHookPathError(`Refusing to manage a symbolic-link Git hook: ${hookPath}`);
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") break;
+      throw error;
+    }
+  }
   const existingParent = nearestExistingDirectory(path.dirname(hookPath));
   if (!isWithin(realAuthority, realpathSync(existingParent))) {
     throw new UnsafeHookPathError(
@@ -148,16 +166,28 @@ async function planContextHookRemoval(
   assertHookIsWithinAuthority(resolved.authorityRoot, resolved.path);
   const existing = await readTextIfExists(resolved.path);
   if (existing === undefined) {
-    return { result: { path: resolved.path, status: "not-installed" } };
+    return {
+      authorityRoot: resolved.authorityRoot,
+      result: { path: resolved.path, status: "not-installed" },
+    };
   }
   const inspection = inspectManagedBlock(existing, definition);
   if (inspection.status === "conflict") {
     throw new Error(`CCR managed block conflict in ${resolved.path}.`);
   }
   if (inspection.status === "absent") {
-    return { original: existing, result: { path: resolved.path, status: "not-installed" } };
+    if (/^\s*(?:#|\/\/|;|--|<!--) ccr:(?:start|end)(?:\s|$)/m.test(existing)) {
+      throw new Error(`Unrecorded CCR hook markers in ${resolved.path}; cleanup stopped.`);
+    }
+    return {
+      authorityRoot: resolved.authorityRoot,
+      original: existing,
+      result: { path: resolved.path, status: "not-installed" },
+    };
   }
   return {
+    authorityRoot: resolved.authorityRoot,
+    mode: (await lstat(resolved.path)).mode & 0o777,
     content: removeManagedBlock(existing, definition, resolved.path, {
       terminalSeparator: "preserve",
     }),
@@ -168,8 +198,12 @@ async function planContextHookRemoval(
 
 async function validateHookRemovalPlans(plans: readonly HookRemovalPlan[]): Promise<void> {
   for (const plan of plans) {
+    assertHookIsWithinAuthority(plan.authorityRoot, plan.result.path);
     if ((await readTextIfExists(plan.result.path)) !== plan.original) {
       throw new Error(`Git hook changed after preview: ${plan.result.path}`);
+    }
+    if (plan.mode !== undefined && ((await lstat(plan.result.path)).mode & 0o777) !== plan.mode) {
+      throw new Error(`Git hook permissions changed after preview: ${plan.result.path}`);
     }
   }
 }
@@ -179,7 +213,7 @@ async function applyHookRemovalPlans(plans: readonly HookRemovalPlan[]): Promise
   for (const plan of plans) {
     if (plan.content === undefined) continue;
     await writeTextAtomic(plan.result.path, plan.content);
-    await chmod(plan.result.path, 0o755);
+    if (plan.mode !== undefined) await chmod(plan.result.path, plan.mode);
   }
 }
 
@@ -235,7 +269,15 @@ export async function readContextHookStatus(
 export async function previewContextHookRemoval(root: string): Promise<ContextHookRemovalPreview> {
   const preCommit = await planContextHookRemoval(root, "pre-commit");
   const postCommit = await planContextHookRemoval(root, "post-commit");
-  return { [PREVIEW_PLANS]: { plans: [preCommit, postCommit], root: path.resolve(root) } };
+  return {
+    paths: {
+      remove: [],
+      modify: [preCommit, postCommit]
+        .filter((plan) => plan.content !== undefined)
+        .map((plan) => path.relative(root, plan.result.path).replaceAll(path.sep, "/")),
+    },
+    [PREVIEW_PLANS]: { plans: [preCommit, postCommit], root: path.resolve(root) },
+  };
 }
 
 function hookRemovalPlans(
@@ -253,7 +295,17 @@ export async function validateContextHookRemoval(
   root: string,
   preview: ContextHookRemovalPreview,
 ): Promise<void> {
-  await validateHookRemovalPlans(hookRemovalPlans(root, preview));
+  const plans = hookRemovalPlans(root, preview);
+  for (const [index, name] of (["pre-commit", "post-commit"] as const).entries()) {
+    const resolved = resolveHook(root, name);
+    if (
+      resolved.path !== plans[index].result.path ||
+      resolved.authorityRoot !== plans[index].authorityRoot
+    ) {
+      throw new Error("Git hook location changed after preview.");
+    }
+  }
+  await validateHookRemovalPlans(plans);
 }
 
 /** Removes CCR's legacy marked blocks from both advisory hooks. */
@@ -265,6 +317,7 @@ export async function removeAllContextHooks(
   postCommit: HookResult;
 }> {
   const plan = preview ?? (await previewContextHookRemoval(root));
+  await validateContextHookRemoval(root, plan);
   const [preCommit, postCommit] = hookRemovalPlans(root, plan);
   await applyHookRemovalPlans([preCommit, postCommit]);
   return { preCommit: preCommit.result, postCommit: postCommit.result };

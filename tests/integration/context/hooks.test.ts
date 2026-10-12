@@ -73,7 +73,7 @@ it("should reject a configured hook directory that crosses a symlink", async () 
   await runCommand("git", ["config", "core.hooksPath", ".managed-hooks"], { cwd: root });
 
   expect((await readContextHookStatus(root)).status).toBe("unsafe");
-  await expect(removeContextHook(root)).rejects.toThrow(/outside the repository/i);
+  await expect(removeContextHook(root)).rejects.toThrow(/symbolic-link|outside the repository/i);
 });
 
 it("should distinguish current, stale, malformed, and absent legacy blocks", async () => {
@@ -101,6 +101,28 @@ it("should distinguish current, stale, malformed, and absent legacy blocks", asy
 
   await writeFile(hookPath, "#!/bin/sh\n# ccr:start - advisory context check\n", "utf8");
   expect((await readContextHookStatus(root)).status).toBe("malformed");
+});
+
+it("should reject symlinked hook files even when their targets are inside the repository", async () => {
+  const root = await createRepository();
+  const directory = path.join(root, "original-hooks");
+  await mkdir(directory);
+  const content = "#!/bin/sh\n# ccr:start - advisory context check\nccr\n# ccr:end\n";
+  await writeFile(path.join(directory, "pre-commit"), content);
+  await symlink(directory, path.join(root, ".managed-hooks"), "junction");
+  await runCommand("git", ["config", "core.hooksPath", ".managed-hooks"], { cwd: root });
+  await expect(previewContextHookRemoval(root)).rejects.toThrow(/symbolic-link/);
+  expect(await readFile(path.join(directory, "pre-commit"), "utf8")).toBe(content);
+});
+
+it("should reject hook location changes after preview", async () => {
+  const root = await createRepository();
+  const content = "#!/bin/sh\n# ccr:start - advisory context check\nccr\n# ccr:end\n";
+  await writeFile(path.join(root, ".git/hooks/pre-commit"), content);
+  const preview = await previewContextHookRemoval(root);
+  await runCommand("git", ["config", "core.hooksPath", ".new-hooks"], { cwd: root });
+  await expect(removeAllContextHooks(root, preview)).rejects.toThrow(/location changed/);
+  expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe(content);
 });
 
 it("should report unavailable Git hook metadata without throwing", async () => {

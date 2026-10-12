@@ -69,7 +69,7 @@ async function showSetup(
               action,
               path: relativePath,
             })),
-            rollback: "ccr uninstall [--remove-context]",
+            rollback: "ccr uninstall [--keep-context]",
           },
           null,
           2,
@@ -121,7 +121,7 @@ async function showSetup(
         "warning",
         io.isColorEnabled === true,
       ),
-      "Rollback: `ccr uninstall` (add `--remove-context` to remove shared context).",
+      "Rollback: `ccr uninstall` removes all project CCR data (use `--keep-context` to preserve it).",
       formatTone(
         `Run \`${nextCommand}\` to apply these changes.`,
         "success",

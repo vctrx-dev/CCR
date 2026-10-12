@@ -8,7 +8,7 @@ Terminal commands:
   ccr -v | -version | --version                    Print installed CCR version
   ccr setup [--dry-run] [--json]                    Install or refresh CCR assets
   ccr update [--dry-run] [--json]                   Safely refresh package-managed CCR assets
-  ccr uninstall [--dry-run] [--remove-context]      Remove integration; preserve context by default
+  ccr uninstall [--dry-run] [--keep-context]        Remove integration and all .ccr data
   ccr context <command>                          Inspect human-impact context and review-safe evidence
   ccr context save-review <scope> <dimensions> <counts> <summary>
                                                  Save a finished review to its journal

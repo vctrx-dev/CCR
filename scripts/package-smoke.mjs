@@ -469,6 +469,28 @@ if (config.model !== "gpt-5.2") throw new Error("Installed CommonJS SDK export i
     throw new Error("Package update replaced a customized taxonomy or ignored live JSON edits.");
   }
 
+  const hookPath = path.join(scripted, ".git", "hooks", "pre-commit");
+  const userHook = "#!/bin/sh\nprintf 'user check'\n";
+  const installedHook = `${userHook}# ccr:start - advisory context check\nccr hooks pre-commit\n# ccr:end\n`;
+  writeFileSync(hookPath, installedHook, "utf8");
+  const purgePreview = runInstalled(installedBin, ["uninstall", "--dry-run"], scripted);
+  if (
+    !purgePreview.includes("entire .ccr directory will be deleted") ||
+    !existsSync(journalPath) ||
+    readFileSync(hookPath, "utf8") !== installedHook
+  ) {
+    throw new Error("Installed purge preview changed CCR data or failed to explain full cleanup.");
+  }
+  runInstalled(installedBin, ["uninstall"], scripted);
+  if (
+    existsSync(path.join(scripted, ".ccr")) ||
+    existsSync(path.join(scripted, ".claude", "skills", "ccr")) ||
+    readFileSync(hookPath, "utf8") !== userHook ||
+    readFileSync(ignorePath, "utf8").includes("ccr:start")
+  ) {
+    throw new Error("Installed purge left CCR data or changed unrelated hook bytes.");
+  }
+
   process.stdout.write(
     `Package smoke passed (${pack.name}@${pack.version}, installed ${files.length} files).\n`,
   );
