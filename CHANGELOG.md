@@ -4,6 +4,43 @@ User-visible changes and migrations, following [Semantic Versioning](https://sem
 beta while its version is 0.x, so incompatible changes increment MINOR. See
 [VERSIONING.md](VERSIONING.md). Versions before 0.8.0, and 0.9.0–0.9.1, were never published to npm.
 
+## Unreleased
+
+## 0.15.0 - 2026-10-15
+
+### Changed
+
+- The routine test suite is about 80% smaller. It keeps representative setup, privacy, hook,
+  cleanup, journal/review integrity, and provider checks, with one compact packed-package scenario.
+  Coverage is an optional diagnostic rather than a release gate. `AGENTS.md`, the PR checklist,
+  and the audit now favor behavioral risk over per-file tests and exhaustive case matrices.
+- Automatic context updates use Claude Code safe mode so existing subscription sign-in remains
+  available while project customizations stay disabled. **Migration:**
+  Claude Code 2.1.169 or later is required for this flag; the old 2.1.0 minimum was insufficient
+  for the isolated worker's flags. No new CCR dependency or API key is required.
+
+### Fixed
+
+- Uninstall recognizes older plain `# ccr:start` hook markers as well as described markers.
+  Valid older hooks no longer block removal of `.ccr` and installed CCR skills; unrelated hook
+  commands are preserved.
+- `npx @vctrx/ccr@latest setup` retains a self-contained, Git-ignored runtime for all Claude Code
+  skills and Git hooks. Initialization and review no longer require a separate global or local
+  package install, resolve the unrelated `ccr` package, or depend on the npx cache remaining present.
+  Rerun setup to refresh existing skills and retain the runtime.
+- Installed skills and hook callbacks contain no package-runner commands. Initialization performs
+  domain selection, validation, journaling, and assessment locally. Hook sync migrates complete
+  legacy marker blocks with the local helper before recording a fresh baseline, without asking
+  the developer to run another cleanup or install command.
+- All four skill prompts share runtime invocation, shell argument handling, and spelling rules.
+  Context operations parse their operation separately from supplied facts or focus; `initialise`
+  is supported. Read-only hook status never removes disabled integration, repeated initialization
+  preserves human context, and verification without corrections avoids unnecessary journal writes.
+- `config --resolved` exposes effective settings and `config validate` checks local overrides.
+  Committed context updates select the exact HEAD journal with `review-journal --commit` and
+  `journals --commit`, even when unrelated working changes remain. Review prompts specify actual
+  evidence commands, save argument formats and limits, and fallback references for edited taxonomy.
+
 ## 0.14.0 - 2026-10-12
 
 ### Changed

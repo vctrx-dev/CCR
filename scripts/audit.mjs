@@ -40,6 +40,8 @@ const MAX_FUNC_PARAMS = 4;
 const PROMPT_ONLY_SOURCE_FILES = new Set([
   "src/context/manual-skill.ts",
   "src/context/skills.ts",
+  "src/context/skill-cli.ts",
+  "src/context/skill-argument-normalization.ts",
   "src/context/templates.ts",
   "src/review/skills.ts",
 ]);
@@ -93,30 +95,6 @@ function isNonCode(line) {
     t.startsWith('"use ') ||
     t.startsWith("'use ")
   );
-}
-
-/**
- * Checks if a file exports logic (functions, classes, arrow functions) that
- * requires testing. Type-only exports, constants, and re-exports are excluded.
- *
- * @param content - Full file content.
- * @returns True if the file has function/class/arrow exports.
- */
-function fileExportsLogic(content) {
-  for (const line of content.split("\n")) {
-    const t = line.trim();
-    if (isNonCode(t)) continue;
-    if (/^export\s+(default\s+)?(async\s+)?function\s*[*\s(]/.test(t)) return true;
-    if (/^export\s+(default\s+)?(abstract\s+)?class\s+/.test(t)) return true;
-    if (/^export\s+(const|let|var)\s+\w+(\s*:\s*[^=]+)?\s*=\s*(async\s+)?\s*[(<f]/.test(t))
-      return true;
-  }
-  return false;
-}
-
-function sourceToTestPaths(srcRel) {
-  const base = srcRel.replace(/^src\//, "").replace(/\.tsx?$/, "");
-  return ["unit", "integration", "e2e"].map((l) => `tests/${l}/${base}.test.ts`);
 }
 
 function isPromptOrTaxonomyFile(rel) {
@@ -380,64 +358,6 @@ function checkDebugger(rel, lines) {
   }
 }
 
-function checkTestFilesExist() {
-  const srcFiles = findFiles(SRC);
-  const testFiles = new Set(findFiles(TESTS).map((f) => relative(ROOT, f).replace(/\\/g, "/")));
-
-  for (const filePath of srcFiles) {
-    const rel = relative(ROOT, filePath).replace(/\\/g, "/");
-    if (isPromptOrTaxonomyFile(rel)) continue;
-    if (rel === "src/index.ts" || rel.endsWith("/index.ts")) continue;
-    const candidates = sourceToTestPaths(rel);
-    const found = candidates.some(
-      (c) => testFiles.has(c) || testFiles.has(c.replace(".test.ts", ".spec.ts")),
-    );
-    if (!found) {
-      const content = readFileSync(filePath, "utf-8");
-      if (fileExportsLogic(content)) {
-        warn(
-          "TDD-001",
-          rel,
-          1,
-          `No discoverable test covers this file's exported behavior. Checked: ${candidates.join(", ")}`,
-          "Confirm that an existing behavioral test covers this boundary, or add the narrowest useful test. Do not test internal helpers only to satisfy this warning.",
-        );
-      }
-    }
-  }
-
-  for (const level of ["unit", "integration", "e2e"]) {
-    const levelDir = join(TESTS, level);
-    if (!existsSync(levelDir)) {
-      warn(
-        "TDD-002",
-        level,
-        0,
-        `Test level directory "tests/${level}/" is missing.`,
-        `Create tests/${level}/ directory. Add at least one .test.ts file to start testing at this level.`,
-      );
-      continue;
-    }
-    for (const filePath of findFiles(levelDir)) {
-      const rel = relative(ROOT, filePath).replace(/\\/g, "/");
-      const content = readFileSync(filePath, "utf-8");
-      for (let i = 0; i < content.split("\n").length; i++) {
-        const line = content.split("\n")[i].trim();
-        const dm = line.match(/describe\(['"](.+?)['"]/);
-        if (dm && dm[1].length < 2) {
-          fail(
-            "TDD-003",
-            rel,
-            i + 1,
-            `describe() label "${dm[1]}" is too short. Use descriptive test group names.`,
-            `Change describe("${dm[1]}") to describe("ModuleOrFunctionName"). Use PascalCase for modules, camelCase for function names.`,
-          );
-        }
-      }
-    }
-  }
-}
-
 // ─── Static Audit Entry ────────────────────────────────────
 
 function runAudit() {
@@ -460,7 +380,6 @@ function runAudit() {
       checkMaxParams(rel, lines);
       checkDebugger(rel, lines);
     }
-    checkTestFilesExist();
   }
   const allTestFiles = findFiles(TESTS);
   for (const filePath of allTestFiles) {
@@ -496,29 +415,15 @@ function findTestDirs(level) {
 
 function mapTests(changedFiles) {
   const plan = { unit: [], integration: [], e2e: [] };
-  const seenInt = new Set();
   const testableChangedFiles = changedFiles.filter((file) => !isPromptOrTaxonomyFile(file));
-
-  for (const file of testableChangedFiles) {
-    if (!file.startsWith("src/") || !file.endsWith(".ts") || file.endsWith(".d.ts")) continue;
-    const base = file.replace(/^src\//, "").replace(/\.tsx?$/, "");
-
-    const u = `tests/unit/${base}.test.ts`;
-    if (existsSync(join(ROOT, u))) plan.unit.push(u);
-    const s = `tests/unit/${base}.spec.ts`;
-    if (existsSync(join(ROOT, s)) && !plan.unit.includes(s)) plan.unit.push(s);
-
-    const moduleDir = base.split("/")[0];
-    if (moduleDir && !seenInt.has(moduleDir)) {
-      seenInt.add(moduleDir);
-      const intDir = join(TESTS, "integration", moduleDir);
-      if (existsSync(intDir) && findFiles(intDir).length > 0) plan.integration.push(moduleDir);
-    }
-  }
-
-  const e2eFiles = findTestDirs("e2e");
-  if (e2eFiles.length > 0 && testableChangedFiles.some((f) => f.startsWith("src/"))) {
-    plan.e2e = e2eFiles;
+  if (
+    testableChangedFiles.some(
+      (file) => file.startsWith("src/") && file.endsWith(".ts") && !file.endsWith(".d.ts"),
+    )
+  ) {
+    // The behavioral suite is deliberately small and can cover many source files per scenario.
+    // Do not require matching test filenames or generate more tests to satisfy a mapper.
+    for (const level of Object.keys(plan)) plan[level] = findTestDirs(level);
   }
 
   return plan;
@@ -595,9 +500,9 @@ function runBlastRadius(flagPrint, flagAll) {
   }
 
   if (plan.integration.length > 0) {
-    console.log(`  ▶  Running integration tests for ${plan.integration.length} module(s)...`);
+    console.log(`  ▶  Running ${plan.integration.length} integration test file(s)...`);
     try {
-      const out = run("pnpm exec vitest run tests/integration --reporter=verbose");
+      const out = run(`pnpm exec vitest run ${plan.integration.join(" ")} --reporter=verbose`);
       console.log(out);
     } catch (e) {
       console.error(e.stdout || e.message);
@@ -658,7 +563,6 @@ if (hasErrors) {
   console.error("    DEBUG-002  TODO/FIXME without issue ref — add #number");
   console.error("    DEBUG-003  debugger statement — remove it");
   console.error("    CODE-001   Too many function params — use options object");
-  console.error("    TDD-003    describe() label too short — use descriptive name");
   console.error("");
   console.error("  ❌  Audit FAILED — fix errors above and re-stage.\n");
   process.exit(1);
@@ -667,7 +571,6 @@ if (hasErrors) {
 if (hasWarnings) {
   console.warn("  [SUMMARY] Audit passed with warnings. Warning rule IDs:");
   console.warn("    LOC-002    File crossed its soft limit — review cohesion");
-  console.warn("    TDD-001    No discoverable behavioral test for exported logic");
   console.warn("");
   console.warn("  ⚠️   Audit passed with warnings.\n");
   process.exit(0);

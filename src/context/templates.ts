@@ -17,6 +17,10 @@ export const CONTEXT_WRITING_GUIDANCE = `## Write context that helps an ethical 
 Write all generated context prose, including project.md, stakeholders.md, decisions, and journals,
 for a non-technical ethical reviewer who does not read code
 and does not need to understand how the software is built. These files must stand on their own.
+Keep each shared context file (project.md, stakeholders.md, and decisions.md) within 10,000
+characters, including headings and metadata. Preserve the required \`# Project\` and
+\`# Stakeholders\` headings in their respective files. Condense repetition without dropping
+supported facts, human rationale, or ownership constraints.
 Write in everyday language,
 using simple headings and short paragraphs or bullets. Include as much detail as the evidence
 supports and the review needs. A short, useful account is better than filling sections with guesses.
@@ -141,8 +145,10 @@ journal pending clarification. A fix request, inferred code behavior, review rec
 accepted unresolved risk alone is not proof of a false positive or a durable decision.
 
 Read existing context before appending; avoid duplicates and preserve human entries. Use CCR's
-append-decision support during interactive follow-up. Choose the destination before writing:
-missing human rationale that explains an intentional review exception belongs in decisions;
+append-decision support during interactive follow-up.
+Each appended decision must be a single line of at most 500 characters. Condense the rationale
+before calling the helper; do not split one decision into multiple appends to bypass that limit.
+Choose the destination before writing: missing human rationale that explains an intentional review exception belongs in decisions;
 project.md describes enduring product facts and plans, without duplicating that explanation.
 Automatic context updates may carry forward
 only an explicit human review rationale already recorded in the approved journal, never originate

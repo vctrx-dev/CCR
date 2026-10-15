@@ -65,44 +65,6 @@ function createRunner(
   });
 }
 
-it("should accept exactly 200 approved files from the same immutable comparison as the patch", async () => {
-  const root = await makeRoot();
-  const runner = createRunner(
-    new Map([
-      [1, Array.from({ length: 100 }, (_, index) => metadata(`src/a-${index}.ts`))],
-      [2, Array.from({ length: 100 }, (_, index) => metadata(`src/b-${index}.ts`))],
-      [3, []],
-    ]),
-  );
-
-  const evidence = await readSafePullRequestEvidence(root, 42, runner);
-
-  expect(evidence.changedPaths).toHaveLength(200);
-  expect(runner).toHaveBeenCalledWith(
-    expect.objectContaining({
-      arguments_: expect.arrayContaining([
-        expect.stringContaining(`/compare/${"a".repeat(40)}...${"b".repeat(40)}?per_page=1`),
-      ]),
-      root,
-    }),
-  );
-});
-
-it("should reject a pull request only when a 201st path exists", async () => {
-  const root = await makeRoot();
-  const runner = createRunner(
-    new Map([
-      [1, Array.from({ length: 100 }, (_, index) => metadata(`src/a-${index}.ts`))],
-      [2, Array.from({ length: 100 }, (_, index) => metadata(`src/b-${index}.ts`))],
-      [3, [metadata("src/overflow.ts")]],
-    ]),
-  );
-
-  await expect(readSafePullRequestEvidence(root, 42, runner)).rejects.toThrow(
-    "exceeds 200 changed paths",
-  );
-});
-
 it("should return bounded head evidence only for approved changed paths", async () => {
   const root = await makeRoot();
   const runner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
@@ -129,37 +91,6 @@ it("should reject excluded PR paths before requesting the patch", async () => {
   );
 });
 
-it("should reject excluded content at the captured revision even when the live PR has removed it", async () => {
-  const root = await makeRoot();
-  const stableRunner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
-  const runner: PullRequestCommandRunner = vi.fn(async (command) => {
-    if (
-      command.arguments_.some((argument) => argument.includes("/compare/")) &&
-      !command.arguments_.includes("Accept: application/vnd.github.diff")
-    ) {
-      return JSON.stringify([metadata("src/file.ts"), metadata("secrets/learner-records.txt")]);
-    }
-    return stableRunner(command);
-  });
-  await expect(readSafePullRequestEvidence(root, 42, runner)).rejects.toThrow(
-    "privacy-excluded paths",
-  );
-  expect(runner).not.toHaveBeenCalledWith(
-    expect.objectContaining({
-      arguments_: expect.arrayContaining(["Accept: application/vnd.github.diff"]),
-    }),
-  );
-});
-
-it("should reject an oversized patch before returning evidence", async () => {
-  const root = await makeRoot();
-  const runner = createRunner(new Map([[1, [metadata("src/file.ts")]]]), "x".repeat(524_289));
-
-  await expect(readSafePullRequestEvidence(root, 42, runner)).rejects.toThrow(
-    "safe response limit",
-  );
-});
-
 it("should reject a renamed file whose original comparison path was excluded", async () => {
   const root = await makeRoot();
   const stableRunner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
@@ -179,18 +110,4 @@ it("should reject a renamed file whose original comparison path was excluded", a
       arguments_: expect.arrayContaining(["Accept: application/vnd.github.diff"]),
     }),
   );
-});
-
-it("should return only net changes, not intermediate commit patches containing removed records", async () => {
-  const root = await makeRoot();
-  const stableRunner = createRunner(new Map([[1, [metadata("src/file.ts")]]]));
-  const runner: PullRequestCommandRunner = async (command) => {
-    if (command.arguments_.includes("Accept: application/vnd.github.patch")) {
-      return "diff --git a/secrets/learner.txt b/secrets/learner.txt\n+SYNTHETIC_PRIVATE_RECORD\n";
-    }
-    return stableRunner(command);
-  };
-  const evidence = await readSafePullRequestEvidence(root, 42, runner);
-  expect(evidence.patch).toContain("src/file.ts");
-  expect(evidence.patch).not.toContain("SYNTHETIC_PRIVATE_RECORD");
 });

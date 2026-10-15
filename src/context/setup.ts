@@ -77,6 +77,7 @@ function planArtifactChange(artifact: ManagedArtifact, existing: string | undefi
   if (existing === undefined) action = "create";
   else if (setupPolicy === "preserve-existing") action = "preserve";
   else if (existing === content) action = "unchanged";
+  else if (setupPolicy === "replace-runtime") action = "modify";
   else if (setupPolicy === "upgrade-if-marked" && skillOwnership === "package") action = "modify";
   else if (setupPolicy === "upgrade-if-unmodified" && artifact.isUnmodified?.(existing) === true)
     action = "modify";
@@ -94,21 +95,26 @@ function planArtifactChange(artifact: ManagedArtifact, existing: string | undefi
 }
 
 /** Returns every proposed setup change without writing to the target repository. */
-export async function previewSetup(root: string): Promise<SetupPreview> {
+export async function previewSetup(
+  root: string,
+  runtimeSourcePath?: string,
+): Promise<SetupPreview> {
   const config = await readSetupConfig(root);
   const blockArtifacts = MANAGED_BLOCK_ARTIFACTS.filter(
     ({ setupCondition }) =>
       setupCondition === "always" || config.instructions[setupCondition] === true,
   );
   const managedEntries = await Promise.all(
-    (await readManagedArtifacts(root)).map(async (artifact): Promise<SetupChange> => {
-      const existing = await readManagedTextIfExists(
-        root,
-        artifact.path,
-        artifact.maximumCharacters,
-      );
-      return planArtifactChange(artifact, existing);
-    }),
+    (await readManagedArtifacts(root, runtimeSourcePath)).map(
+      async (artifact): Promise<SetupChange> => {
+        const existing = await readManagedTextIfExists(
+          root,
+          artifact.path,
+          artifact.maximumCharacters,
+        );
+        return planArtifactChange(artifact, existing);
+      },
+    ),
   );
   const changes = await Promise.all(
     blockArtifacts.map(async (artifact): Promise<SetupChange> => {

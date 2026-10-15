@@ -78,7 +78,7 @@ export function assertDecisionDocumentAppend(previous: string, current: string):
 }
 
 /**
- * Appends one human-confirmed, bounded decision only when the committed opt-in is enabled.
+ * Appends one human-confirmed, bounded decision under the resolved decision policy.
  * The document must already be created by setup; this prevents an ad-hoc context write path.
  */
 export async function appendDecision(root: string, candidate: unknown): Promise<void> {

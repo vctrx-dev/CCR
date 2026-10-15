@@ -1,6 +1,7 @@
 import { CCR_REVIEW_SKILL } from "../review/skills";
 import { CCR_MANUAL_SKILL } from "./manual-skill";
 import { SKILL_ARGUMENT_NORMALIZATION } from "./skill-argument-normalization";
+import { SKILL_CLI_INVOCATION } from "./skill-cli";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
 import {
   CONTEXT_WRITING_GUIDANCE,
@@ -20,13 +21,17 @@ export interface SkillDefinition {
 export const CCR_HOOKS_SKILL = `---
 name: ccr-hooks
 description: Synchronize, inspect, or remove CCR advisory Git hooks using the repository-native hook system. Use when setup enables hooks, hook status is stale, or a developer asks to install, repair, verify, or remove CCR hooks.
+argument-hint: "[sync | status | remove]"
 ---
 
 ${MANAGED_SKILL_MARKER}
 # CCR hooks
 
+${SKILL_CLI_INVOCATION}
+
 You are a repository-integration engineer. Interpret \`$ARGUMENTS\` as \`sync\`, \`status\`, or
-\`remove\`; use \`sync\` when invoked by \`/ccr-context initialize\`. After applying the spelling
+\`remove\`; blank input means read-only \`status\`. Use \`sync\` when invoked by
+\`/ccr-context initialize\`. Accept exactly one operation, with no extra arguments. After applying the spelling
 contract below, show only those choices for an unsupported or ambiguous argument. Never change
 \`.ccr/config.json\`, commit, push, or replace unrelated hook behavior.
 
@@ -35,7 +40,9 @@ ${SKILL_ARGUMENT_NORMALIZATION}
 <contracts>
 - Read the resolved CCR configuration first and stop if it is invalid or unavailable.
 - \`hooks.enabled: true\` is approval to reconcile only CCR-marked advisory integration.
-- \`hooks.enabled: false\` authorizes only the \`remove\` rules below; remove and stop.
+- \`status\` always remains read-only, including when hooks are disabled or provenance is invalid.
+- With \`hooks.enabled: false\`, \`sync\` reconciles to disabled by following the \`remove\` rules;
+  explicit \`remove\` does the same. Inspecting \`status\` never removes anything.
 - Preserve the existing hook interpreter, framework, order, line endings, and failure semantics.
   CCR runs after existing blocking checks when practical. A CCR failure prints a short warning and
   returns success so it never changes whether a commit succeeds.
@@ -46,10 +53,15 @@ ${SKILL_ARGUMENT_NORMALIZATION}
   configured path outside the repository as unsupported, and stop if any edited path crosses a
   symlink. Report the path and make no changes.
 - \`ccr uninstall\` can remove recorded hook blocks when the original bytes can be verified; \`ccr hooks uninstall\` removes legacy blocks only, and invalid records never authorize cleanup.
-- Check CCR hook status before sync writes. Invalid provenance means stop and
+- Check local CCR hook status before sync writes. Invalid provenance means stop and
   ask the human to preserve or move the state for investigation. Markers without provenance are
-  legacy/unprovenanced; stop with no changes. Do not infer or reconstruct history, original bytes,
-  separators, or ownership from current files or timestamps. Offer marker-only cleanup and fresh sync.
+  legacy/unprovenanced. During requested sync (including initialization), inspect both artifacts
+  and use local \`ccr hooks uninstall\` for complete legacy marker blocks, preserving all surrounding
+  behavior. Then measure the remaining files and install fresh integration with fresh provenance.
+  This migration is part of sync; no separate cleanup command or approval is needed from the user.
+  Malformed markers, unknown framework entries, unsafe paths, or invalid provenance still stop writes.
+  Never infer or reconstruct pre-legacy history, original bytes, separators, or ownership. The new
+  provenance records only the exact baseline observed after legacy marker cleanup.
 </contracts>
 
 ## Inspect
@@ -71,7 +83,7 @@ and one to three \`artifacts\`. Each artifact has unique \`events\` drawn from \
 \`post-commit\`, a repository-relative \`path\`, \`existed\`, \`originalByteLength\`, lowercase
 64-character \`originalSha256\`, and \`separatorByteCount\` of 0, 1, or 2. Cover each event exactly
 once. A framework strategy requires both nullable fields to be non-null; other strategies require
-both to be null. Use the installed package to validate hook status and continue only when it validates the
+both to be null. Use the local runtime to validate hook status and continue only when it validates the
 state. Never store contents, secrets, or external paths. Preserve original metadata on later syncs.
 
 ## Choose the repository-native strategy
@@ -85,8 +97,8 @@ state. Never store contents, secrets, or external paths. Preserve original metad
 4. If none is safe, report the unsupported constraint and the smallest manual choice needed. Do not
    install a new framework or dependency merely for CCR.
 
-Connect the installed package's advisory pre-commit and post-commit actions, consulting its help
-for the supported invocation. Keep successful output visible. Make each wrapper
+Connect \`ccr hooks pre-commit\` and \`ccr hooks post-commit\` through the retained runtime above.
+Keep successful output visible. Make each wrapper
 non-blocking; print \`CCR: context check unavailable; commit continues.\` on pre-commit failure and
 \`CCR: post-commit context check unavailable.\` on post-commit failure.
 
@@ -129,9 +141,10 @@ the first write. Record strategy \`existing-native\`, one artifact per event,
 without an extra blank line. On remove, both files must again be 10 bytes with their original hashes.
 </example>
 <example>
-Both hook files contain CCR markers but \`.ccr/private/hooks-state.json\` is absent. Report
-legacy/unprovenanced integration and make no changes. Do not derive a stub from the bytes outside
-the markers. Offer explicit marker-only CLI cleanup followed by a fresh sync.
+Both hook files contain complete CCR markers but \`.ccr/private/hooks-state.json\` is absent.
+During sync, remove only those legacy marker blocks with the local cleanup helper, preserve the
+containers and surrounding bytes, then measure the remaining artifacts and install fresh integration.
+Do not claim the remaining bytes prove what existed before the legacy installation. Status remains read-only.
 </example>
 </examples>
 `;
@@ -139,10 +152,13 @@ the markers. Offer explicit marker-only CLI cleanup followed by a fresh sync.
 export const CCR_CONTEXT_SKILL = `---
 name: ccr-context
 description: Initialize, update, verify, add supplied knowledge to, or compact evidence-backed CCR product-impact context. Use when a developer runs a CCR context operation, finishes a durable change, or needs concise project continuity.
+argument-hint: "<initialize | update [last commit | focus] | verify | addition <facts or plans> | compact>"
 ---
 
 ${MANAGED_SKILL_MARKER}
 # CCR context
+
+${SKILL_CLI_INVOCATION}
 
 Help an ethical reviewer understand this product and the people it affects. Work on your own without
 subagents. Interpret \`$ARGUMENTS\` as \`initialize\`, \`update\`, \`verify\`,
@@ -150,17 +166,32 @@ subagents. Interpret \`$ARGUMENTS\` as \`initialize\`, \`update\`, \`verify\`,
 for unsupported or ambiguous input, show only those five choices. These are skill operations, not
 terminal subcommands.
 
+Parse the first word as the operation and the remaining text as its subject, not as another
+operation. \`initialise\` is an explicit alias for \`initialize\`. Blank input shows the five
+operations and makes no changes. \`update\` accepts an optional focus; \`update last commit\`
+is the exact committed-work variant below. \`addition\` uses the supplied remaining text as facts
+or plans and asks for input only when none was supplied. \`verify\` and \`compact\` may name a
+focus but cannot grant permission to edit stakeholder or decision files. Do not infer a different
+operation from a subject containing words such as "update" or "initialize".
+
 ${SKILL_ARGUMENT_NORMALIZATION}
 
-Read the resolved CCR configuration first and stop if it is invalid or unavailable. Preserve
+Read the resolved CCR configuration with \`ccr config --resolved\` first and stop if it is invalid or unavailable. Preserve
 \`.ccr/config.json\`; it is human-owned. The only exception is the one-time initial-domain update
 defined below. When \`hooks.enabled\` is true, run \`/ccr-hooks sync\` once during initialize. A later
 operation changes hooks only when the human explicitly requests it.
+Read the ccr-hooks skill and carry out its sync operation in this same session when initializing;
+slash skill names are not executable shell commands. A hook-layout problem may leave hooks pending
+while context discovery continues. Report that partial result and the actual constraint; never claim
+hook setup succeeded when it did not, and do not ask for a package installation as a workaround.
 
 Check existing context before starting. Read \`.ccr/project.md\`, \`.ccr/stakeholders.md\`,
 \`.ccr/decisions.md\`, and the configured selection of recent journals. Choose the appropriate
-repository tools yourself. Use installed CCR support for managed writes and validation, consulting
-its help only when usage details are needed.
+repository tools yourself. Use file-edit tools for authorized context prose. Before editing, read
+each target with \`ccr context shared <file>\` to verify its repository-contained, non-symlink path.
+Use CCR helpers for journal allocation, the conditional domain update, decision append, assessment,
+and validation; there is no generic terminal context-write or context-initialize command.
+Consult command-specific \`--help\` only when argument details are needed.
 
 ## Which files you may change
 - \`.ccr/project.md\`: populate during initialize. Later, update it only for verified durable
@@ -211,7 +242,7 @@ ${JOURNAL_WRITING_GUIDANCE}
 - Complete the selected journal. Keep one working entry before commit and one finalized entry per
   commit. Preserve \`Started\` and set \`Updated\` in \`YYYY-MM-DDTHH:MM:SSZ\` form whenever
   completing or amending the journal, reading the time from the system clock (for example
-  \`date -u +%Y-%m-%dT%H:%M:%SZ\`) rather than estimating it. Keep the filename stable
+  \`node -e "process.stdout.write(new Date().toISOString().slice(0,19)+'Z')"\`) rather than estimating it. Keep the filename stable
   when work spans multiple days. Never add a changed-path inventory or delete a pre-existing journal.
 - If this operation follows a review in the current session, amend its active journal using the
   review skill's session-continuity rules. Carry forward finding labels, human responses, changes,
@@ -229,28 +260,33 @@ ${JOURNAL_WRITING_GUIDANCE}
   Keep useful uncertainties and existing safeguards. Translate jargon into people's experiences;
   omit internal mechanics and unnecessary detail in every context file you are authorized to write. Remove
   old technical Evidence sections from project.md when revising it. Do not pad a sparse account.
-- Show the exact shared-context diff, apply once, validate the result, and complete the current
-  journal. Never stage the journal, commit, or push.
+- When a shared-context edit is needed, show the exact diff, apply once, validate the result, and
+  complete the current journal. Follow Verify's no-change journal exception below. Never stage
+  the journal, commit, or push.
 - After assessing current local work, including deciding no shared edit is needed, use CCR's
   review-state and context assess support to record the code/context fingerprints with a concise
   reason. Capture the state before assessment and recheck it after authorized context edits; if
   code changed, reassess rather than stamping a new state. This records context assessment, not
   ethical review completion. Save the same reason in the journal. Do not record local assessment
-  for a remote PR or an incomplete investigation.
+  for a remote PR, an incomplete investigation, or a read-only Verify with no correction.
 - When evidence shows a new or changed affected group after initialize, show a proposed
   stakeholders.md edit in your reply and list it under Next steps for the human to apply.
-- End with: "Please review the resulting \`.ccr\` context changes once before relying on them."
+- After shared-context edits, end with: "Please review the resulting \`.ccr\` context changes once before relying on them."
+  When nothing changed, report that without implying files were written.
 
 ## Initialize
 
 Ask once: "Can you provide optional context that is not in this repository, such as future plans,
-specifications, research, or product decisions?" Continue when the answer is none. Run
+specifications, research, or product decisions?" Reuse an answer already provided in this session;
+continue when the answer is none. Run
 the normal discovery tools needed to identify instructions, manifests, entry points, schemas, tests,
 and user-facing documentation. Follow people's activities and the decisions affecting them yourself.
 Resolve uncertainties through the clarification conversation below before finalizing either file.
 Use what you learn and the user's answers to fill
 \`.ccr/project.md\` and \`.ccr/stakeholders.md\`, leave
 \`.ccr/decisions.md\` unchanged, verify the draft, validate, and create or complete one journal.
+On repeated initialization, preserve existing human context and incorporate supported additions;
+do not reset files to templates or silently replace a person's stakeholder descriptions.
 
 ### Clarify in this conversation
 
@@ -285,8 +321,8 @@ label of 1 to 80 characters, such as \`education-technology\` or \`civic-tech\`.
 product problem, not a repository name, framework, model name, organization, person, identifier,
 or data value. If the evidence does not establish a more specific domain, use \`general-software\`.
 
-Use CCR's conditional initial-domain support once, then read back the recorded value. This is the
-only automatic configuration write. Preserve any domain already chosen by a person or another
+Run \`ccr config set-domain-if-unspecified <derived-domain>\` once, then read back the resolved value.
+This is the only automatic configuration write. Preserve any domain already chosen by a person or another
 process. Later operations leave the domain unchanged. Recording it does not require another setup.
 
 Examples:
@@ -298,6 +334,11 @@ Examples:
 
 \`update last commit\`, which the post-commit hook prints, targets HEAD's commit and its journal even
 when unrelated uncommitted changes remain; plain \`update\` follows the journal rules.
+Resolve the full HEAD SHA with Git, then select its journal with
+\`ccr context review-journal --commit <full-HEAD-sha>\`. Read recent entries with
+\`ccr context journals --commit <full-HEAD-sha>\` so the committed journal is excluded from its own
+recent previews. Read that commit's changes through \`ccr context commit-changes <full-HEAD-sha>\`
+and \`ccr context commit-read <full-HEAD-sha> <file>\`, rather than mixing in uncommitted file content.
 When the commit journal already ends with CCR's context-assessed marker for that commit, the
 background update has finished: only correct or fill gaps rather than redoing the account.
 Resolve the working or committed journal under the journal rules, then inspect the relevant changes,
@@ -315,6 +356,9 @@ as broadly as the claim needs, then verify the draft. Correct \`.ccr/project.md\
 otherwise leave shared files untouched. Never edit stakeholders or rewrite decisions. Validate and
 journal only an actual context correction outside an active review session. Within that session,
 update its active entry under the review-continuity rules even when verification changes no context.
+If the first validation fails because of a correctable project-context problem, inspect and repair
+only authorized project context, then validate again. Invalid configuration, taxonomy, or unsafe
+managed paths require reporting the actual problem; never bypass them or claim verification passed.
 
 ## Addition
 

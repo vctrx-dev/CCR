@@ -10,6 +10,8 @@ import { formatCliError, formatTone } from "./output";
 
 export interface CliIo {
   cwd: string;
+  /** Bundled entry point retained by setup; injected callers may supply their own bundle. */
+  runtimeSourcePath?: string;
   write(message: string): void;
   isColorEnabled?: boolean;
 }
@@ -17,6 +19,7 @@ export interface CliIo {
 function defaultIo(): CliIo {
   return {
     cwd: process.cwd(),
+    runtimeSourcePath: typeof __filename === "string" ? __filename : undefined,
     isColorEnabled: process.stdout.isTTY === true,
     write(message: string) {
       process.stdout.write(message);

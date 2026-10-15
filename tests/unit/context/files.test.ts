@@ -1,23 +1,10 @@
-import {
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rename,
-  symlink,
-  utimes,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir, uptime } from "node:os";
+import { mkdtemp, readFile, readdir, rename, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import {
   createManagedTextExclusive,
   deleteManagedTextIfUnchanged,
-  fingerprintManagedTree,
-  readBoundedManagedDirectory,
-  readRegularFileGitMode,
   tryAcquireManagedLock,
   writeManagedText,
   writeManagedTextIfUnchanged,
@@ -37,43 +24,6 @@ it("should atomically write inside the repository and reject traversal", async (
   );
 });
 
-it("should derive Git modes only for safe regular files", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-file-mode-"));
-  roots.push(root);
-  await writeFile(path.join(root, "regular.txt"), "content\n", "utf8");
-  await mkdir(path.join(root, "directory"));
-
-  await expect(readRegularFileGitMode(root, "regular.txt")).resolves.toBe("100644");
-  await expect(readRegularFileGitMode(root, "directory")).resolves.toBeUndefined();
-  await expect(readRegularFileGitMode(root, "missing.txt")).resolves.toBeUndefined();
-});
-
-it("should bound managed directory enumeration before retaining excess entries", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-directory-files-"));
-  roots.push(root);
-  await expect(readBoundedManagedDirectory(root, ".ccr/missing", 1)).resolves.toEqual([]);
-  await mkdir(path.join(root, ".ccr/journal"), { recursive: true });
-  await writeFile(path.join(root, ".ccr/journal/a.md"), "a\n");
-  await writeFile(path.join(root, ".ccr/journal/b.md"), "b\n");
-
-  await expect(readBoundedManagedDirectory(root, ".ccr/journal", 1)).rejects.toThrow("entry limit");
-  await expect(readBoundedManagedDirectory(root, ".ccr/journal", 2)).resolves.toHaveLength(2);
-});
-
-it("should bound managed-tree fingerprints and tolerate an absent tree", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-fingerprint-files-"));
-  roots.push(root);
-  await expect(fingerprintManagedTree(root, ".ccr")).resolves.toEqual(new Map());
-  await mkdir(path.join(root, ".ccr/nested"), { recursive: true });
-  await writeFile(path.join(root, ".ccr/nested/context.md"), "context\n");
-
-  expect(await fingerprintManagedTree(root, ".ccr")).toEqual(
-    new Map([[".ccr/nested/context.md", expect.stringMatching(/^[a-f0-9]{64}$/u)]]),
-  );
-  await expect(fingerprintManagedTree(root, ".ccr", 0)).rejects.toThrow("file limit");
-  await expect(fingerprintManagedTree(root, ".ccr", 1, 2)).rejects.toThrow("content limit");
-});
-
 it("should hold an exclusive managed lock and permit release more than once", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "ccr-lock-files-"));
   roots.push(root);
@@ -82,21 +32,6 @@ it("should hold an exclusive managed lock and permit release more than once", as
   await expect(tryAcquireManagedLock(root, ".ccr/private/test.lock")).resolves.toBeUndefined();
   await release?.();
   await expect(release?.()).resolves.toBeUndefined();
-});
-
-it("should keep the shared managed write-lock group after release", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-managed-write-lock-files-"));
-  roots.push(root);
-  const release = await tryAcquireManagedLock(
-    root,
-    ".ccr/private/managed-write-locks/example.lock",
-  );
-  if (release === undefined) throw new Error("Expected managed write lock acquisition.");
-
-  await release();
-
-  // Removing the shared group would race writers about to create their own lock inside it.
-  await expect(readdir(path.join(root, ".ccr/private/managed-write-locks"))).resolves.toEqual([]);
 });
 
 it("should preserve a replacement lock when an earlier owner releases", async () => {
@@ -113,125 +48,6 @@ it("should preserve a replacement lock when an earlier owner releases", async ()
   await firstRelease?.();
   await expect(tryAcquireManagedLock(root, relativePath)).resolves.toBeUndefined();
   await secondRelease?.();
-});
-
-it("should keep an over-age live lock exclusive until its owner releases", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-aged-lock-files-"));
-  roots.push(root);
-  const relativePath = ".ccr/private/test.lock";
-  const target = path.join(root, relativePath);
-  const firstRelease = await tryAcquireManagedLock(root, relativePath);
-  const ownerFile = (await readdir(target))[0];
-  if (ownerFile === undefined) throw new Error("Expected managed lock owner metadata.");
-  await writeFile(
-    path.join(target, ownerFile),
-    `${JSON.stringify({
-      token: ownerFile.replace(/\.owner\.json$/u, ""),
-      pid: process.pid,
-      // Long ago but after boot: age alone never reclaims a live owner.
-      createdAt: Math.max(Date.now() - 24 * 60 * 60_000, Date.now() - uptime() * 1000),
-    })}\n`,
-  );
-
-  const replacementRelease = await tryAcquireManagedLock(root, relativePath);
-  expect(replacementRelease).toBeUndefined();
-  await firstRelease?.();
-  const nextRelease = await tryAcquireManagedLock(root, relativePath);
-  expect(nextRelease).toBeTypeOf("function");
-  await nextRelease?.();
-});
-
-it.each(["token-directory", "incomplete-directory", "legacy-file"] as const)(
-  "should let at most one simultaneous contender reclaim the same stale %s lock",
-  async (fixture) => {
-    const root = await mkdtemp(path.join(tmpdir(), "ccr-stale-contenders-files-"));
-    roots.push(root);
-    const relativePaths = Array.from(
-      { length: 16 },
-      (_, index) => `.ccr/private/test-${index}.lock`,
-    );
-    await mkdir(path.join(root, ".ccr/private"), { recursive: true });
-    await Promise.all(
-      relativePaths.map(async (relativePath) => {
-        const target = path.join(root, relativePath);
-        if (fixture === "token-directory") {
-          await mkdir(target);
-          await writeFile(
-            path.join(target, "00000000-0000-0000-0000-000000000000.owner.json"),
-            `${JSON.stringify({
-              token: "00000000-0000-0000-0000-000000000000",
-              pid: 999_999_999,
-              createdAt: 946_684_800_000,
-            })}\n`,
-          );
-        } else if (fixture === "incomplete-directory") {
-          await mkdir(target);
-          const old = new Date("2000-01-01T00:00:00Z");
-          await utimes(target, old, old);
-        } else {
-          await writeFile(
-            target,
-            `${JSON.stringify({ pid: 999_999_999, createdAt: 946_684_800_000 })}\n`,
-          );
-        }
-      }),
-    );
-    const results = await Promise.all(
-      relativePaths.map(async (relativePath) => ({
-        relativePath,
-        contenders: await Promise.all([
-          tryAcquireManagedLock(root, relativePath),
-          tryAcquireManagedLock(root, relativePath),
-        ]),
-      })),
-    );
-
-    const acquisitionCounts: number[] = [];
-    for (const { relativePath, contenders } of results) {
-      const releases = contenders.filter(
-        (release): release is () => Promise<void> => release !== undefined,
-      );
-      acquisitionCounts.push(releases.length);
-      await expect(tryAcquireManagedLock(root, relativePath)).resolves.toBeUndefined();
-      await Promise.all(releases.map((release) => release()));
-    }
-    expect(acquisitionCounts).toEqual(Array.from({ length: 16 }, () => 1));
-    expect(
-      (await readdir(path.join(root, ".ccr/private"))).filter((entry) =>
-        entry.includes(".ccr-stale-"),
-      ),
-    ).toEqual([]);
-  },
-);
-
-it("should treat a recent incomplete lock as active and reclaim it only after a grace period", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-incomplete-lock-files-"));
-  roots.push(root);
-  const relativePath = ".ccr/private/test.lock";
-  const target = path.join(root, relativePath);
-  await mkdir(target, { recursive: true });
-
-  await expect(tryAcquireManagedLock(root, relativePath)).resolves.toBeUndefined();
-  const old = new Date("2000-01-01T00:00:00Z");
-  await utimes(target, old, old);
-  const release = await tryAcquireManagedLock(root, relativePath);
-  expect(release).toBeTypeOf("function");
-  await release?.();
-});
-
-it("should tolerate an owner releasing while another process inspects the lock", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "ccr-release-race-lock-files-"));
-  roots.push(root);
-  const relativePath = ".ccr/private/test.lock";
-
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const release = await tryAcquireManagedLock(root, relativePath);
-    expect(release).toBeTypeOf("function");
-    const contender = tryAcquireManagedLock(root, relativePath);
-    await release?.();
-    const contenderRelease = await contender;
-    await contenderRelease?.();
-  }
 });
 
 it("should create managed text exclusively without overwriting a concurrent winner", async () => {

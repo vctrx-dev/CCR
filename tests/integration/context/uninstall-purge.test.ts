@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, lstat, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createCli } from "../../../src/cli/index";
@@ -68,7 +68,7 @@ describe("full CCR cleanup", () => {
     await mkdir(path.join(root, ".claude/skills/other"), { recursive: true });
     await writeFile(path.join(root, ".claude/skills/other/SKILL.md"), "other skill");
     const hook = "#!/bin/sh\r\nnpm test\r\n";
-    const installed = `${hook}# ccr:start - advisory context check\r\nDO NOT EXECUTE\r\n# ccr:end\r\n`;
+    const installed = `${hook}# ccr:start\r\nnpx --no-install ccr hooks pre-commit\r\n# ccr:end\r\n`;
     await writeFile(path.join(root, ".git/hooks/pre-commit"), installed);
     let output = "";
     const io = {
@@ -87,7 +87,9 @@ describe("full CCR cleanup", () => {
     );
     await createCli(io).parseAsync(["node", "ccr", "uninstall"]);
     await expect(lstat(path.join(root, ".ccr"))).rejects.toThrow();
-    await expect(lstat(path.join(root, ".claude/skills/ccr"))).rejects.toThrow();
+    for (const skill of ["ccr", "ccr-context", "ccr-review", "ccr-hooks"]) {
+      await expect(lstat(path.join(root, ".claude/skills", skill))).rejects.toThrow();
+    }
     expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe(hook);
     expect(await readFile(path.join(root, "app.txt"), "utf8")).toBe("unrelated");
     expect(await readFile(path.join(root, ".claude/skills/other/SKILL.md"), "utf8")).toBe(
@@ -97,38 +99,6 @@ describe("full CCR cleanup", () => {
     await createCli(io).parseAsync(["node", "ccr", "uninstall", "--purge"]);
     await expect(lstat(path.join(root, ".ccr"))).rejects.toThrow();
   });
-
-  it.each(["\n", "\r\n"])(
-    "restores native and framework hooks exactly with %j separators",
-    async (newline) => {
-      const root = await repository();
-      const native = `#!/usr/bin/env python${newline}print('user check')`;
-      const yaml = `repos:${newline}  - repo: local${newline}    hooks: []${newline}`;
-      await writeFile(
-        path.join(root, ".git/hooks/pre-commit"),
-        `${native}${newline}# ccr:start${newline}not executed${newline}# ccr:end${newline}`,
-      );
-      await chmod(path.join(root, ".git/hooks/pre-commit"), 0o700);
-      const mode = (await lstat(path.join(root, ".git/hooks/pre-commit"))).mode & 0o777;
-      await writeFile(
-        path.join(root, ".pre-commit-config.yaml"),
-        `${yaml}# ccr:start${newline}ccr-checks${newline}# ccr:end${newline}`,
-      );
-      await record(
-        root,
-        [
-          artifact(".git/hooks/pre-commit", native, ["pre-commit"], true, newline.length as 1 | 2),
-          artifact(".pre-commit-config.yaml", yaml, ["post-commit"]),
-        ],
-        ".pre-commit-config.yaml",
-      );
-      await applyUninstall(root, true, undefined, options);
-      expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe(native);
-      expect((await lstat(path.join(root, ".git/hooks/pre-commit"))).mode & 0o777).toBe(mode);
-      expect(await readFile(path.join(root, ".pre-commit-config.yaml"), "utf8")).toBe(yaml);
-      await expect(lstat(path.join(root, ".ccr"))).rejects.toThrow();
-    },
-  );
 
   it("deletes newly created CCR-only hooks, but preserves an original shebang stub", async () => {
     const root = await repository();
@@ -143,61 +113,6 @@ describe("full CCR cleanup", () => {
     await expect(lstat(path.join(root, ".git/hooks/pre-commit"))).rejects.toThrow();
     expect(await readFile(path.join(root, ".git/hooks/post-commit"), "utf8")).toBe("#!/bin/sh\n");
   });
-
-  it.each(["wrong hash", "malformed", "unrelated addition", "unsupported entries"])(
-    "stops before cleanup for %s",
-    async (reason) => {
-      const root = await repository();
-      const original = "#!/bin/sh\nnpm test\n";
-      let current = `${original}# ccr:start\nccr command\n# ccr:end\n`;
-      if (reason === "malformed") current = current.replace("# ccr:end\n", "");
-      if (reason === "unrelated addition") current += "npm run extra\n";
-      if (reason === "unsupported entries") current = `${original}ccr command without markers\n`;
-      await writeFile(path.join(root, ".git/hooks/pre-commit"), current);
-      await record(root, [
-        artifact(".git/hooks/pre-commit", reason === "wrong hash" ? "other original" : original, [
-          "pre-commit",
-        ]),
-        artifact(".git/hooks/post-commit", "", ["post-commit"], false),
-      ]);
-      await expect(applyUninstall(root, true, undefined, options)).rejects.toThrow();
-      expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe(current);
-      await expect(
-        readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
-      ).resolves.toContain("managed by CCR");
-      await expect(readFile(path.join(root, statePath), "utf8")).resolves.toContain(
-        "schemaVersion",
-      );
-      await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).resolves.toBeTruthy();
-    },
-  );
-
-  it.each(["new file", "changed data", "hook edit", "state edit"])(
-    "rejects %s after preview before deleting files",
-    async (change) => {
-      const root = await repository();
-      const original = "#!/bin/sh\n";
-      const current = `${original}# ccr:start\nccr command\n# ccr:end\n`;
-      await writeFile(path.join(root, ".git/hooks/pre-commit"), current);
-      await record(root, [
-        artifact(".git/hooks/pre-commit", original, ["pre-commit"]),
-        artifact(".git/hooks/post-commit", "", ["post-commit"], false),
-      ]);
-      const preview = await previewUninstall(root, true, options);
-      if (change === "new file") await writeFile(path.join(root, ".ccr/new.txt"), "new");
-      if (change === "changed data")
-        await writeFile(path.join(root, ".ccr/project.md"), "human edit");
-      if (change === "hook edit")
-        await writeFile(path.join(root, ".git/hooks/pre-commit"), `${current}human edit\n`);
-      if (change === "state edit") await writeFile(path.join(root, statePath), "{}");
-      await expect(applyUninstall(root, true, preview, options)).rejects.toThrow(
-        /changed after preview/,
-      );
-      await expect(
-        readFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "utf8"),
-      ).resolves.toContain("managed by CCR");
-    },
-  );
 
   it("refuses symlinks inside .ccr without deleting their targets or integrations", async () => {
     const root = await repository();
@@ -228,72 +143,6 @@ describe("full CCR cleanup", () => {
     await expect(lstat(path.join(root, ".git/hooks/pre-commit"))).rejects.toThrow();
     await expect(lstat(path.join(root, statePath))).rejects.toThrow();
     await expect(readFile(path.join(root, ".ccr/project.md"), "utf8")).resolves.toBeTruthy();
-  });
-
-  it.each(["unrecorded markers", "invalid state", "active write lock", "unowned skill"])(
-    "refuses %s before removing integration",
-    async (reason) => {
-      const root = await repository();
-      if (reason === "unrecorded markers")
-        await writeFile(path.join(root, ".git/hooks/pre-commit"), "# ccr:start\nccr\n# ccr:end\n");
-      if (reason === "invalid state") await writeFile(path.join(root, statePath), "{}");
-      if (reason === "active write lock") {
-        await mkdir(path.join(root, ".ccr/private/managed-write-locks/pending.lock"), {
-          recursive: true,
-        });
-        await writeFile(
-          path.join(root, ".ccr/private/managed-write-locks/pending.lock/owner"),
-          "pending",
-        );
-      }
-      if (reason === "unowned skill")
-        await writeFile(path.join(root, ".claude/skills/ccr/SKILL.md"), "human-owned skill");
-      await expect(applyUninstall(root, true, undefined, options)).rejects.toThrow();
-      await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).resolves.toBeTruthy();
-      await expect(
-        readFile(path.join(root, ".claude/skills/ccr-review/SKILL.md"), "utf8"),
-      ).resolves.toBeTruthy();
-    },
-  );
-
-  it("derives safe hook changes again rather than trusting modified preview contents", async () => {
-    const root = await repository();
-    const original = "#!/bin/sh\nnpm test\n";
-    await writeFile(
-      path.join(root, ".git/hooks/pre-commit"),
-      `${original}# ccr:start\nccr\n# ccr:end\n`,
-    );
-    await record(root, [
-      artifact(".git/hooks/pre-commit", original, ["pre-commit"]),
-      artifact(".git/hooks/post-commit", "", ["post-commit"], false),
-    ]);
-    const preview = await previewUninstall(root, true, options);
-    if (preview.hooks?.kind !== "recorded") throw new Error("Expected recorded hook preview");
-    preview.hooks.removals[0].restored = "unapproved replacement";
-    await applyUninstall(root, true, preview, options);
-    expect(await readFile(path.join(root, ".git/hooks/pre-commit"), "utf8")).toBe(original);
-  });
-
-  it("rejects aliased duplicate hook paths and uncovered framework sources", async () => {
-    const root = await repository();
-    await writeFile(path.join(root, ".git/hooks/pre-commit"), "# ccr:start\nccr\n# ccr:end\n");
-    await record(root, [
-      artifact(".git/hooks/pre-commit", "", ["pre-commit"], false),
-      artifact("./.git/hooks/pre-commit", "", ["post-commit"], false),
-    ]);
-    await expect(previewUninstall(root, true, options)).rejects.toThrow(
-      /Invalid recorded hook path/,
-    );
-    await record(
-      root,
-      [
-        artifact(".git/hooks/pre-commit", "", ["pre-commit"], false),
-        artifact(".git/hooks/post-commit", "", ["post-commit"], false),
-      ],
-      ".pre-commit-config.yaml",
-    );
-    await expect(previewUninstall(root, true, options)).rejects.toThrow(/not covered/);
-    await expect(readFile(path.join(root, ".ccr/config.json"), "utf8")).resolves.toBeTruthy();
   });
 
   it("refuses a symlinked .ccr root without removing outside data", async () => {

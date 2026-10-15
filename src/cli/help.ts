@@ -20,12 +20,14 @@ Terminal commands:
   ccr context review-pr PR-<number>              Read bounded privacy-filtered PR evidence
   ccr context review-pr-head PR-<number> <files...> Read approved PR head files
   ccr config [validate|defaults]                  Read or validate settings and defaults
+  ccr config --resolved                         Read effective settings, including local overrides
   ccr config init [--dry-run]                    Create or upgrade editable settings
   ccr config set <key> <value> [--dry-run]       Update one setting
   ccr hooks uninstall [--dry-run]                Remove legacy advisory hook blocks
   ccr hooks <status|pre-commit|post-commit>       Inspect or run advisory hook operations
 
-  Run npx --no-install ccr help <command> for nested commands, arguments, and options.
+  After setup, replace the initial ccr with node .ccr/private/runtime/dist/cli/index.cjs.
+  Append --help to any command for its arguments and options, e.g. ccr context review-state --help.
 
 Claude Code skills (run inside Claude Code after setup):
   /ccr [question]                                  Answer CCR usage questions

@@ -36,10 +36,11 @@ describe("automatic context runner", () => {
     expect(args[systemPromptIndex + 1]).toEqual(expect.any(String));
     expect(args).toContain("-p");
     expect(args).toContain("dontAsk");
-    expect(args).toContain("--bare");
+    expect(args).toContain("--safe-mode");
+    expect(args).not.toContain("--bare");
     expect(args).toContain("--no-session-persistence");
     expect(args).toContain("--setting-sources");
-    expect(args).toContain("");
+    expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
     expect(args).toContain("--strict-mcp-config");
     expect(args).toContain("Read,Edit");
     expect(args).toContain(
