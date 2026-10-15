@@ -9,7 +9,7 @@ Link relevant issues or decisions, if any.
 ## Test plan
 
 - [ ] `pnpm verify` passes
-- [ ] Behavior changes have regression tests; empty/error/boundary cases covered
+- [ ] Relevant behavior is validated; existing tests are reused and new cases protect a concrete risk
 - [ ] User-facing changes update README and user manual
 
 ## Reviewer notes

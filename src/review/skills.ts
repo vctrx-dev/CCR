@@ -1,3 +1,5 @@
+import { SKILL_ARGUMENT_NORMALIZATION } from "../context/skill-argument-normalization";
+import { SKILL_CLI_INVOCATION } from "../context/skill-cli";
 import { MANAGED_SKILL_MARKER } from "../context/skill-marker";
 import { JOURNAL_WRITING_GUIDANCE, REVIEW_DECISION_GUIDANCE } from "../context/templates";
 import { PRODUCT_AUDIENCE_CONTEXT, REVIEW_REPORT_FORMAT } from "./dimension-worker-prompt";
@@ -5,7 +7,7 @@ import { STAKEHOLDER_IMPACT_REVIEW_STANDARD } from "./impact-review-guidance";
 
 const DIMENSION_LENSES = `<review_dimensions>
 Before choosing dimensions or discovering findings on every review, run the installed CCR command
-\`ccr context dimensions\` (or \`npx --no-install ccr context dimensions\` for a local installation).
+\`ccr context dimensions\` through the repository runtime specified above.
 It rereads and validates JSON on every call: repository \`src/review/dimensions.json\` takes priority,
 otherwise customized \`.ccr/dimensions.json\` applies, otherwise current package JSON is read from
 disk. Untouched setup copies track package JSON automatically. It renders the dimension headings,
@@ -33,16 +35,23 @@ argument-hint: "[changes | codebase | PR-<number>] [all | dimension [<id> ...] |
 ---
 
 ${MANAGED_SKILL_MARKER}
+${SKILL_CLI_INVOCATION}
+
+${SKILL_ARGUMENT_NORMALIZATION}
+
 Review this repository for ethical and inclusivity issues yourself. Do not use subagents.
 Review without changing code. A later request to fix or change code authorizes that follow-up work.
 Maintain the journal throughout this session and use judgment to update durable context as below.
 Terminal support commands in this skill belong to the \`ccr context\` group: use
-\`ccr context review-state\`, \`ccr context save-review\`, and \`ccr context record-review-state\`,
-not \`ccr review-state\` or other root-level shortcuts. For a local installation, replace only
-\`ccr\` with \`npx --no-install ccr\`, keeping \`context\` and the remaining arguments.
+\`ccr context review-state\`, \`ccr context save-review\`, and \`ccr context record-review-state\`.
+Replace the initial \`ccr\` with the
+repository runtime invocation above, keeping \`context\` and the remaining arguments.
 
 \`$ARGUMENTS\` is an optional scope (\`changes\`, \`codebase\`, or \`PR-<number>\`) followed by an
 optional dimension selection: \`all\`, \`dimension <id> ...\`, or bare IDs, separated by spaces or commas.
+Recognize scope and the \`dimension\` keyword case-insensitively under the spelling contract.
+Normalize a recognized local scope to \`changes\` or \`codebase\` and a PR scope to \`PR-<number>\`;
+preserve its digits exactly. A dimension-only invocation uses the default \`changes\` scope.
 The default scope is \`changes\`; only an omitted selection defaults to \`all\`.
 \`dimension\` is an optional keyword introducing the IDs, not a dimension ID. Remove that keyword
 before validating the selection or passing it to CCR support commands. Empty comma-separated items,
@@ -75,7 +84,7 @@ dimension selection. For a subset, investigate and report only issues related to
 dimensions, using every selected criterion. Do not review unselected dimensions or add
 \`Other — outside current dimensions\` findings. General impact guidance does not widen that selection.
 
-1. Read resolved CCR configuration, \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, \`.ccr/decisions.md\`,
+1. Read resolved CCR configuration using \`ccr config --resolved\`, then \`.ccr/project.md\`, \`.ccr/stakeholders.md\`, \`.ccr/decisions.md\`,
    and the configured recent journals directly from their files. Read the active review journal
    too, even if it falls outside that selection. Missing context is a coverage limit, not permission
    to invent facts or initialize shared files. Stop on invalid configuration. Use prior decisions
@@ -87,6 +96,15 @@ dimensions, using every selected criterion. Do not review unselected dimensions 
    - changes: all uncommitted changes
    - codebase: the whole codebase, including uncommitted changes
    - PR: the pull request's changes (read only)
+   For local changes, use \`ccr context review-changes\` and \`ccr context review-diff <file>\`
+   for the approved staged, unstaged, and untracked evidence. Do not substitute the index-only
+   \`context read\` or staged-only \`context diff\` for current working changes. For codebase scope,
+   also inspect privacy-approved tracked product files with the available read-only tools.
+   For a PR, use \`ccr context review-pr <PR-number>\` (for example \`PR-123\`) and, when needed,
+   \`ccr context review-pr-head <PR-number> <files...>\` for up to eight returned approved paths
+   per call. Keep the immutable head consistent across packets. GitHub CLI must already be
+   authenticated; report an unavailable remote evidence source without substituting local files
+   or asking for another CCR package installation. Never check out, merge, or push the PR.
    Before local discovery, run CCR's review-state and keep its \`fingerprint\` and
     \`contextFingerprint\` and \`inputContextFingerprint\`; for a PR, use its immutable base/head
     evidence and review-context-state.
@@ -102,12 +120,16 @@ dimensions, using every selected criterion. Do not review unselected dimensions 
     task. Combine duplicates and keep uncertain claims unconfirmed in the journal, not the report.
     Finish when you have checked
    every selected dimension and question. It is fine if some do not apply or no issues are found.
-5. Save the review in the appropriate CCR journal using the installed package's review-saving
-   support so its recorded scope and freshness match the work you reviewed. Consult installed help
+5. Save the review in the appropriate CCR journal using the local runtime's review-saving
+   support so its recorded scope and freshness match the work you reviewed. Consult local help
    only when you need usage details.
-   For a PR, begin the summary with \`head <first 12 characters of headRefOid>\`; on a later run of
-   that PR, compare it and focus on commits after that head. When only some dimensions were
-   selected, name the unchecked ones in the summary.
+   Run \`ccr context save-review <scope> <selection> <counts> <summary>\`, using the canonical scope,
+   one comma-separated selection (or \`all\`), and counts in \`critical,high,medium,low\` order
+   (for example \`0,1,2,0\`). The quoted summary must be one line of at most 500 characters.
+   For a PR, begin the summary with \`head <first 12 characters of headRefOid>\`. On later runs,
+   recheck the current immutable PR evidence and prior unresolved findings; reuse earlier analysis
+   only where the base, relevant code, context, selected dimensions, and criteria still apply.
+   Record omitted dimensions concisely in the journal rather than overflowing the save summary.
    Immediately before saving, reread the active journal and supplied recent previews if their
    \`inputContextFingerprint\` changed. Consider any new feedback, preserve your own session writes,
    and pass the acknowledged hash as \`--expected-input-context\` (also for PR reviews).
@@ -127,7 +149,7 @@ dimensions, using every selected criterion. Do not review unselected dimensions 
 Before each subsequent response in this session, update the same active entry with what was learned,
 asked, decided, changed, or checked, including follow-up explanations and work requested by the user.
 Preserve Started and advance Updated in YYYY-MM-DDTHH:MM:SSZ form, reading the time from the
-system clock (for example \`date -u +%Y-%m-%dT%H:%M:%SZ\`) rather than estimating it. A turn
+system clock (for example \`node -e "process.stdout.write(new Date().toISOString().slice(0,19)+'Z')"\`) rather than estimating it. A turn
 with no new substantive information needs only a timestamp refresh, not filler. Journal updates
 need no separate user request. Never infer agreement from silence or mark a proposed fix completed.
 
@@ -204,7 +226,7 @@ Keep other findings open. Do not record a new completed review merely because te
 User: "F2 and F3 are false positives: the final decision is made by a trained reviewer,
 and this screen deliberately shows only a draft. This is how our review process works."
 Record each response and its reason in the journal. Check the findings against that explanation;
-if it establishes missing durable context, append the scoped human rationale when opted in. Do not
+if it establishes missing durable context, append the scoped human rationale under the decision policy. Do not
 require the outside review process to exist in code. Future reviews apply it when the draft-only
 and human-review conditions still hold; a newly automatic final decision warrants reconsideration.
 </example>
@@ -221,7 +243,9 @@ ${STAKEHOLDER_IMPACT_REVIEW_STANDARD}
 
 ${DIMENSION_LENSES}
 
-Link dimension and criterion labels in each finding to their matching headings in \`.claude/skills/ccr/references/dimensions.md\`.
+Link dimension and criterion labels to existing matching headings in \`.claude/skills/ccr/references/dimensions.md\`.
+If live taxonomy edits made that reference stale, cite the matching entry in the authoritative JSON
+instead. Never invent an anchor or change review criteria to match an outdated reference.
 
 ${REVIEW_REPORT_FORMAT}
 `;

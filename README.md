@@ -8,33 +8,29 @@ unfairly, or limit their privacy, learning, and control. Findings explain human 
 language with code evidence. CCR runs in Claude Code, not as a general code-quality checker, and
 does not change source code without your approval.
 
-**Requirements:** Node.js 22.12+, Git, and Claude Code 2.1.0+ installed and signed in.
+**Requirements:** Node.js 22.12+, Git, and Claude Code 2.1.169+ installed and signed in.
 
 ## Quick start
 
-Install CCR globally:
+In your project's Git repository, run:
 
 ```bash
-npm install --global @vctrx/ccr@latest
+npx @vctrx/ccr@latest setup
 ```
 
 CCR is in beta. While its version is 0.x, a minor release (for example 0.12 → 0.13) may include
 breaking changes; the [changelog](CHANGELOG.md) explains each one and any migration.
 
-In your project's Git repository, run:
-
-```bash
-ccr setup
-```
-
-Setup creates the configuration, context files, and Claude Code skills. Existing context and custom
-settings are preserved. To preview the changes first, use `ccr setup --dry-run`.
+Setup creates the configuration, context files, Claude Code skills, and a self-contained runtime
+in the Git-ignored `.ccr/private/runtime` directory. No global install or project dependency is
+needed. Skills and hooks use that runtime, even after npm's cache is cleared. Existing context and
+custom settings are preserved. To preview first, use `npx @vctrx/ccr@latest setup --dry-run`.
 
 Open Claude Code in the same repository and run these one at a time:
 
 ```text
 /ccr-context initialize
-/ccr-review changes
+/ccr-review codebase all
 ```
 
 Initialization asks about your project and the people it affects. Answer its questions, check the
@@ -42,7 +38,15 @@ generated context, then run the review. After that, just commit as usual: hooks 
 initialization keep the journal and project context current in the background, never block a
 commit, and print at most one short line.
 
-### Prefer a project-local installation?
+### Terminal commands and optional installations
+
+After setup, terminal examples using `ccr` can be run as
+`node .ccr/private/runtime/dist/cli/index.cjs` followed by the same arguments.
+For example: `node .ccr/private/runtime/dist/cli/index.cjs config validate`.
+Claude Code runs these support commands itself; you only need the slash commands above.
+
+Global and project-local npm installations are optional. For a global installation, use
+`npm install --global @vctrx/ccr@latest`, then `ccr setup`. For a local installation:
 
 Install in the repository, then use `npx ccr` instead of `ccr` for terminal commands:
 
@@ -126,24 +130,23 @@ See the [manual](USER_MANUAL.md) for settings, context ownership, and hook permi
 
 ## Update or remove CCR
 
-For a global installation, upgrade the package, then refresh each repository's installed skills:
+Refresh each repository's skills and retained runtime:
 
 ```bash
-npm install --global @vctrx/ccr@latest
-ccr update
+npx @vctrx/ccr@latest update
 ```
 
-For a local installation, run `npm install --save-dev @vctrx/ccr@latest`, then `npx ccr update`.
+For an optional global or local installation, upgrade the package and run `ccr update` or
+`npx ccr update`, respectively.
 Updating preserves your configuration, context, journals, and custom dimensions.
 
 To remove CCR integration, run in the terminal:
 
 ```bash
-ccr uninstall
-npm uninstall --global @vctrx/ccr
+npx @vctrx/ccr@latest uninstall
 ```
 
-Remove integration from every repository using the global installation before removing the package.
+For an optional global installation, remove repository integration before `npm uninstall --global @vctrx/ccr`.
 For a local installation, use `npx ccr uninstall`, then `npm uninstall @vctrx/ccr`.
 Uninstall deletes all project CCR data by default; add `--keep-context` to preserve `.ccr` data.
 Use `--dry-run` to preview update or uninstall changes.

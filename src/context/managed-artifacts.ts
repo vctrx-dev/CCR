@@ -5,6 +5,7 @@ import {
   isUnmodifiedJsonArtifact,
   serializeUpgradableJsonArtifact,
 } from "./managed-json";
+import { RUNTIME_ARTIFACTS, readPackagedRuntimeSourcePath, readRuntimeArtifacts } from "./runtime";
 import { CCR_SKILL_RESOURCES } from "./skill-resources";
 import { CCR_SKILLS, MANAGED_SKILL_MARKER } from "./skills";
 import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
@@ -15,12 +16,13 @@ import { CLAUDE_BLOCK, CONTEXT_FILES, IGNORE_BLOCK } from "./templates";
  */
 
 /** Identifies an artifact's purpose for reporting and future feature selection. */
-export type ManagedArtifactKind = "config" | "context" | "skill";
+export type ManagedArtifactKind = "config" | "context" | "skill" | "runtime";
 /** Controls how setup treats an artifact that already exists. */
 export type SetupPolicy =
   | "create-only"
   | "preserve-existing"
   | "upgrade-if-marked"
+  | "replace-runtime"
   | "upgrade-if-unmodified";
 /** Controls the bounded condition under which uninstall may remove an artifact. */
 export type UninstallPolicy = "preserve" | "remove-if-marked" | "remove-with-context";
@@ -65,6 +67,7 @@ const contextArtifacts: readonly ManagedArtifact[] = Object.entries(CONTEXT_FILE
  */
 export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
   ...contextArtifacts,
+  ...RUNTIME_ARTIFACTS,
   {
     content: serializeUpgradableJsonArtifact(REVIEW_DIMENSIONS),
     kind: "context",
@@ -84,9 +87,17 @@ export const MANAGED_ARTIFACTS: readonly ManagedArtifact[] = [
 ];
 
 /** Resolves taxonomy-derived lifecycle content from the same live JSON used by reviews. */
-export async function readManagedArtifacts(root: string): Promise<readonly ManagedArtifact[]> {
+export async function readManagedArtifacts(
+  root: string,
+  runtimeSourcePath?: string,
+): Promise<readonly ManagedArtifact[]> {
   const registry = await readReviewDimensionRegistry(root);
-  return MANAGED_ARTIFACTS.map((artifact) => {
+  const runtimePath = runtimeSourcePath ?? (await readPackagedRuntimeSourcePath());
+  const artifacts = [
+    ...MANAGED_ARTIFACTS.filter(({ kind }) => kind !== "runtime"),
+    ...(runtimePath === undefined ? [] : await readRuntimeArtifacts(runtimePath)),
+  ];
+  return artifacts.map((artifact) => {
     if (artifact.path === REVIEW_DIMENSIONS_PATH) {
       return { ...artifact, content: serializeUpgradableJsonArtifact(registry) };
     }

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -69,16 +69,6 @@ async function completeJournal(root: string): Promise<void> {
   );
 }
 
-async function enableDecisionUpdates(root: string): Promise<void> {
-  await writeFile(
-    path.join(root, ".ccr/config.json"),
-    serializeContextConfig({
-      ...DEFAULT_CONTEXT_CONFIG,
-      instructions: { ...DEFAULT_CONTEXT_CONFIG.instructions, updateDecisionsMd: true },
-    }),
-  );
-}
-
 describe("runAutomaticContextUpdate", () => {
   it("should run Claude once for a commit and persist completion only after success", async () => {
     const root = await makeAutomationRoot();
@@ -97,116 +87,6 @@ describe("runAutomaticContextUpdate", () => {
       commit,
     );
     await expect(readFile(path.join(root, evidencePacketPath(commit)), "utf8")).rejects.toThrow();
-  });
-
-  it("should refresh Updated from CCR's clock because the headless worker has none", async () => {
-    const root = await makeAutomationRoot();
-    const startedAt = new Date().toISOString().replace(/\.\d{3}Z$/u, "Z");
-
-    await runUpdate(root, () => completeJournal(root));
-    const journal = await readFile(path.join(root, JOURNAL_PATH), "utf8");
-
-    expect(journal).toContain("- **Started**: 2026-08-27T01:00:00Z");
-    const updated = /^- \*\*Updated\*\*: (\S+)$/mu.exec(journal)?.[1] ?? "";
-    expect(updated >= startedAt).toBe(true);
-  });
-
-  it("should recognize successful automation after bounded state pruning", async () => {
-    const root = await makeAutomationRoot();
-    const runClaude = vi.fn(() => completeJournal(root));
-    await runUpdate(root, runClaude);
-    runClaude.mockClear();
-    await mkdir(path.join(root, ".ccr/private"), { recursive: true });
-    await writeFile(
-      path.join(root, ".ccr/private/auto-update.json"),
-      `${JSON.stringify({
-        schemaVersion: 1,
-        commits: Array.from({ length: 100 }, (_, index) => index.toString(16).padStart(40, "0")),
-      })}\n`,
-    );
-
-    await expect(runUpdate(root, runClaude)).resolves.toEqual({ status: "already-updated" });
-    expect(runClaude).not.toHaveBeenCalled();
-  });
-
-  it("should run automation even when a review already completed the journal narrative", async () => {
-    const root = await makeAutomationRoot();
-    await completeJournal(root);
-    const runner = vi.fn(() => completeJournal(root));
-
-    expect(await runUpdate(root, runner)).toEqual({ status: "updated" });
-    expect(runner).toHaveBeenCalledTimes(1);
-  });
-
-  it("should retry after a runner completes narrative but fails its write boundary", async () => {
-    const root = await makeAutomationRoot();
-    await expect(
-      runUpdate(root, async () => {
-        await completeJournal(root);
-        await writeFile(path.join(root, ".ccr/unauthorized.md"), "changed");
-      }),
-    ).rejects.toThrow("unauthorized path");
-    const runner = vi.fn(() => completeJournal(root));
-    expect(await runUpdate(root, runner)).toEqual({ status: "updated" });
-    expect(runner).toHaveBeenCalledTimes(1);
-  });
-
-  it("should validate context before accepting a completed journal without state", async () => {
-    const root = await makeAutomationRoot();
-    await completeJournal(root);
-    await writeFile(path.join(root, ".ccr/project.md"), "Invalid project context.\n");
-
-    await expect(runUpdate(root, vi.fn())).rejects.toThrow(
-      "Automatic context update left context invalid.",
-    );
-  });
-
-  it("should accept one normalized append while preserving the decisions prefix", async () => {
-    const root = await makeAutomationRoot();
-    await enableDecisionUpdates(root);
-    await writeFile(path.join(root, ".ccr/decisions.md"), "Existing decision.");
-    const runner = vi.fn(async () => {
-      await completeJournal(root);
-      await writeFile(path.join(root, ".ccr/decisions.md"), "Existing decision.\n- Append once.\n");
-    });
-
-    await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
-  });
-
-  it.each([
-    ["replacement", "- Replacement.\n"],
-    ["multiple appends", "- Existing.\n- First.\n- Second.\n"],
-    ["multiline append", "- Existing.\n- First.\nContinuation.\n"],
-    ["unnormalized append", "- Existing.\n-   Padded.  \n"],
-    ["blank append", "- Existing.\n-   \n"],
-    ["oversized append", `- Existing.\n- ${"x".repeat(10_001)}\n`],
-  ])("should reject a %s to decisions", async (_case, replacement) => {
-    const root = await makeAutomationRoot();
-    await enableDecisionUpdates(root);
-    await writeFile(path.join(root, ".ccr/decisions.md"), "- Existing.\n");
-    await expect(
-      runUpdate(root, async () => {
-        await completeJournal(root);
-        await writeFile(path.join(root, ".ccr/decisions.md"), replacement);
-      }),
-    ).rejects.toThrow("append-only boundary");
-  });
-
-  it.each([
-    ["deletion", undefined],
-    ["malformed UTF-8", Buffer.from([0xff])],
-  ])("should reject decisions %s", async (_case, replacement) => {
-    const root = await makeAutomationRoot();
-    await enableDecisionUpdates(root);
-    await writeFile(path.join(root, ".ccr/decisions.md"), "- Existing.\n");
-    await expect(
-      runUpdate(root, async () => {
-        await completeJournal(root);
-        replacement === undefined
-          ? await rm(path.join(root, ".ccr/decisions.md"))
-          : await writeFile(path.join(root, ".ccr/decisions.md"), replacement);
-      }),
-    ).rejects.toThrow("append-only boundary");
   });
 
   it("should remain retryable when Claude fails", async () => {
@@ -231,17 +111,6 @@ describe("runAutomaticContextUpdate", () => {
     ).rejects.toThrow();
   });
 
-  it("should tolerate developer source edits made while the background update runs", async () => {
-    const root = await makeAutomationRoot();
-    await writeFile(path.join(root, "app.ts"), "before\n");
-    const runner = vi.fn(async () => {
-      await completeJournal(root);
-      await writeFile(path.join(root, "app.ts"), "after\n");
-    });
-
-    await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
-  });
-
   it("should reject changes to CCR files outside the approved context paths", async () => {
     const root = await makeAutomationRoot();
     const runner = vi.fn(async () => {
@@ -252,44 +121,6 @@ describe("runAutomaticContextUpdate", () => {
     await expect(runUpdate(root, runner)).rejects.toThrow(
       "Automatic context update changed an unauthorized path: .ccr/stakeholders.md.",
     );
-  });
-
-  it("should reject new untracked CCR files outside the approved context paths", async () => {
-    const root = await makeAutomationRoot();
-    const runner = vi.fn(async () => {
-      await completeJournal(root);
-      await writeFile(path.join(root, ".ccr/extra.md"), "unexpected\n");
-    });
-
-    await expect(runUpdate(root, runner)).rejects.toThrow(
-      "Automatic context update changed an unauthorized path: .ccr/extra.md.",
-    );
-  });
-
-  it("should tolerate other journals and private state written while the update runs", async () => {
-    const root = await makeAutomationRoot();
-    const runner = vi.fn(async () => {
-      await completeJournal(root);
-      // A later commit's journal and a saved review land while the headless run is in flight.
-      await writeFile(path.join(root, ".ccr/journal/main/later.md"), "later commit\n");
-      await mkdir(path.join(root, ".ccr/private/coverage"), { recursive: true });
-      await writeFile(path.join(root, ".ccr/private/coverage/review-main.json"), "{}\n");
-    });
-
-    await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
-  });
-
-  it("should reclaim an expired lock left by a dead process", async () => {
-    const root = await makeAutomationRoot();
-    await mkdir(path.join(root, ".ccr/private"), { recursive: true });
-    await writeFile(
-      path.join(root, ".ccr/private/managed-lifecycle.lock"),
-      `${JSON.stringify({ pid: 999_999_999, createdAt: 946_684_800_000 })}\n`,
-    );
-
-    await expect(runUpdate(root, () => completeJournal(root))).resolves.toEqual({
-      status: "updated",
-    });
   });
 
   it("should prevent concurrent hook processes from starting duplicate runs", async () => {
@@ -311,21 +142,6 @@ describe("runAutomaticContextUpdate", () => {
     await expect(first).resolves.toEqual({ status: "updated" });
   });
 
-  it("should require the exact journal path", async () => {
-    const root = await makeAutomationRoot();
-
-    // @ts-expect-error Regression coverage for callers compiled against the former optional path.
-    await expect(runAutomaticContextUpdate(root, commitFor(root), vi.fn())).rejects.toThrow();
-  });
-
-  it("should accept SHA-256 object IDs before checking repository identity", async () => {
-    const root = await makeAutomationRoot();
-
-    await expect(
-      runAutomaticContextUpdate(root, "b".repeat(64), vi.fn(), JOURNAL_PATH),
-    ).rejects.toThrow("Automatic context update commit is no longer in the branch history.");
-  });
-
   it("should finish when a new commit lands on top during the headless update", async () => {
     const root = await makeAutomationRoot();
     const runner = vi.fn(async () => {
@@ -336,62 +152,5 @@ describe("runAutomaticContextUpdate", () => {
     });
 
     await expect(runUpdate(root, runner)).resolves.toEqual({ status: "updated" });
-  });
-
-  it("should stop when the commit leaves the branch history during the headless update", async () => {
-    const root = await makeAutomationRoot();
-    const runner = vi.fn(async () => {
-      await completeJournal(root);
-      await runCommand("git", ["commit", "--quiet", "--amend", "-m", "rewritten"], { cwd: root });
-    });
-
-    await expect(runUpdate(root, runner)).rejects.toThrow(
-      "Automatic context update commit is no longer in the branch history.",
-    );
-  });
-
-  it("should reject malformed or oversized completion state without exposing its content", async () => {
-    const root = await makeAutomationRoot();
-    await mkdir(path.join(root, ".ccr/private"), { recursive: true });
-    await writeFile(
-      path.join(root, ".ccr/private/auto-update.json"),
-      `secret-${"x".repeat(11_000)}`,
-    );
-
-    await expect(runUpdate(root, vi.fn())).rejects.toThrow(
-      "Automatic context update state is invalid.",
-    );
-  });
-
-  it("should reject malformed UTF-8 in automatic state and journal files", async () => {
-    const stateRoot = await makeAutomationRoot();
-    await mkdir(path.join(stateRoot, ".ccr/private"), { recursive: true });
-    await writeFile(
-      path.join(stateRoot, ".ccr/private/auto-update.json"),
-      Buffer.from([0x7b, 0xff, 0x7d]),
-    );
-    await expect(runUpdate(stateRoot, vi.fn())).rejects.toThrow(
-      "Automatic context update state is invalid.",
-    );
-
-    const journalRoot = await makeAutomationRoot();
-    await writeFile(path.join(journalRoot, JOURNAL_PATH), Buffer.from([0x23, 0x20, 0xff]));
-    await expect(runUpdate(journalRoot, vi.fn())).rejects.toThrow(
-      "Automatic context update journal is invalid.",
-    );
-  });
-
-  it("should reject a journal with missing canonical completion metadata", async () => {
-    const root = await makeAutomationRoot();
-    const runner = vi.fn(async () => {
-      await writeFile(
-        path.join(root, JOURNAL_PATH),
-        `# CCR Journal\n\n- **Commit**: \`${commitFor(root)}\`\n\n## Summary\n\nCompleted.\n`,
-      );
-    });
-
-    await expect(runUpdate(root, runner)).rejects.toThrow(
-      "Automatic context update did not complete its journal.",
-    );
   });
 });

@@ -25,7 +25,7 @@ async function showSetup(
   operation: SetupOperation = "setup",
 ): Promise<void> {
   const root = findCliRepositoryRoot(io);
-  const preview = await previewSetup(root);
+  const preview = await previewSetup(root, io.runtimeSourcePath);
   const isSkillLocal = isGitIgnored(root, ".claude/skills/ccr/SKILL.md");
   const hookState = await readHookState(root);
   const isSkillManaged = hookState.status === "valid";
@@ -49,7 +49,7 @@ async function showSetup(
   const actionLabel = operation === "update" ? "CCR update" : "CCR setup";
   const nextCommand = operation === "update" ? "ccr update" : "ccr setup";
   const compatibility =
-    "Requires Claude Code 2.1.0 or later; this operation executes no Claude command.";
+    "Requires Claude Code 2.1.169 or later; this operation executes no Claude command.";
   if (options.dryRun || options.json) {
     if (options.json) {
       io.write(
@@ -156,8 +156,8 @@ async function showSetup(
   if (preview.config.hooks.enabled) {
     hookLine = isProvenanceInvalid
       ? "CCR hooks are enabled, but hook provenance is invalid. Run `/ccr-hooks status`; setup changed no hooks."
-      : hasHookStatus("stale")
-        ? "CCR hooks have legacy marker blocks. Run `ccr hooks uninstall`, then `/ccr-hooks sync` to install fresh provenance-managed hooks."
+      : hasHookStatus("stale") || hasHookStatus("current")
+        ? "CCR hooks have legacy marker blocks. `/ccr-context initialize` or `/ccr-hooks sync` will migrate them locally and record fresh provenance."
         : `CCR hooks are enabled in config. ${operation === "update" ? "Update" : "Setup"} left hook design to \`/ccr-hooks sync\`, which inspects this repository before writing.`;
   } else if (isSkillManaged) {
     hookLine =

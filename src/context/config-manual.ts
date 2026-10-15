@@ -2,6 +2,11 @@
 
 export const CONFIG_MANUAL = `# CCR configuration
 
+After one-shot setup, replace the initial \`ccr\` in terminal examples with
+\`node .ccr/private/runtime/dist/cli/index.cjs\`; no global or project package install is needed.
+Use \`ccr config --resolved\` to read effective settings, including local privacy exclusions and
+runtime defaults. \`ccr config validate\` checks shared settings and local overrides together.
+
 Edit \`.ccr/config.json\` directly or run \`ccr config set <key> <value>\`, then run \`ccr config validate\`. CCR does not rewrite your settings, except that the first \`/ccr-context initialize\` may replace the untouched \`domain: "unspecified"\` default once.
 
 | Setting | Default | What it controls |

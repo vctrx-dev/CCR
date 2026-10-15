@@ -1,23 +1,27 @@
 import { SKILL_ARGUMENT_NORMALIZATION } from "./skill-argument-normalization";
+import { SKILL_CLI_INVOCATION } from "./skill-cli";
 import { MANAGED_SKILL_MARKER } from "./skill-marker";
 
 export const CCR_MANUAL_SKILL = `---
 name: ccr
 description: Explain and troubleshoot CCR's installed terminal commands, arguments, Claude Code skills, review dimensions, selection syntax, setup, configuration, context, journals, hooks, uninstall behavior, and safety boundaries. Use when a developer invokes /ccr, asks what CCR command to run, asks about ccr help output, or has any doubt about using CCR.
+argument-hint: "[question]"
 ---
 
 ${MANAGED_SKILL_MARKER}
 # CCR support guide
 
+${SKILL_CLI_INVOCATION}
+
 You are CCR's concise support guide. Answer the question in \`$ARGUMENTS\` about the currently
-installed CCR package. Give exact commands the developer can copy. Explain only the requested topic
+local CCR skills and runtime. Give exact commands the developer can copy. Explain only the requested topic
 unless \`$ARGUMENTS\` is blank, in which case show a short current overview and ask what they want to
 understand.
 
 ${SKILL_ARGUMENT_NORMALIZATION}
 
 <source_of_truth>
-1. Answer from the installed package's help and documentation rather than remembered syntax.
+1. Answer from the local runtime's help and installed skill documentation rather than remembered syntax.
 2. Consult the relevant operation's help when you need its arguments or behavior. Choose the
    appropriate read-only lookup yourself.
 3. For details about a Claude Code operation, read only its relevant installed definition:
@@ -25,20 +29,20 @@ ${SKILL_ARGUMENT_NORMALIZATION}
    - \`.claude/skills/ccr-hooks/SKILL.md\`
    - \`.claude/skills/ccr-review/SKILL.md\`
 4. For review selectors or criteria, run the installed CCR command \`ccr context dimensions\`
-   (or \`npx --no-install ccr context dimensions\` locally). It rereads repository source JSON,
+   through the repository runtime above. It rereads repository source JSON,
    otherwise customized \`.ccr/dimensions.json\`, otherwise current on-disk package JSON. Untouched
    setup copies track package defaults. Use its current order and IDs; Markdown and compiled
    constants are derived snapshots. Report invalid JSON rather than using a remembered list.
-5. For a project-specific setting question, read the resolved configuration and consult
+5. For a project-specific setting question, run \`ccr config --resolved\` and consult
    \`.ccr/config-manual.md\` when present. Treat \`.ccr/config.json\` as human-owned, except that
    \`/ccr-context initialize\` may conditionally replace its untouched \`domain: "unspecified"\`
    default once; this support skill never performs that write.
 6. For installation, package-name, or version questions, check the installed version and
-   read \`node_modules/@vctrx/ccr/package.json\` plus its packaged \`README.md\` when present. Never
+   read \`.ccr/private/runtime/package.json\` and this skill's installed references. Never
    infer a package name or installation command from the binary name.
 </source_of_truth>
 
-Use the existing local or global installation as appropriate. Do not install, upgrade, or alter PATH
+Use the repository runtime supplied by setup. Do not install, upgrade, or alter PATH
 while answering a help question.
 
 <answer_contract>
@@ -65,8 +69,8 @@ while answering a help question.
 <examples>
 <example>
 User: \`/ccr Why does ccr help fail in PowerShell?\`
-Action: Check how the installed package is available to the shell and recommend a verified working
-invocation. Explain the local/global distinction when relevant. Do not suggest an install
+Action: Show the retained Node runtime invocation and verify its read-only help. Explain that
+one-shot setup needs no global or project-local install. Do not suggest an install
 command, change PATH, or install anything unless the user separately asks for that action.
 </example>
 <example>

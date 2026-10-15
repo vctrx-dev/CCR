@@ -7,6 +7,7 @@ import {
   updateContextConfig,
 } from "../context/config";
 import { readStoredContextConfig, updateStoredContextConfig } from "../context/config-store";
+import { readResolvedContextConfig } from "../context/privacy";
 import { applyConfigSetup } from "../context/setup";
 import type { SetupAction } from "../context/setup";
 import type { CliIo } from "./index";
@@ -38,13 +39,15 @@ function configActionLabel(action: SetupAction): string {
 export function registerConfigCommands(program: Command, io: CliIo): void {
   const rootFor = (): string => findCliRepositoryRoot(io);
   const config = program.command("config").description("Inspect committed CCR settings");
-  config.action(async () => {
-    io.write(
-      `${JSON.stringify(toPublicContextConfig(await readStoredContextConfig(rootFor())), null, 2)}\n`,
-    );
+  config.option("--resolved", "include local overrides and fixed runtime settings");
+  config.action(async (options: { resolved?: boolean }) => {
+    const settings = options.resolved
+      ? await readResolvedContextConfig(rootFor())
+      : toPublicContextConfig(await readStoredContextConfig(rootFor()));
+    io.write(`${JSON.stringify(settings, null, 2)}\n`);
   });
   config.command("validate").action(async () => {
-    await readStoredContextConfig(rootFor());
+    await readResolvedContextConfig(rootFor());
     writeCliLines(io, ["CCR configuration is valid."]);
   });
   config.command("defaults").action(() => {

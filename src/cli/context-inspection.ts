@@ -10,6 +10,7 @@ import {
   readSharedContextFile,
 } from "../context/broker";
 import { appendDecision } from "../context/decisions";
+import { readCurrentCommit } from "../context/git";
 import {
   type ReviewJournalTarget,
   ensureJournalEntryForHead,
@@ -43,7 +44,14 @@ import {
 import type { CliIo } from "./index";
 import { findCliRepositoryRoot } from "./io";
 
-/** Registers privacy-filtered evidence, local continuity inspection, and opt-in decision commands. */
+function assertJournalCommit(root: string, commit: string, pullRequest?: string): void {
+  if (pullRequest !== undefined) throw new Error("Choose a PR journal or --commit, not both.");
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit) || readCurrentCommit(root) !== commit) {
+    throw new Error("Journal commit must be the full current HEAD SHA.");
+  }
+}
+
+/** Registers privacy-filtered evidence, local continuity inspection, and human-confirmed decisions. */
 export function registerContextInspectionCommands(context: Command, io: CliIo): void {
   const root = () => findCliRepositoryRoot(io);
   context
@@ -158,11 +166,22 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
     .description(
       "Read repository-wide recent journals except the active entry; PR-<number> names that entry",
     )
-    .action(async (pullRequest: string | undefined) => {
+    .option(
+      "--commit <commit>",
+      "exclude the exact current HEAD journal, even with working changes",
+    )
+    .action(async (pullRequest: string | undefined, options: { commit?: string }) => {
+      if (options.commit !== undefined) assertJournalCommit(root(), options.commit, pullRequest);
       const target: ReviewJournalTarget =
-        pullRequest === undefined
-          ? { kind: hasSafeReviewChanges(await listSafeReviewChanges(root())) ? "working" : "head" }
-          : { kind: "pull-request", pullRequest: parsePullRequestToken(pullRequest) };
+        options.commit !== undefined
+          ? { kind: "head" }
+          : pullRequest === undefined
+            ? {
+                kind: hasSafeReviewChanges(await listSafeReviewChanges(root()))
+                  ? "working"
+                  : "head",
+              }
+            : { kind: "pull-request", pullRequest: parsePullRequestToken(pullRequest) };
       io.write(
         `${JSON.stringify(await readRecentJournalEntriesExcludingActive(root(), target))}\n`,
       );
@@ -246,7 +265,15 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
   context
     .command("review-journal [pull-request]")
     .description("Reuse one journal for the current change, commit, or PR-<number>")
-    .action(async (pullRequest: string | undefined) => {
+    .option("--commit <commit>", "select the exact current HEAD journal, even with working changes")
+    .action(async (pullRequest: string | undefined, options: { commit?: string }) => {
+      if (options.commit !== undefined) {
+        assertJournalCommit(root(), options.commit, pullRequest);
+        const journal = await ensureJournalEntryForHead(root());
+        assertJournalCommit(root(), options.commit);
+        io.write(`${JSON.stringify(journal)}\n`);
+        return;
+      }
       if (pullRequest !== undefined) {
         const journal = await ensurePullRequestJournalEntry(
           root(),
@@ -289,7 +316,7 @@ export function registerContextInspectionCommands(context: Command, io: CliIo): 
     );
   context
     .command("append-decision <decision>")
-    .description("Append one opt-in, human-confirmed decision")
+    .description("Append one bounded, human-confirmed decision")
     .action(async (decision: string) => {
       await appendDecision(root(), decision);
       io.write("Decision recorded.\n");

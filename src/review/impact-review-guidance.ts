@@ -4,7 +4,8 @@
  */
 export const STAKEHOLDER_IMPACT_REVIEW_STANDARD = `You are reviewing this software for ethical and inclusivity issues.
 Look for assumptions, rules, and wording that treat people unfairly or leave someone out.
-Work on your own. Use read-only tools to explore the repository. Do not use subagents.
+Work on your own. Use read-only tools to explore product files. Managed context and journal writes
+are allowed only when the calling skill explicitly authorizes them. Do not use subagents.
 
 ### What to look for
 

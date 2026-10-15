@@ -5,6 +5,7 @@ import path from "node:path";
 import { readTextIfExists, writeTextAtomic } from "./files";
 import {
   type ManagedBlock,
+  type ManagedBlockInspection,
   inspectManagedBlock,
   managedBlock,
   removeManagedBlock,
@@ -32,10 +33,10 @@ export interface HookResult {
 
 const HOOK_DEFINITIONS: Record<CcrHookName, ManagedBlock> = {
   "pre-commit": managedBlock(`# ccr:start - advisory context check
-npx --no-install ccr hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2
+node .ccr/private/runtime/dist/cli/index.cjs hooks pre-commit || echo "CCR: context check unavailable; commit continues." >&2
 # ccr:end`),
   "post-commit": managedBlock(`# ccr:start - post-commit context check
-npx --no-install ccr hooks post-commit || echo "CCR: post-commit context check unavailable." >&2
+node .ccr/private/runtime/dist/cli/index.cjs hooks post-commit || echo "CCR: post-commit context check unavailable." >&2
 # ccr:end`),
 };
 
@@ -64,6 +65,24 @@ export interface ContextHookRemovalPreview {
 }
 
 class UnsafeHookPathError extends Error {}
+
+/** Older setups and skill-authored hooks may omit or change the marker description. */
+function inspectLegacyHookBlock(
+  content: string,
+  definition: ManagedBlock,
+): { block: ManagedBlock; inspection: ManagedBlockInspection } {
+  const lines = content.split(/\r?\n/);
+  const starts = lines.filter((line) => /^\s*# ccr:start(?:\s|$)/.test(line));
+  const ends = lines.filter((line) => /^\s*# ccr:end\s*$/.test(line));
+  if (starts.length === 0 && ends.length === 0) {
+    return { block: definition, inspection: { status: "absent" } };
+  }
+  if (starts.length !== 1 || ends.length !== 1) {
+    return { block: definition, inspection: { status: "conflict" } };
+  }
+  const block = managedBlock(`${starts[0]}\n${ends[0]}`);
+  return { block, inspection: inspectManagedBlock(content, block) };
+}
 
 function isWithin(root: string, target: string): boolean {
   const relative = path.relative(root, target);
@@ -171,7 +190,7 @@ async function planContextHookRemoval(
       result: { path: resolved.path, status: "not-installed" },
     };
   }
-  const inspection = inspectManagedBlock(existing, definition);
+  const { block, inspection } = inspectLegacyHookBlock(existing, definition);
   if (inspection.status === "conflict") {
     throw new Error(`CCR managed block conflict in ${resolved.path}.`);
   }
@@ -188,7 +207,7 @@ async function planContextHookRemoval(
   return {
     authorityRoot: resolved.authorityRoot,
     mode: (await lstat(resolved.path)).mode & 0o777,
-    content: removeManagedBlock(existing, definition, resolved.path, {
+    content: removeManagedBlock(existing, block, resolved.path, {
       terminalSeparator: "preserve",
     }),
     original: existing,
@@ -252,7 +271,7 @@ export async function readContextHookStatus(
   try {
     const existing = await readTextIfExists(hookPath);
     if (existing === undefined) return { path: hookPath, status: "not-installed" };
-    const inspection = inspectManagedBlock(existing, definition);
+    const { inspection } = inspectLegacyHookBlock(existing, definition);
     if (inspection.status === "conflict") return { path: hookPath, status: "malformed" };
     if (inspection.status === "absent") return { path: hookPath, status: "not-installed" };
     const managed = existing.slice(inspection.start, inspection.end);

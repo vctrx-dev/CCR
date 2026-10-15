@@ -3,23 +3,36 @@
 CCR uncovers ethical and inclusivity bugs developers may not have anticipated, including harmful
 assumptions in code that works as intended. Reviews explain human consequences in plain language
 with supporting evidence; they are advisory, not general engineering audits.
-Requires Node.js 22.12+, Git, and Claude Code 2.1.0+ installed and signed in. Slash skills run in
-Claude Code; `ccr` commands run in a terminal. Examples below use a global installation.
-For project-local installs, use `npx ccr` or `pnpm exec ccr` instead of bare `ccr`.
+Requires Node.js 22.12+, Git, and Claude Code 2.1.169+ installed and signed in. Slash skills run in
+Claude Code; support commands run in a terminal. After setup, replace `ccr` in terminal examples
+with `node .ccr/private/runtime/dist/cli/index.cjs`, preserving the arguments. Skills do this for you.
+Optional global and project-local installations may also use `ccr` and `pnpm exec ccr`, respectively.
 
 ## Install and setup
 
-Install globally, then run setup in each project's Git repository:
+Run setup in each project's Git repository:
 
 ```bash
-npm install --global @vctrx/ccr@latest
-ccr setup
+npx @vctrx/ccr@latest setup
 ```
 
 `@latest` always installs the newest release. CCR is in beta (0.x): a minor release may include
 breaking changes, which [CHANGELOG.md](CHANGELOG.md) describes with any migration steps.
 
-For a project-local installation, run these in the repository instead:
+Open Claude Code in that repository and run these one at a time:
+
+```text
+/ccr-context initialize
+/ccr-review codebase all
+```
+
+Setup retains its bundled runtime and default taxonomy under Git-ignored `.ccr/private/runtime`.
+No separate package install is needed. Skills and hooks work after the npx cache is removed.
+Initialization may ask about product context and stakeholders, then performs the managed context
+work and enabled hook integration using that runtime. A new clone needs its own setup run.
+
+Global installation is optional: `npm install --global @vctrx/ccr@latest`, then `ccr setup`.
+For an optional project-local installation, run these in the repository instead:
 
 ```bash
 npm install --save-dev @vctrx/ccr@latest
@@ -33,14 +46,16 @@ Install the package before running `npx ccr`; otherwise npx may download a diffe
 Setup creates configuration, skills, context skeletons, and editable taxonomy, preserving existing
 human-owned files. A separate `ccr config init` is not needed for first-time setup; use it to create
 or upgrade configuration and its manual independently. `setup`, `update`, and
-`uninstall` apply by default; `--dry-run` or `--json` previews without writes. Repeating setup is safe.
+`uninstall` apply by default. All three accept `--dry-run` for a preview without writes;
+`setup` and `update` also accept `--json` previews. Repeating setup is safe.
 
-For a global upgrade, run `npm install --global @vctrx/ccr@latest`, then `ccr update` in each
+To refresh skills and the retained runtime, run `npx @vctrx/ccr@latest update` in each repository.
+For an optional global upgrade, run `npm install --global @vctrx/ccr@latest`, then `ccr update` in each
 repository. For a local upgrade, run `npm install --save-dev @vctrx/ccr@latest`, then
 `npx ccr update`. With pnpm, use `pnpm add --save-dev @vctrx/ccr@latest` and `pnpm exec ccr update`.
 Update refreshes marked skills, resources, instruction
 blocks, and untouched taxonomy defaults; it preserves configuration, custom taxonomy, context,
-journals, private state, and unrelated files. Foreign or malformed managed skills stop the update.
+journals, other private state, and unrelated files. Foreign or malformed managed skills stop the update.
 Setup does not invoke repository-resolved Claude, commit, or push.
 
 ## Configure
@@ -463,7 +478,9 @@ ESM/CommonJS, focused subpaths ESM only. Imports alone never mutate repositories
 Use `readReviewDimensionRegistry(root)` and `renderReviewDimensionSections(registry)` from the review
 entry point for live taxonomy. Do not depend on private source paths.
 
-Contributors run `pnpm verify`: safety, audit, typecheck, lint, coverage, build, and package smoke.
+Contributors run `pnpm verify`: safety, audit, typecheck, lint, the compact test suite, build, and package smoke.
+Testing follows the risk-based policy in `AGENTS.md`; `pnpm test:coverage` is an optional diagnostic
+with no percentage gate, and tests need not mirror source filenames.
 Typecheck rejects unused source locals/parameters; test-only helpers and public exports require
 caller checks before removal. In the source checkout, `pnpm test:prompt` prints the first dimension's
 standalone prompt without installation or a model call. Use `/ccr-review codebase all` in Claude Code

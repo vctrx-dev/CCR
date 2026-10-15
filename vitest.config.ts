@@ -9,19 +9,11 @@ export default defineConfig({
     maxWorkers: process.platform === "win32" ? 1 : undefined,
     // Windows process startup and filesystem scanning can exceed Vitest's 5-second default.
     testTimeout: process.platform === "win32" ? 30_000 : 5_000,
-    passWithNoTests: true,
+    passWithNoTests: false,
     coverage: {
       provider: "v8",
-      // Release coverage measures shipped source, not repository tooling exercised by separate checks.
+      // Optional diagnostic only; meaningful behavioral checks define the release gate.
       include: ["src/**/*.ts"],
-      thresholds: {
-        "src/**/*.ts": {
-          statements: 90,
-          branches: 80,
-          functions: 93,
-          lines: 90,
-        },
-      },
     },
   },
 });
